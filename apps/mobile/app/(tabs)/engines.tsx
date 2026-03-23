@@ -20,14 +20,12 @@ export default function EnginesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      (async () => {
-        const [s, t] = await Promise.all([
-          getAllEngineScores(dateKey),
-          getAllTasksForDate(dateKey),
-        ]);
-        setScores(s);
-        setTasks(t);
-      })();
+      try {
+        setScores(getAllEngineScores(dateKey));
+        setTasks(getAllTasksForDate(dateKey));
+      } catch (err) {
+        console.error("[Engines] load failed:", err);
+      }
     }, [dateKey])
   );
 
@@ -38,26 +36,18 @@ export default function EnginesScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Engines</Text>
         <Text style={styles.subtitle}>Your life operating system</Text>
 
         <SectionHeader title="Core Engines" />
-
         <View style={styles.grid}>
           {(["body", "mind", "money", "general"] as EngineKey[]).map((engine) => {
             const c = engineCounts(engine);
             return (
               <EngineCard
-                key={engine}
-                engine={engine}
-                score={scores[engine]}
-                completedCount={c.completed}
-                totalCount={c.total}
+                key={engine} engine={engine} score={scores[engine]}
+                completedCount={c.completed} totalCount={c.total}
                 onPress={() => router.push(`/engine/${engine}`)}
               />
             );
@@ -74,20 +64,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: colors.text,
-    marginTop: spacing.lg,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md,
-  },
+  title: { fontSize: 28, fontWeight: "800", color: colors.text, marginTop: spacing.lg },
+  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: spacing.xs },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
 });

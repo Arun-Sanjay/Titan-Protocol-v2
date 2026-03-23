@@ -1,64 +1,58 @@
-import { getDB } from "./database";
-import type { EngineKey, Task, Completion } from "./schema";
+import { db } from "./database";
+import type { EngineKey, Task } from "./schema";
 
 // ─── Task CRUD ─────────────────────────────────────────────────────────────
 
-export async function listTasks(engine: EngineKey): Promise<Task[]> {
-  const db = await getDB();
-  return db.getAllAsync<Task>(
+export function listTasks(engine: EngineKey): Task[] {
+  return db.getAllSync<Task>(
     "SELECT * FROM tasks WHERE engine = ? AND is_active = 1 ORDER BY kind ASC, created_at ASC",
     [engine]
   );
 }
 
-export async function addTask(
+export function addTask(
   engine: EngineKey,
   title: string,
   kind: "main" | "secondary",
   daysPerWeek = 7
-): Promise<number> {
-  const db = await getDB();
-  const result = await db.runAsync(
+): number {
+  const result = db.runSync(
     "INSERT INTO tasks (engine, title, kind, created_at, days_per_week, is_active) VALUES (?, ?, ?, ?, ?, 1)",
     [engine, title, kind, Date.now(), daysPerWeek]
   );
   return result.lastInsertRowId;
 }
 
-export async function updateTaskKind(taskId: number, kind: "main" | "secondary"): Promise<void> {
-  const db = await getDB();
-  await db.runAsync("UPDATE tasks SET kind = ? WHERE id = ?", [kind, taskId]);
+export function updateTaskKind(taskId: number, kind: "main" | "secondary"): void {
+  db.runSync("UPDATE tasks SET kind = ? WHERE id = ?", [kind, taskId]);
 }
 
-export async function deleteTask(taskId: number): Promise<void> {
-  const db = await getDB();
-  await db.runAsync("DELETE FROM tasks WHERE id = ?", [taskId]);
-  await db.runAsync("DELETE FROM completions WHERE task_id = ?", [taskId]);
+export function deleteTask(taskId: number): void {
+  db.runSync("DELETE FROM tasks WHERE id = ?", [taskId]);
+  db.runSync("DELETE FROM completions WHERE task_id = ?", [taskId]);
 }
 
 // ─── Completions ───────────────────────────────────────────────────────────
 
-export async function getCompletedIds(engine: EngineKey, dateKey: string): Promise<Set<number>> {
-  const db = await getDB();
-  const rows = await db.getAllAsync<{ task_id: number }>(
+export function getCompletedIds(engine: EngineKey, dateKey: string): Set<number> {
+  const rows = db.getAllSync<{ task_id: number }>(
     "SELECT task_id FROM completions WHERE engine = ? AND date_key = ?",
     [engine, dateKey]
   );
   return new Set(rows.map((r) => r.task_id));
 }
 
-export async function toggleTask(engine: EngineKey, taskId: number, dateKey: string): Promise<boolean> {
-  const db = await getDB();
-  const existing = await db.getFirstAsync<{ id: number }>(
+export function toggleTask(engine: EngineKey, taskId: number, dateKey: string): boolean {
+  const existing = db.getFirstSync<{ id: number }>(
     "SELECT id FROM completions WHERE task_id = ? AND date_key = ?",
     [taskId, dateKey]
   );
 
   if (existing) {
-    await db.runAsync("DELETE FROM completions WHERE id = ?", [existing.id]);
+    db.runSync("DELETE FROM completions WHERE id = ?", [existing.id]);
     return false; // uncompleted
   } else {
-    await db.runAsync(
+    db.runSync(
       "INSERT INTO completions (engine, task_id, date_key) VALUES (?, ?, ?)",
       [engine, taskId, dateKey]
     );
@@ -80,30 +74,25 @@ export function computeScore(tasks: Task[], completedIds: Set<number>): number {
   return total === 0 ? 0 : Math.round((earned / total) * 100);
 }
 
-export async function getEngineScore(engine: EngineKey, dateKey: string): Promise<number> {
-  const [tasks, completedIds] = await Promise.all([
-    listTasks(engine),
-    getCompletedIds(engine, dateKey),
-  ]);
+export function getEngineScore(engine: EngineKey, dateKey: string): number {
+  const tasks = listTasks(engine);
+  const completedIds = getCompletedIds(engine, dateKey);
   return computeScore(tasks, completedIds);
 }
 
-export async function getAllEngineScores(dateKey: string): Promise<Record<EngineKey, number>> {
-  const engines: EngineKey[] = ["body", "mind", "money", "general"];
-  const scores = await Promise.all(engines.map((e) => getEngineScore(e, dateKey)));
+export function getAllEngineScores(dateKey: string): Record<EngineKey, number> {
   return {
-    body: scores[0],
-    mind: scores[1],
-    money: scores[2],
-    general: scores[3],
+    body: getEngineScore("body", dateKey),
+    mind: getEngineScore("mind", dateKey),
+    money: getEngineScore("money", dateKey),
+    general: getEngineScore("general", dateKey),
   };
 }
 
-export async function getTotalScore(dateKey: string): Promise<number> {
-  const scores = await getAllEngineScores(dateKey);
+export function getTotalScore(dateKey: string): number {
+  const scores = getAllEngineScores(dateKey);
   const values = Object.values(scores);
-  const activeEngines = values.filter((s) => s > 0);
-  if (activeEngines.length === 0) return 0;
+  if (values.every((s) => s === 0)) return 0;
   return Math.round(values.reduce((a, b) => a + b, 0) / 4);
 }
 
@@ -111,12 +100,11 @@ export async function getTotalScore(dateKey: string): Promise<number> {
 
 export type TaskWithStatus = Task & { completed: boolean };
 
-export async function getAllTasksForDate(dateKey: string): Promise<TaskWithStatus[]> {
-  const db = await getDB();
-  const tasks = await db.getAllAsync<Task>(
+export function getAllTasksForDate(dateKey: string): TaskWithStatus[] {
+  const tasks = db.getAllSync<Task>(
     "SELECT * FROM tasks WHERE is_active = 1 ORDER BY engine ASC, kind ASC, created_at ASC"
   );
-  const completions = await db.getAllAsync<{ task_id: number }>(
+  const completions = db.getAllSync<{ task_id: number }>(
     "SELECT task_id FROM completions WHERE date_key = ?",
     [dateKey]
   );
