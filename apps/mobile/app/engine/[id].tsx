@@ -56,16 +56,21 @@ export default function EngineScreen() {
   // Add task state
   const [newTitle, setNewTitle] = useState("");
   const [newKind, setNewKind] = useState<"main" | "secondary">("main");
+  const [busy, setBusy] = useState(false); // Prevents double-taps
   const bottomSheetRef = useRef<BottomSheet>(null);
 
   const loadData = useCallback(async () => {
-    const [t, c] = await Promise.all([
-      listTasks(engine),
-      getCompletedIds(engine, dateKey),
-    ]);
-    setTasks(t);
-    setCompletedIds(c);
-    setScore(computeScore(t, c));
+    try {
+      const [t, c] = await Promise.all([
+        listTasks(engine),
+        getCompletedIds(engine, dateKey),
+      ]);
+      setTasks(t);
+      setCompletedIds(c);
+      setScore(computeScore(t, c));
+    } catch (err) {
+      console.error("[Engine] loadData failed:", err);
+    }
   }, [engine, dateKey]);
 
   useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
@@ -76,13 +81,22 @@ export default function EngineScreen() {
   const sideCompleted = sideTasks.filter((t) => completedIds.has(t.id!)).length;
 
   const handleToggle = async (task: Task) => {
-    const completed = await toggleTask(engine, task.id!, dateKey);
-    if (completed) {
-      const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
-      await awardXP(dateKey, "task_complete", xp);
-      await updateStreak(dateKey);
+    if (busy) return;
+    setBusy(true);
+    try {
+      const completed = await toggleTask(engine, task.id!, dateKey);
+      if (completed) {
+        const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
+        await awardXP(dateKey, "task_complete", xp);
+        await updateStreak(dateKey);
+      }
+      await loadData();
+    } catch (err) {
+      console.error("[Engine] toggle failed:", err);
+      Alert.alert("Error", "Failed to update task. Please try again.");
+    } finally {
+      setBusy(false);
     }
-    await loadData();
   };
 
   const handleDelete = (task: Task) => {
@@ -92,18 +106,30 @@ export default function EngineScreen() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          await deleteTask(task.id!);
-          await loadData();
+          try {
+            await deleteTask(task.id!);
+            await loadData();
+          } catch (err) {
+            console.error("[Engine] delete failed:", err);
+          }
         },
       },
     ]);
   };
 
   const handleMoveKind = async (task: Task) => {
-    const newKind = task.kind === "main" ? "secondary" : "main";
-    await updateTaskKind(task.id!, newKind);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await loadData();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const newKind = task.kind === "main" ? "secondary" : "main";
+      await updateTaskKind(task.id!, newKind);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await loadData();
+    } catch (err) {
+      console.error("[Engine] move failed:", err);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const openAddSheet = (kind: "main" | "secondary") => {
@@ -113,12 +139,20 @@ export default function EngineScreen() {
   };
 
   const handleAddTask = async () => {
-    if (!newTitle.trim()) return;
-    await addTask(engine, newTitle.trim(), newKind);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setNewTitle("");
-    bottomSheetRef.current?.close();
-    await loadData();
+    if (!newTitle.trim() || busy) return;
+    setBusy(true);
+    try {
+      await addTask(engine, newTitle.trim(), newKind);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setNewTitle("");
+      bottomSheetRef.current?.close();
+      await loadData();
+    } catch (err) {
+      console.error("[Engine] addTask failed:", err);
+      Alert.alert("Error", "Failed to create task. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (

@@ -62,30 +62,50 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
   const [completedIds, setCompletedIds] = useState<Set<number>>(new Set());
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [h, logs] = await Promise.all([
-      listHabits(),
-      getHabitLogsForDate(dateKey),
-    ]);
-    setHabits(h);
-    setCompletedIds(logs);
+    try {
+      const [h, logs] = await Promise.all([
+        listHabits(),
+        getHabitLogsForDate(dateKey),
+      ]);
+      setHabits(h);
+      setCompletedIds(logs);
+    } catch (err) {
+      console.error("[Habits] load failed:", err);
+    }
   }, [dateKey]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const handleToggle = async (id: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await toggleHabit(id, dateKey);
-    await load();
+    if (busy) return;
+    setBusy(true);
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await toggleHabit(id, dateKey);
+      await load();
+    } catch (err) {
+      console.error("[Habits] toggle failed:", err);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleAdd = async () => {
-    if (!newTitle.trim()) return;
-    await addHabit(newTitle.trim(), "✓");
-    setNewTitle("");
-    setShowAdd(false);
-    await load();
+    if (!newTitle.trim() || busy) return;
+    setBusy(true);
+    try {
+      await addHabit(newTitle.trim(), "✓");
+      setNewTitle("");
+      setShowAdd(false);
+      await load();
+    } catch (err) {
+      console.error("[Habits] add failed:", err);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleDelete = (id: number) => {
@@ -95,8 +115,12 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          await deleteHabit(id);
-          await load();
+          try {
+            await deleteHabit(id);
+            await load();
+          } catch (err) {
+            console.error("[Habits] delete failed:", err);
+          }
         },
       },
     ]);
@@ -171,10 +195,15 @@ function JournalTab({ dateKey }: { dateKey: string }) {
   );
 
   const handleSave = async () => {
-    await saveJournalEntry(dateKey, content);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      await saveJournalEntry(dateKey, content);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error("[Journal] save failed:", err);
+      Alert.alert("Error", "Failed to save journal entry.");
+    }
   };
 
   return (

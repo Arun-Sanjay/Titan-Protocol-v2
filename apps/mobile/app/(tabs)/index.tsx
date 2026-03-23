@@ -47,18 +47,23 @@ export default function HQScreen() {
     last_active_date: "",
   });
   const [refreshing, setRefreshing] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const loadData = useCallback(async () => {
-    const [score, scores, allTasks, prof] = await Promise.all([
-      getTotalScore(dateKey),
-      getAllEngineScores(dateKey),
-      getAllTasksForDate(dateKey),
-      getProfile(),
-    ]);
-    setTotalScore(score);
-    setEngineScores(scores);
-    setTasks(allTasks);
-    setProfile(prof);
+    try {
+      const [score, scores, allTasks, prof] = await Promise.all([
+        getTotalScore(dateKey),
+        getAllEngineScores(dateKey),
+        getAllTasksForDate(dateKey),
+        getProfile(),
+      ]);
+      setTotalScore(score);
+      setEngineScores(scores);
+      setTasks(allTasks);
+      setProfile(prof);
+    } catch (err) {
+      console.error("[HQ] loadData failed:", err);
+    }
   }, [dateKey]);
 
   useFocusEffect(
@@ -74,16 +79,21 @@ export default function HQScreen() {
   };
 
   const handleToggle = async (task: TaskWithStatus) => {
-    const completed = await toggleTask(task.engine, task.id!, dateKey);
-
-    // Award XP
-    if (completed) {
-      const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
-      await awardXP(dateKey, "task_complete", xp);
-      await updateStreak(dateKey);
+    if (busy) return;
+    setBusy(true);
+    try {
+      const completed = await toggleTask(task.engine, task.id!, dateKey);
+      if (completed) {
+        const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
+        await awardXP(dateKey, "task_complete", xp);
+        await updateStreak(dateKey);
+      }
+      await loadData();
+    } catch (err) {
+      console.error("[HQ] toggle failed:", err);
+    } finally {
+      setBusy(false);
     }
-
-    await loadData();
   };
 
   const completedCount = tasks.filter((t) => t.completed).length;
