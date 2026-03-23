@@ -1,7 +1,5 @@
-import { db } from "./database";
+import { getJSON, setJSON } from "./storage";
 import type { UserProfile } from "./schema";
-
-// ─── XP & Level System ────────────────────────────────────────────────────
 
 const XP_PER_LEVEL = 500;
 
@@ -37,42 +35,39 @@ export function getRankForLevel(level: number) {
   return RANKS[0];
 }
 
-export function xpForLevel(level: number): number {
-  return level * XP_PER_LEVEL;
-}
-
-export function xpProgress(xp: number, level: number): number {
-  const currentLevelXP = xp - (level - 1) * XP_PER_LEVEL;
-  return Math.max(0, Math.min(1, currentLevelXP / XP_PER_LEVEL));
-}
-
 // ─── Profile ───────────────────────────────────────────────────────────────
 
+const PROFILE_KEY = "user_profile";
+
+const DEFAULT_PROFILE: UserProfile = {
+  id: "default",
+  xp: 0,
+  level: 1,
+  streak: 0,
+  best_streak: 0,
+  last_active_date: "",
+};
+
 export function getProfile(): UserProfile {
-  const profile = db.getFirstSync<UserProfile>(
-    "SELECT * FROM user_profile WHERE id = 'default'"
-  );
-  return profile || { id: "default", xp: 0, level: 1, streak: 0, best_streak: 0, last_active_date: "" };
+  return getJSON<UserProfile>(PROFILE_KEY, DEFAULT_PROFILE);
 }
 
-export function awardXP(dateKey: string, source: string, amount: number): UserProfile {
-  // Record XP event
-  db.runSync(
-    "INSERT INTO xp_events (date_key, source, amount, created_at) VALUES (?, ?, ?, ?)",
-    [dateKey, source, amount, Date.now()]
-  );
+function saveProfile(p: UserProfile): void {
+  setJSON(PROFILE_KEY, p);
+}
 
-  // Update profile
-  db.runSync("UPDATE user_profile SET xp = xp + ? WHERE id = 'default'", [amount]);
-
-  // Check for level up
+export function awardXP(dateKey: string, _source: string, amount: number): UserProfile {
   const profile = getProfile();
+  profile.xp += amount;
+
+  // Level up
   const newLevel = Math.floor(profile.xp / XP_PER_LEVEL) + 1;
   if (newLevel > profile.level) {
-    db.runSync("UPDATE user_profile SET level = ? WHERE id = 'default'", [newLevel]);
+    profile.level = newLevel;
   }
 
-  return getProfile();
+  saveProfile(profile);
+  return profile;
 }
 
 // ─── Streak ────────────────────────────────────────────────────────────────
@@ -94,17 +89,13 @@ export function updateStreak(dateKey: string): number {
     newStreak = 1;
   }
 
-  const newBest = Math.max(newStreak, profile.best_streak);
-
-  db.runSync(
-    "UPDATE user_profile SET streak = ?, best_streak = ?, last_active_date = ? WHERE id = 'default'",
-    [newStreak, newBest, dateKey]
-  );
+  profile.streak = newStreak;
+  profile.best_streak = Math.max(newStreak, profile.best_streak);
+  profile.last_active_date = dateKey;
+  saveProfile(profile);
 
   return newStreak;
 }
-
-// ─── XP amounts ────────────────────────────────────────────────────────────
 
 export const XP_REWARDS = {
   MAIN_TASK: 20,
@@ -115,11 +106,3 @@ export const XP_REWARDS = {
   STREAK_BONUS_30: 200,
   PERFECT_DAY: 100,
 } as const;
-
-export function getXPForDate(dateKey: string): number {
-  const result = db.getFirstSync<{ total: number }>(
-    "SELECT COALESCE(SUM(amount), 0) as total FROM xp_events WHERE date_key = ?",
-    [dateKey]
-  );
-  return result?.total ?? 0;
-}

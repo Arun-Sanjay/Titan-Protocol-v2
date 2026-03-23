@@ -1,25 +1,38 @@
-import { db } from "./database";
+import { getJSON, setJSON } from "./storage";
 import type { JournalEntry } from "./schema";
 
+function journalKey(dateKey: string): string {
+  return `journal:${dateKey}`;
+}
+
 export function getJournalEntry(dateKey: string): JournalEntry | null {
-  return db.getFirstSync<JournalEntry>(
-    "SELECT * FROM journal_entries WHERE date_key = ?",
-    [dateKey]
-  );
+  const entry = getJSON<JournalEntry | null>(journalKey(dateKey), null);
+  return entry;
 }
 
 export function saveJournalEntry(dateKey: string, content: string): void {
-  db.runSync(
-    `INSERT INTO journal_entries (date_key, content, updated_at)
-     VALUES (?, ?, ?)
-     ON CONFLICT(date_key) DO UPDATE SET content = ?, updated_at = ?`,
-    [dateKey, content, Date.now(), content, Date.now()]
-  );
+  const entry: JournalEntry = {
+    date_key: dateKey,
+    content,
+    updated_at: Date.now(),
+  };
+  setJSON(journalKey(dateKey), entry);
 }
 
 export function listJournalEntries(limit = 30): JournalEntry[] {
-  return db.getAllSync<JournalEntry>(
-    "SELECT * FROM journal_entries ORDER BY date_key DESC LIMIT ?",
-    [limit]
-  );
+  // MMKV doesn't have range queries, so we scan recent dates
+  const entries: JournalEntry[] = [];
+  const today = new Date();
+
+  for (let i = 0; i < 90 && entries.length < limit; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateKey = d.toISOString().slice(0, 10);
+    const entry = getJournalEntry(dateKey);
+    if (entry && entry.content) {
+      entries.push(entry);
+    }
+  }
+
+  return entries;
 }

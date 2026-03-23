@@ -7,7 +7,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { colors, spacing, radius } from "../../theme";
-import { getRankForLevel, xpForLevel } from "../../db/gamification";
+import { getRankForLevel } from "../../db/gamification";
 
 type Props = {
   xp: number;

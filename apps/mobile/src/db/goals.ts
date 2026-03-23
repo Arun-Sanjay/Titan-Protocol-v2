@@ -1,41 +1,56 @@
-import { db } from "./database";
+import { getJSON, setJSON, nextId } from "./storage";
 import type { Goal, GoalTask } from "./schema";
 
+const GOALS_KEY = "goals";
+
+function goalTasksKey(goalId: number): string {
+  return `goal_tasks:${goalId}`;
+}
+
 export function listGoals(): Goal[] {
-  return db.getAllSync<Goal>("SELECT * FROM goals ORDER BY created_at DESC");
+  return getJSON<Goal[]>(GOALS_KEY, []);
 }
 
 export function addGoal(goal: Omit<Goal, "id" | "created_at">): number {
-  const result = db.runSync(
-    "INSERT INTO goals (title, engine, type, target, unit, deadline, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [goal.title, goal.engine, goal.type, goal.target, goal.unit, goal.deadline, Date.now()]
-  );
-  return result.lastInsertRowId;
+  const id = nextId();
+  const newGoal: Goal = { ...goal, id, created_at: Date.now() };
+  const goals = listGoals();
+  goals.push(newGoal);
+  setJSON(GOALS_KEY, goals);
+  return id;
 }
 
 export function deleteGoal(id: number): void {
-  db.runSync("DELETE FROM goals WHERE id = ?", [id]);
-  db.runSync("DELETE FROM goal_tasks WHERE goal_id = ?", [id]);
+  const goals = listGoals().filter((g) => g.id !== id);
+  setJSON(GOALS_KEY, goals);
 }
 
 export function listGoalTasks(goalId: number): GoalTask[] {
-  return db.getAllSync<GoalTask>(
-    "SELECT * FROM goal_tasks WHERE goal_id = ? ORDER BY created_at ASC",
-    [goalId]
-  );
+  return getJSON<GoalTask[]>(goalTasksKey(goalId), []);
 }
 
 export function addGoalTask(goalId: number, title: string): number {
-  const result = db.runSync(
-    "INSERT INTO goal_tasks (goal_id, title, task_type, completed, created_at) VALUES (?, ?, 'once', 0, ?)",
-    [goalId, title, Date.now()]
-  );
-  return result.lastInsertRowId;
+  const id = nextId();
+  const task: GoalTask = {
+    id,
+    goal_id: goalId,
+    title,
+    task_type: "once",
+    engine: null,
+    completed: 0,
+    created_at: Date.now(),
+  };
+  const tasks = listGoalTasks(goalId);
+  tasks.push(task);
+  setJSON(goalTasksKey(goalId), tasks);
+  return id;
 }
 
-export function toggleGoalTask(taskId: number): void {
-  db.runSync(
-    "UPDATE goal_tasks SET completed = CASE WHEN completed = 1 THEN 0 ELSE 1 END WHERE id = ?",
-    [taskId]
-  );
+export function toggleGoalTask(taskId: number, goalId: number): void {
+  const tasks = listGoalTasks(goalId);
+  const task = tasks.find((t) => t.id === taskId);
+  if (task) {
+    task.completed = task.completed === 1 ? 0 : 1;
+    setJSON(goalTasksKey(goalId), tasks);
+  }
 }

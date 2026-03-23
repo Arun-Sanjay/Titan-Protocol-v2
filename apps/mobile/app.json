@@ -32,7 +32,6 @@
     "scheme": "titan-protocol",
     "plugins": [
       "expo-router",
-      "expo-sqlite",
       "expo-font",
       "expo-haptics"
     ]

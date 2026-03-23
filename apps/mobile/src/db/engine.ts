@@ -1,13 +1,22 @@
-import { db } from "./database";
+import { getJSON, setJSON, nextId } from "./storage";
 import type { EngineKey, Task } from "./schema";
+
+// ─── Storage keys ──────────────────────────────────────────────────────────
+// tasks:{engine} → Task[]
+// completions:{engine}:{dateKey} → number[] (task IDs)
+
+function tasksKey(engine: EngineKey): string {
+  return `tasks:${engine}`;
+}
+
+function completionsKey(engine: EngineKey, dateKey: string): string {
+  return `completions:${engine}:${dateKey}`;
+}
 
 // ─── Task CRUD ─────────────────────────────────────────────────────────────
 
 export function listTasks(engine: EngineKey): Task[] {
-  return db.getAllSync<Task>(
-    "SELECT * FROM tasks WHERE engine = ? AND is_active = 1 ORDER BY kind ASC, created_at ASC",
-    [engine]
-  );
+  return getJSON<Task[]>(tasksKey(engine), []).filter((t) => t.is_active === 1);
 }
 
 export function addTask(
@@ -16,46 +25,66 @@ export function addTask(
   kind: "main" | "secondary",
   daysPerWeek = 7
 ): number {
-  const result = db.runSync(
-    "INSERT INTO tasks (engine, title, kind, created_at, days_per_week, is_active) VALUES (?, ?, ?, ?, ?, 1)",
-    [engine, title, kind, Date.now(), daysPerWeek]
-  );
-  return result.lastInsertRowId;
+  const id = nextId();
+  const task: Task = {
+    id,
+    engine,
+    title,
+    kind,
+    created_at: Date.now(),
+    days_per_week: daysPerWeek,
+    is_active: 1,
+  };
+  const tasks = getJSON<Task[]>(tasksKey(engine), []);
+  tasks.push(task);
+  setJSON(tasksKey(engine), tasks);
+  return id;
 }
 
 export function updateTaskKind(taskId: number, kind: "main" | "secondary"): void {
-  db.runSync("UPDATE tasks SET kind = ? WHERE id = ?", [kind, taskId]);
+  const engines: EngineKey[] = ["body", "mind", "money", "general"];
+  for (const engine of engines) {
+    const tasks = getJSON<Task[]>(tasksKey(engine), []);
+    const idx = tasks.findIndex((t) => t.id === taskId);
+    if (idx !== -1) {
+      tasks[idx].kind = kind;
+      setJSON(tasksKey(engine), tasks);
+      return;
+    }
+  }
 }
 
 export function deleteTask(taskId: number): void {
-  db.runSync("DELETE FROM tasks WHERE id = ?", [taskId]);
-  db.runSync("DELETE FROM completions WHERE task_id = ?", [taskId]);
+  const engines: EngineKey[] = ["body", "mind", "money", "general"];
+  for (const engine of engines) {
+    const tasks = getJSON<Task[]>(tasksKey(engine), []);
+    const filtered = tasks.filter((t) => t.id !== taskId);
+    if (filtered.length !== tasks.length) {
+      setJSON(tasksKey(engine), filtered);
+      return;
+    }
+  }
 }
 
 // ─── Completions ───────────────────────────────────────────────────────────
 
 export function getCompletedIds(engine: EngineKey, dateKey: string): Set<number> {
-  const rows = db.getAllSync<{ task_id: number }>(
-    "SELECT task_id FROM completions WHERE engine = ? AND date_key = ?",
-    [engine, dateKey]
-  );
-  return new Set(rows.map((r) => r.task_id));
+  const ids = getJSON<number[]>(completionsKey(engine, dateKey), []);
+  return new Set(ids);
 }
 
 export function toggleTask(engine: EngineKey, taskId: number, dateKey: string): boolean {
-  const existing = db.getFirstSync<{ id: number }>(
-    "SELECT id FROM completions WHERE task_id = ? AND date_key = ?",
-    [taskId, dateKey]
-  );
+  const key = completionsKey(engine, dateKey);
+  const ids = getJSON<number[]>(key, []);
+  const idx = ids.indexOf(taskId);
 
-  if (existing) {
-    db.runSync("DELETE FROM completions WHERE id = ?", [existing.id]);
+  if (idx !== -1) {
+    ids.splice(idx, 1);
+    setJSON(key, ids);
     return false; // uncompleted
   } else {
-    db.runSync(
-      "INSERT INTO completions (engine, task_id, date_key) VALUES (?, ?, ?)",
-      [engine, taskId, dateKey]
-    );
+    ids.push(taskId);
+    setJSON(key, ids);
     return true; // completed
   }
 }
@@ -101,13 +130,20 @@ export function getTotalScore(dateKey: string): number {
 export type TaskWithStatus = Task & { completed: boolean };
 
 export function getAllTasksForDate(dateKey: string): TaskWithStatus[] {
-  const tasks = db.getAllSync<Task>(
-    "SELECT * FROM tasks WHERE is_active = 1 ORDER BY engine ASC, kind ASC, created_at ASC"
-  );
-  const completions = db.getAllSync<{ task_id: number }>(
-    "SELECT task_id FROM completions WHERE date_key = ?",
-    [dateKey]
-  );
-  const completedSet = new Set(completions.map((c) => c.task_id));
-  return tasks.map((t) => ({ ...t, completed: completedSet.has(t.id!) }));
+  const engines: EngineKey[] = ["body", "mind", "money", "general"];
+  const allTasks: TaskWithStatus[] = [];
+
+  for (const engine of engines) {
+    const tasks = listTasks(engine);
+    const completedIds = getCompletedIds(engine, dateKey);
+    for (const t of tasks) {
+      allTasks.push({ ...t, completed: completedIds.has(t.id!) });
+    }
+  }
+
+  return allTasks.sort((a, b) => {
+    if (a.engine !== b.engine) return a.engine.localeCompare(b.engine);
+    if (a.kind !== b.kind) return a.kind === "main" ? -1 : 1;
+    return a.created_at - b.created_at;
+  });
 }
