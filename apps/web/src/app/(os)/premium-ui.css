@@ -1909,7 +1909,7 @@ html[data-theme="cyberpunk"] .tp-button:hover {
 [data-theme="cyberpunk"] .cyber-ticker {
   position: fixed;
   bottom: 0;
-  left: 0;
+  left: 240px;
   right: 0;
   z-index: 50;
   height: 28px;
@@ -1949,7 +1949,7 @@ html[data-theme="cyberpunk"] .tp-button:hover {
 }
 
 [data-theme="cyberpunk"] .tp-main {
-  padding-bottom: 40px;
+  padding-bottom: 48px;
 }
 
 /* ╔══════════════════════════════════════════════════════════════════════════╗
@@ -2735,7 +2735,13 @@ html[data-theme="cyberpunk"] .tp-button:hover {
 /* --- CyberTicker mobile repositioning --- */
 @media (max-width: 639px) {
   [data-theme="cyberpunk"] .cyber-ticker {
+    left: 0;
     bottom: calc(var(--tx-mobile-bottom-nav-h, 64px) + env(safe-area-inset-bottom, 0px));
+  }
+
+  [data-theme="cyberpunk"] .tp-main,
+  [data-theme="cyberpunk"] .tp-main--mobile {
+    padding-bottom: calc(28px + var(--tx-mobile-bottom-nav-h, 64px) + env(safe-area-inset-bottom, 0px) + 12px);
   }
 }
 
