@@ -1,0 +1,54 @@
+{
+  "productName": "Titan Protocol",
+  "version": "0.1.0",
+  "identifier": "com.titan.protocol",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build:tauri",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../out"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Titan Protocol",
+        "width": 1440,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true
+      }
+    ],
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "dmg": {
+        "background": "dmg-background.png",
+        "windowSize": {
+          "width": 800,
+          "height": 600
+        },
+        "appPosition": {
+          "x": 200,
+          "y": 300
+        },
+        "applicationFolderPosition": {
+          "x": 600,
+          "y": 300
+        }
+      }
+    }
+  }
+}

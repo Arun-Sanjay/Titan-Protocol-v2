@@ -1,0 +1,13 @@
+
+.env
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+.next/
+out/
+.DS_Store
+target/
+.claude/worktrees/
+.claude/settings.local.json
+.claude/

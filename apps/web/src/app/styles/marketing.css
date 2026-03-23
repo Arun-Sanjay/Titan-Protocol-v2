@@ -1,0 +1,391 @@
+/* ===== Marketing theme (/) ===== */
+
+html[data-theme="marketing"] body {
+  background: #000000;
+  color: var(--m-text);
+}
+
+/* Marketing has NO scanlines/grids/sweeps */
+
+html[data-theme="marketing"] .m-page {
+  min-height: 100vh;
+}
+
+html[data-theme="marketing"] .m-container {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+html[data-theme="marketing"] .m-hero {
+  padding: clamp(84px, 8vw, 132px) 0 56px;
+}
+
+html[data-theme="marketing"] .m-hero-inner {
+  text-align: center;
+}
+
+html[data-theme="marketing"] .m-eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--m-muted);
+}
+
+html[data-theme="marketing"] .m-h1 {
+  margin: 16px auto 0;
+  max-width: 18ch;
+  font-size: clamp(44px, 5.5vw, 84px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+html[data-theme="marketing"] .m-sub {
+  margin: 16px auto 0;
+  max-width: 70ch;
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--m-muted);
+}
+
+html[data-theme="marketing"] .m-micro {
+  margin-top: 10px;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 247, 0.52);
+}
+
+html[data-theme="marketing"] .m-cta {
+  margin-top: 26px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+html[data-theme="marketing"] .m-btn {
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-weight: 600;
+  border: 1px solid var(--m-border);
+  background: rgba(255, 255, 255, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease,
+    border-color 160ms ease;
+}
+
+html[data-theme="marketing"] .m-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.10);
+}
+
+html[data-theme="marketing"] .m-btn-primary {
+  color: rgba(0, 0, 0, 0.92);
+  border-color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+
+html[data-theme="marketing"] .m-btn-primary:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-1px);
+}
+
+html[data-theme="marketing"] .m-link {
+  background: transparent;
+  border: none;
+  padding: 12px 6px;
+  color: rgba(245, 245, 247, 0.78);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+html[data-theme="marketing"] .m-link:hover {
+  color: rgba(245, 245, 247, 0.92);
+  text-decoration: underline;
+  text-decoration-color: rgba(245, 245, 247, 0.38);
+  text-underline-offset: 6px;
+}
+
+html[data-theme="marketing"] .m-scroll {
+  margin-top: 40px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.55;
+}
+
+html[data-theme="marketing"] .m-scroll span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+  animation: mBounce 1.35s ease-in-out infinite;
+}
+
+html[data-theme="marketing"] .m-strip {
+  padding: 16px 0 72px;
+}
+
+html[data-theme="marketing"] .m-strip-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  html[data-theme="marketing"] .m-strip-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+html[data-theme="marketing"] .m-section {
+  padding: 0 0 92px;
+}
+
+html[data-theme="marketing"] .m-what-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  html[data-theme="marketing"] .m-what-grid {
+    grid-template-columns: 1.1fr 0.9fr;
+  }
+}
+
+html[data-theme="marketing"] .m-card {
+  background: var(--m-card);
+  border: 1px solid var(--m-border);
+  border-radius: 22px;
+  padding: 18px;
+  box-shadow: var(--m-shadow);
+  backdrop-filter: blur(8px);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+html[data-theme="marketing"] .m-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.50);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+html[data-theme="marketing"] .m-card-title {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+html[data-theme="marketing"] .m-card-body {
+  margin-top: 6px;
+  color: var(--m-muted);
+  line-height: 1.55;
+}
+
+html[data-theme="marketing"] .m-card-lg {
+  padding: 22px;
+}
+
+html[data-theme="marketing"] .m-kicker {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(245, 245, 247, 0.52);
+}
+
+html[data-theme="marketing"] .m-card-title-lg {
+  margin-top: 10px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+html[data-theme="marketing"] .m-card-body-lg {
+  margin-top: 8px;
+  color: var(--m-muted);
+  line-height: 1.55;
+}
+
+html[data-theme="marketing"] .m-tabs {
+  margin-top: 16px;
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="marketing"] .m-tab {
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(245, 245, 247, 0.72);
+  transition: background 160ms ease, color 160ms ease;
+}
+
+html[data-theme="marketing"] .m-tab:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(245, 245, 247, 0.92);
+}
+
+html[data-theme="marketing"] .m-tab-active {
+  background: rgba(10, 132, 255, 0.12);
+  color: rgba(245, 245, 247, 0.96);
+}
+
+html[data-theme="marketing"] .m-tab-body {
+  margin-top: 14px;
+  transition: opacity 160ms ease;
+}
+
+html[data-theme="marketing"] .m-fade {
+  opacity: 0.35;
+}
+
+html[data-theme="marketing"] .m-tab-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+html[data-theme="marketing"] .m-tab-text {
+  margin-top: 8px;
+  color: var(--m-muted);
+}
+
+html[data-theme="marketing"] .m-list {
+  margin-top: 12px;
+  padding-left: 18px;
+  color: rgba(245, 245, 247, 0.78);
+}
+
+html[data-theme="marketing"] .m-preview {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+html[data-theme="marketing"] .m-mini-hud {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme="marketing"] .m-mini-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: rgba(245, 245, 247, 0.70);
+}
+
+html[data-theme="marketing"] .m-mini-strong {
+  color: rgba(245, 245, 247, 0.92);
+  font-weight: 650;
+}
+
+html[data-theme="marketing"] .m-progress {
+  margin-top: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+html[data-theme="marketing"] .m-progress-fill {
+  height: 100%;
+  width: 35%;
+  background: linear-gradient(90deg, #0a84ff, #5e5ce6);
+  animation: mProgress 2.4s ease-in-out infinite;
+}
+
+html[data-theme="marketing"] .m-mini-item {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme="marketing"] .m-mini-item-title {
+  font-weight: 700;
+}
+
+html[data-theme="marketing"] .m-mini-item-meta {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+html[data-theme="marketing"] .m-pill {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: rgba(245, 245, 247, 0.78);
+}
+
+html[data-theme="marketing"] .m-note {
+  margin-top: 14px;
+  font-size: 13px;
+  color: rgba(245, 245, 247, 0.65);
+}
+
+html[data-theme="marketing"] .m-key {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(245, 245, 247, 0.90);
+}
+
+html[data-theme="marketing"] .m-appear {
+  animation: mIntro 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes mIntro {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(7px);
+    opacity: 1;
+  }
+}
+
+@keyframes mProgress {
+  0%,
+  100% {
+    transform: translateX(0);
+    width: 35%;
+  }
+  50% {
+    transform: translateX(35%);
+    width: 55%;
+  }
+}

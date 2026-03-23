@@ -1,0 +1,62 @@
+name: Electron Windows Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-electron-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Build static export
+        working-directory: apps/web
+        env:
+          TAURI: "1"
+        run: npx next build --webpack
+
+      - name: Verify static export
+        shell: pwsh
+        run: |
+          if (!(Test-Path "apps/web/out/index.html")) {
+            Write-Error "Static export failed — out/index.html not found."
+            exit 1
+          }
+          Write-Host "Static export OK"
+
+      - name: Build Electron installer
+        working-directory: apps/web
+        run: npx electron-builder --config electron/electron-builder.json --win
+
+      - name: List Electron output
+        shell: pwsh
+        run: |
+          if (Test-Path "apps/web/dist-electron") {
+            Get-ChildItem -Path "apps/web/dist-electron" -Recurse -File | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "dist-electron directory not found."
+          }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-windows-installer
+          path: |
+            apps/web/dist-electron/*.exe
+          if-no-files-found: error

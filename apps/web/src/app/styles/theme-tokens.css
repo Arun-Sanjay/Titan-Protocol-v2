@@ -1,0 +1,86 @@
+/* ===== Route-based themes via html[data-theme] ===== */
+
+:root[data-theme="hud"] {
+  /* ===== TITAN HUD: Transparent Silver/Black ===== */
+  --bg0: #050607;
+  --bg1: #090a0c;
+
+  /* panels */
+  --panel: rgba(10, 12, 14, 0.62);
+  --panel2: rgba(12, 14, 18, 0.78);
+
+  /* text */
+  --text: rgba(245, 248, 255, 0.92);
+  --muted: rgba(210, 216, 230, 0.62);
+
+  /* chrome / strokes */
+  --chrome1: rgba(255, 255, 255, 0.62);
+  --chrome2: rgba(255, 255, 255, 0.22);
+  --stroke: rgba(255, 255, 255, 0.20);
+  --stroke2: rgba(255, 255, 255, 0.10);
+
+  /* HUD accents (subtle — silver only) */
+  --hud-glow: rgba(210, 230, 255, 0.10);
+  --hud-glow-strong: rgba(210, 230, 255, 0.18);
+  --hud-ring: rgba(255, 255, 255, 0.12);
+
+  --warn: rgba(255, 255, 255, 0.00);
+}
+
+:root[data-theme="cyberpunk"] {
+  /* ===== CYBERPUNK: Cyan-accented dark HUD ===== */
+
+  /* Inherit dark base from hud */
+  --bg0: #050607;
+  --bg1: #090a0c;
+
+  /* panels — slightly brighter surface for more depth */
+  --panel: rgba(10, 14, 20, 0.72);
+  --panel2: rgba(14, 18, 26, 0.82);
+
+  /* text */
+  --text: rgba(245, 248, 255, 0.92);
+  --muted: rgba(210, 216, 230, 0.62);
+
+  /* chrome / strokes — brighter for more definition */
+  --chrome1: rgba(255, 255, 255, 0.62);
+  --chrome2: rgba(255, 255, 255, 0.24);
+  --stroke: rgba(255, 255, 255, 0.14);
+  --stroke2: rgba(255, 255, 255, 0.08);
+
+  /* HUD accents — cyan dominant */
+  --hud-glow: rgba(56, 189, 248, 0.10);
+  --hud-glow-strong: rgba(56, 189, 248, 0.22);
+  --hud-ring: rgba(56, 189, 248, 0.18);
+
+  /* Primary accent */
+  --accent: #38bdf8;
+  --accent-rgb: 56, 189, 248;
+  --accent-dim: rgba(56, 189, 248, 0.12);
+  --accent-glow: rgba(56, 189, 248, 0.25);
+
+  /* Status colors */
+  --status-success: #34d399;
+  --status-success-rgb: 52, 211, 153;
+  --status-error: #f87171;
+  --status-error-rgb: 248, 113, 113;
+  --status-warning: #fbbf24;
+  --status-warning-rgb: 251, 191, 36;
+
+  /* Layout density */
+  --layout-gap: 10px;
+  --panel-pad: 14px;
+
+  --warn: rgba(255, 255, 255, 0.00);
+}
+
+:root[data-theme="marketing"] {
+  /* calm marketing theme (no HUD effects) */
+  --m-bg: #000000;
+  --m-text: rgba(245, 245, 247, 0.92);
+  --m-muted: rgba(245, 245, 247, 0.62);
+  --m-card: rgba(255, 255, 255, 0.02);
+  --m-border: rgba(255, 255, 255, 0.06);
+  --m-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --m-accent: #0a84ff; /* apple-ish blue */
+}

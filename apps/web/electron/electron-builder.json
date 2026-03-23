@@ -1,0 +1,25 @@
+{
+  "appId": "com.titan.protocol",
+  "productName": "Titan Protocol",
+  "directories": {
+    "output": "dist-electron"
+  },
+  "files": [
+    "out/**/*",
+    "electron/main.js"
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "src-tauri/icons/icon.ico"
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": false
+  }
+}
