@@ -23,6 +23,7 @@ type EngineState = {
   addTask: (engine: EngineKey, title: string, kind: "main" | "secondary") => void;
   deleteTask: (engine: EngineKey, taskId: number) => void;
   toggleTask: (engine: EngineKey, taskId: number, dateKey: string) => boolean;
+  loadDateRange: (startDate: string, endDate: string) => void;
 };
 
 function computeScore(tasks: Task[], completedIds: Set<number>): number {
@@ -142,6 +143,34 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
     }));
 
     return completed;
+  },
+
+  loadDateRange: (startDate, endDate) => {
+    const newCompletions: Record<string, number[]> = {};
+    const newScores: Record<string, number> = {};
+    const start = new Date(startDate + "T00:00:00");
+    const end = new Date(endDate + "T00:00:00");
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dk = d.toISOString().slice(0, 10);
+      for (const engine of ENGINES) {
+        const cKey = `${engine}:${dk}`;
+        if (get().scores[cKey] !== undefined) continue; // already loaded
+        const tasks = get().tasks[engine].length > 0
+          ? get().tasks[engine]
+          : getJSON<Task[]>(tasksKey(engine), []).filter((t) => t.is_active === 1);
+        const ids = getJSON<number[]>(completionsKey(engine, dk), []);
+        newCompletions[cKey] = ids;
+        newScores[cKey] = computeScore(tasks, new Set(ids));
+      }
+    }
+
+    if (Object.keys(newScores).length > 0) {
+      set((s) => ({
+        completions: { ...s.completions, ...newCompletions },
+        scores: { ...s.scores, ...newScores },
+      }));
+    }
   },
 }));
 
