@@ -99,49 +99,52 @@ export default function HQScreen() {
         </View>
         <StreakBadge streak={profileStreak} />
 
-        {/* Titan Score + Radar Chart — side by side */}
-        <View style={styles.heroRow}>
-          <Panel hero style={styles.titanScorePanel}>
-            <Text style={styles.titanScoreLabel}>TITAN SCORE</Text>
-            <Text style={styles.titanScoreValue}>{analytics.titanScore.toFixed(1)}%</Text>
-            <Text style={styles.titanScoreSub}>
-              {analytics.activeEngines}/4 engines active today
-            </Text>
-            {/* Engine progress bars */}
-            <View style={styles.engineBars}>
-              {ENGINES.map((engine) => (
-                <Pressable
-                  key={engine}
-                  style={styles.engineBarRow}
-                  onPress={() => router.push(`/engine/${engine}`)}
-                >
-                  <Text style={[styles.engineBarLabel, { color: ENGINE_COLORS[engine] }]}>
-                    {ENGINE_LABELS[engine]}
-                  </Text>
-                  <View style={styles.engineBarTrack}>
-                    <View
-                      style={[
-                        styles.engineBarFill,
-                        {
-                          width: `${analytics.engineScores[engine]}%`,
-                          backgroundColor: ENGINE_COLORS[engine],
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.engineBarValue}>
-                    {analytics.engineScores[engine].toFixed(1)}%
-                  </Text>
-                </Pressable>
-              ))}
+        {/* Titan Score panel */}
+        <Panel hero style={styles.titanScorePanel}>
+          <View style={styles.titanScoreRow}>
+            <View style={styles.titanScoreLeft}>
+              <Text style={styles.titanScoreLabel}>TITAN SCORE</Text>
+              <Text style={styles.titanScoreValue}>{analytics.titanScore.toFixed(1)}%</Text>
+              <Text style={styles.titanScoreSub}>
+                {analytics.activeEngines}/4 engines active today
+              </Text>
             </View>
-          </Panel>
+          </View>
+          {/* Engine progress bars */}
+          <View style={styles.engineBars}>
+            {ENGINES.map((engine) => (
+              <Pressable
+                key={engine}
+                style={styles.engineBarRow}
+                onPress={() => router.push(`/engine/${engine}`)}
+              >
+                <Text style={[styles.engineBarLabel, { color: ENGINE_COLORS[engine] }]}>
+                  {ENGINE_LABELS[engine]}
+                </Text>
+                <View style={styles.engineBarTrack}>
+                  <View
+                    style={[
+                      styles.engineBarFill,
+                      {
+                        width: `${analytics.engineScores[engine]}%`,
+                        backgroundColor: ENGINE_COLORS[engine],
+                      },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.engineBarValue}>
+                  {analytics.engineScores[engine].toFixed(1)}%
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Panel>
 
-          <Panel style={styles.radarPanel}>
-            <Text style={styles.radarLabel}>ENGINE OVERVIEW</Text>
-            <RadarChart scores={analytics.engineScores} size={180} />
-          </Panel>
-        </View>
+        {/* Engine Overview radar — full width */}
+        <Panel style={styles.radarPanel}>
+          <Text style={styles.radarLabel}>ENGINE OVERVIEW</Text>
+          <RadarChart scores={analytics.engineScores} size={240} />
+        </Panel>
 
         {/* VS Last Week */}
         <WeekComparison thisWeek={analytics.thisWeekEngines} lastWeek={analytics.lastWeek} />
@@ -217,13 +220,16 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg },
   xpWrap: { marginTop: spacing.lg, marginBottom: spacing.md },
 
-  // Titan Score + Radar hero row
-  heroRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
-  titanScorePanel: { flex: 1.4 },
-  radarPanel: { flex: 1, alignItems: "center" },
+  // Titan Score panel
+  titanScorePanel: { marginTop: spacing.md },
+  titanScoreRow: { flexDirection: "row", alignItems: "center" },
+  titanScoreLeft: { flex: 1 },
   titanScoreLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted },
   titanScoreValue: { ...fonts.monoValue, fontSize: 38, marginTop: spacing.xs },
   titanScoreSub: { ...fonts.small, fontSize: 11, color: colors.textMuted, marginTop: 2 },
+
+  // Radar panel
+  radarPanel: { marginTop: spacing.sm, alignItems: "center" },
 
   // Engine progress bars inside titan score panel
   engineBars: { marginTop: spacing.md, gap: spacing.sm },

@@ -73,7 +73,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.panelBorder,
     padding: 20,
-    overflow: "hidden",
   },
   hero: {
     backgroundColor: colors.surfaceHero,

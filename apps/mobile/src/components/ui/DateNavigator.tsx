@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, TOUCH_MIN, fonts } from "../../theme";
@@ -9,19 +9,24 @@ type Props = {
   onChange: (dateKey: string) => void;
 };
 
-// NOT memoized — must always reflect current dateKey to avoid stale closure bugs
 export function DateNavigator({ dateKey, onChange }: Props) {
   const isToday = dateKey === getTodayKey();
+  const busyRef = useRef(false);
+
+  const go = (delta: number) => {
+    // Debounce: prevent double-fire from Pressable re-render race
+    if (busyRef.current) return;
+    busyRef.current = true;
+    Haptics.selectionAsync();
+    const newDate = addDays(dateKey, delta);
+    onChange(newDate);
+    // Release after a short delay to allow React to settle
+    setTimeout(() => { busyRef.current = false; }, 300);
+  };
 
   return (
     <View style={styles.container}>
-      <Pressable
-        onPress={() => {
-          Haptics.selectionAsync();
-          onChange(addDays(dateKey, -1));
-        }}
-        style={styles.arrow}
-      >
+      <Pressable onPress={() => go(-1)} style={styles.arrow}>
         <Text style={styles.arrowText}>◀</Text>
       </Pressable>
 
@@ -36,13 +41,7 @@ export function DateNavigator({ dateKey, onChange }: Props) {
         {isToday && <Text style={styles.todayBadge}>TODAY</Text>}
       </Pressable>
 
-      <Pressable
-        onPress={() => {
-          Haptics.selectionAsync();
-          onChange(addDays(dateKey, 1));
-        }}
-        style={styles.arrow}
-      >
+      <Pressable onPress={() => go(1)} style={styles.arrow}>
         <Text style={styles.arrowText}>▶</Text>
       </Pressable>
     </View>
