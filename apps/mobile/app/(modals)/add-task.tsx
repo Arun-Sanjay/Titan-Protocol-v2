@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceLight,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: colors.panelBorder,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     color: colors.text,

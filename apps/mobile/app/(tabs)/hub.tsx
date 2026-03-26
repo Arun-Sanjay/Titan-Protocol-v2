@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius } from "../../src/theme";
+import { PageHeader } from "../../src/components/ui/PageHeader";
 
 type HubItem = {
   icon: string;
@@ -37,8 +38,7 @@ export default function HubScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Hub</Text>
-        <Text style={styles.subtitle}>Tools & utilities</Text>
+        <PageHeader kicker="TOOLS" title="Hub" subtitle="Tools & utilities" />
 
         <View style={styles.grid}>
           {HUB_ITEMS.map((item) => (
@@ -77,8 +77,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
-  title: { fontSize: 28, fontWeight: "800", color: colors.text, marginTop: spacing.lg },
-  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: spacing.xs, marginBottom: spacing.xl },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   card: {
     width: "47%",

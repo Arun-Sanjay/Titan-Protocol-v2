@@ -14,8 +14,9 @@ function TabIcon({ name, label, focused }: TabIconProps) {
     <View style={styles.iconWrap}>
       <Ionicons
         name={name}
-        size={22}
+        size={20}
         color={focused ? colors.primary : colors.textSecondary}
+        style={focused ? styles.iconGlow : undefined}
       />
       <Text
         style={[
@@ -25,6 +26,7 @@ function TabIcon({ name, label, focused }: TabIconProps) {
       >
         {label}
       </Text>
+      {focused && <View style={styles.activeDot} />}
     </View>
   );
 }
@@ -88,8 +90,8 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: colors.surface,
-    borderTopColor: colors.surfaceBorder,
+    backgroundColor: colors.tabBar,
+    borderTopColor: colors.tabBarBorder,
     borderTopWidth: 1,
     height: 72,
     paddingBottom: 8,
@@ -99,11 +101,23 @@ const styles = StyleSheet.create({
   iconWrap: {
     alignItems: "center",
     justifyContent: "center",
-    gap: 2,
+    gap: 3,
+  },
+  iconGlow: {
+    textShadowColor: colors.primary,
+    textShadowRadius: 8,
   },
   label: {
-    fontSize: 10,
-    fontWeight: "600",
-    letterSpacing: 0.5,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+    marginTop: 2,
   },
 });

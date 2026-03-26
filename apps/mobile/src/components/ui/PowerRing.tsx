@@ -7,13 +7,13 @@ import Animated, {
   withTiming,
   Easing,
 } from "react-native-reanimated";
-import { colors } from "../../theme";
+import { colors, fonts, shadows } from "../../theme";
 import { getDailyRank } from "../../db/gamification";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type Props = {
-  score: number; // 0–100
+  score: number;
   size?: number;
   strokeWidth?: number;
   showRank?: boolean;
@@ -41,34 +41,31 @@ export const PowerRing = React.memo(function PowerRing({ score, size = 200, stro
     strokeDashoffset: circumference * (1 - progress.value),
   }));
 
-  // Color based on score
   const ringColor =
-    score >= 90 ? colors.warning : // Gold
-    score >= 70 ? colors.primary : // Blue
-    score >= 40 ? "#F97316" : // Orange
-    colors.danger; // Red
+    score >= 90 ? colors.warning :
+    score >= 70 ? colors.primary :
+    score >= 40 ? "#F97316" :
+    colors.danger;
 
   return (
-    <View style={[styles.container, { width: size, height: size }]}>
+    <View style={[styles.container, { width: size, height: size }, shadows.ring]}>
       <Svg width={size} height={size}>
         <Defs>
           <LinearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0%" stopColor={ringColor} stopOpacity="1" />
-            <Stop offset="100%" stopColor={ringColor} stopOpacity="0.6" />
+            <Stop offset="0%" stopColor={ringColor} stopOpacity="0.6" />
+            <Stop offset="100%" stopColor={ringColor} stopOpacity="1" />
           </LinearGradient>
         </Defs>
 
-        {/* Background track */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke={colors.surfaceBorder}
+          stroke="rgba(255, 255, 255, 0.06)"
           strokeWidth={strokeWidth}
           fill="none"
         />
 
-        {/* Animated progress */}
         <AnimatedCircle
           cx={size / 2}
           cy={size / 2}
@@ -83,10 +80,11 @@ export const PowerRing = React.memo(function PowerRing({ score, size = 200, stro
         />
       </Svg>
 
-      {/* Center content */}
       <View style={styles.center}>
         {showRank && (
-          <Text style={[styles.rank, { color: rank.color }]}>{rank.letter}</Text>
+          <Text style={[styles.rank, { color: rank.color, textShadowColor: rank.color + "40", textShadowRadius: 12 }]}>
+            {rank.letter}
+          </Text>
         )}
         <Text style={styles.score}>{score}%</Text>
         <Text style={styles.label}>POWER</Text>
@@ -110,16 +108,14 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   score: {
+    ...fonts.mono,
     fontSize: 18,
     fontWeight: "700",
-    color: colors.text,
     marginTop: -2,
   },
   label: {
+    ...fonts.kicker,
     fontSize: 10,
-    fontWeight: "600",
-    color: colors.textSecondary,
-    letterSpacing: 2,
     marginTop: 2,
   },
 });

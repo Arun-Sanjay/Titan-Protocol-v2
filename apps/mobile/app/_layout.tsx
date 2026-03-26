@@ -6,7 +6,6 @@ import { StyleSheet } from "react-native";
 import * as SystemUI from "expo-system-ui";
 import { colors } from "../src/theme";
 
-// Import database module — triggers sync init at module load time
 import "../src/db/database";
 
 export default function RootLayout() {

@@ -3,13 +3,14 @@ import { View, Text, StyleSheet, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
-import { colors, spacing } from "../../src/theme";
+import { colors, spacing, fonts, shadows } from "../../src/theme";
 import { PowerRing } from "../../src/components/ui/PowerRing";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
 import { EngineCard } from "../../src/components/ui/EngineCard";
 import { MissionRow } from "../../src/components/ui/MissionRow";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
+import { PageHeader } from "../../src/components/ui/PageHeader";
 import { getTodayKey, getGreeting } from "../../src/lib/date";
 import { useEngineStore, selectTotalScore, selectAllTasksForDate, ENGINES, type TaskWithStatus } from "../../src/stores/useEngineStore";
 import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
@@ -75,7 +76,7 @@ export default function HQScreen() {
 
   const ListHeader = useMemo(() => (
     <>
-      <Text style={styles.greeting}>{getGreeting()}</Text>
+      <PageHeader kicker="COMMAND // HQ" title={getGreeting()} />
 
       <View style={styles.xpWrap}>
         <XPBar xp={profile.xp} level={profile.level} />
@@ -87,7 +88,7 @@ export default function HQScreen() {
 
       <StreakBadge streak={profile.streak} />
 
-      <SectionHeader title="Engines" />
+      <SectionHeader title="ENGINES" />
       <View style={styles.engineGrid}>
         {ENGINES.map((engine) => {
           const counts = engineCounts(engine);
@@ -104,7 +105,7 @@ export default function HQScreen() {
         })}
       </View>
 
-      <SectionHeader title="Today's Missions" right={`${completedCount}/${tasks.length}`} />
+      <SectionHeader title="TODAY'S MISSIONS" right={`${completedCount}/${tasks.length}`} />
 
       {tasks.length === 0 && (
         <View style={styles.empty}>
@@ -122,7 +123,6 @@ export default function HQScreen() {
         data={tasks}
         renderItem={renderMission}
         keyExtractor={(item) => String(item.id)}
-
         ListHeaderComponent={ListHeader}
         ListFooterComponent={<View style={{ height: 100 }} />}
         contentContainerStyle={{ paddingHorizontal: spacing.lg }}
@@ -143,8 +143,7 @@ export default function HQScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  greeting: { fontSize: 24, fontWeight: "700", color: colors.text, marginTop: spacing.lg },
-  xpWrap: { marginTop: spacing.lg },
+  xpWrap: { marginTop: spacing.xl },
   ringWrap: { alignItems: "center", marginTop: spacing["2xl"], marginBottom: spacing.lg },
   engineGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   empty: { alignItems: "center", paddingVertical: spacing["4xl"] },

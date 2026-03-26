@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 import Animated, { useSharedValue, useAnimatedProps, withTiming } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, radius } from "../../src/theme";
+import { colors, spacing, radius, fonts, shadows } from "../../src/theme";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { Card } from "../../src/components/ui/Card";
 import { getTodayKey } from "../../src/lib/date";
@@ -196,17 +196,17 @@ const styles = StyleSheet.create({
   backText: { fontSize: 24, color: colors.text },
   headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text },
   body: { flex: 1, paddingHorizontal: spacing.lg },
-  phaseLabel: { fontSize: 14, fontWeight: "800", letterSpacing: 2, textAlign: "center", marginTop: spacing.xl },
+  phaseLabel: { ...fonts.kicker, textAlign: "center", marginTop: spacing.xl },
   ringWrap: { alignItems: "center", justifyContent: "center", marginVertical: spacing["2xl"] },
   timerCenter: { position: "absolute", alignItems: "center" },
-  timerText: { fontSize: 48, fontWeight: "300", color: colors.text, fontVariant: ["tabular-nums"] },
+  timerText: { ...fonts.monoLarge },
   controls: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xl },
-  controlBtn: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
+  controlBtn: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.panelBorder },
   controlText: { fontSize: 16, fontWeight: "600", color: colors.textSecondary },
   mainBtn: { paddingVertical: spacing.md, paddingHorizontal: spacing["3xl"], borderRadius: radius.full },
   mainBtnText: { fontSize: 18, fontWeight: "700", color: "#000" },
   statsRow: { flexDirection: "row", gap: spacing.md },
   statCard: { flex: 1, alignItems: "center" },
-  statValue: { fontSize: 24, fontWeight: "800", color: colors.text },
+  statValue: { ...fonts.monoValue },
   statLabel: { fontSize: 12, color: colors.textSecondary, marginTop: spacing.xs },
 });

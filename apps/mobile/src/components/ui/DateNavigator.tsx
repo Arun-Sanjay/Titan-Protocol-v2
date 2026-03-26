@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, radius, TOUCH_MIN } from "../../theme";
+import { colors, spacing, radius, TOUCH_MIN, fonts } from "../../theme";
 import { formatDateDisplay, addDays, getTodayKey } from "../../lib/date";
 
 type Props = {
@@ -50,22 +50,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   arrowText: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.textSecondary,
   },
   dateWrap: {
     alignItems: "center",
   },
   date: {
-    fontSize: 16,
-    fontWeight: "600",
+    ...fonts.mono,
+    fontSize: 14,
     color: colors.text,
   },
   todayBadge: {
-    fontSize: 10,
-    fontWeight: "700",
+    ...fonts.kicker,
+    fontSize: 9,
     color: colors.primary,
-    letterSpacing: 1,
     marginTop: 2,
   },
 });

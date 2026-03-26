@@ -3,34 +3,37 @@ import { View, Text, StyleSheet } from "react-native";
 import { colors, spacing, fonts } from "../../theme";
 
 type Props = {
+  kicker?: string;
   title: string;
-  right?: string;
+  subtitle?: string;
 };
 
-export const SectionHeader = React.memo(function SectionHeader({ title, right }: Props) {
+export const PageHeader = React.memo(function PageHeader({ kicker, title, subtitle }: Props) {
   return (
     <View style={styles.container}>
+      {kicker && <Text style={styles.kicker}>{kicker}</Text>}
       <Text style={styles.title}>{title}</Text>
-      {right && <Text style={styles.right}>{right}</Text>}
+      {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    marginTop: spacing.lg,
     marginBottom: spacing.md,
-    marginTop: spacing.xl,
   },
-  title: {
+  kicker: {
     ...fonts.kicker,
     color: colors.primary,
+    marginBottom: spacing.xs,
   },
-  right: {
-    ...fonts.mono,
-    fontSize: 13,
+  title: {
+    ...fonts.title,
+  },
+  subtitle: {
+    fontSize: 14,
     color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
 });

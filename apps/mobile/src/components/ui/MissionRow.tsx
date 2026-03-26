@@ -4,12 +4,11 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  withSequence,
   runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, radius, TOUCH_MIN } from "../../theme";
+import { colors, spacing, radius, TOUCH_MIN, fonts, shadows } from "../../theme";
 
 type Props = {
   title: string;
@@ -62,21 +61,13 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
   return (
     <GestureDetector gesture={swipeGesture}>
       <Animated.View style={[styles.container, rowStyle]}>
-        <Pressable onPress={handleToggle} style={styles.row}>
-          {/* Checkbox */}
+        <Pressable onPress={handleToggle} style={[styles.row, completed && styles.rowDone]}>
           <View style={[styles.checkbox, completed && styles.checkboxDone]}>
             <Animated.View style={[styles.checkInner, checkStyle]} />
           </View>
 
-          {/* Title */}
           <View style={styles.content}>
-            <Text
-              style={[
-                styles.title,
-                completed && styles.titleDone,
-              ]}
-              numberOfLines={1}
-            >
+            <Text style={[styles.title, completed && styles.titleDone]} numberOfLines={1}>
               {title}
             </Text>
             <Text style={styles.kindLabel}>
@@ -84,7 +75,6 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
             </Text>
           </View>
 
-          {/* XP */}
           <View style={[styles.xpBadge, completed && styles.xpBadgeDone]}>
             <Text style={[styles.xpText, completed && styles.xpTextDone]}>
               {completed ? "✓" : `+${xp}`}
@@ -106,36 +96,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: colors.panelBorder,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     minHeight: TOUCH_MIN,
     gap: spacing.md,
+    ...shadows.card,
+  },
+  rowDone: {
+    borderColor: colors.success + "20",
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.textSecondary,
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: "rgba(56, 189, 248, 0.25)",
+    backgroundColor: "rgba(4, 8, 16, 0.8)",
     alignItems: "center",
     justifyContent: "center",
   },
   checkboxDone: {
     borderColor: colors.success,
-    backgroundColor: colors.successDim,
+    backgroundColor: colors.success,
   },
   checkInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.success,
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    backgroundColor: "#fff",
   },
   content: {
     flex: 1,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "500",
     color: colors.text,
   },
@@ -144,10 +139,9 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
   },
   kindLabel: {
-    fontSize: 10,
-    fontWeight: "600",
+    ...fonts.kicker,
+    fontSize: 9,
     color: colors.textMuted,
-    letterSpacing: 1,
     marginTop: 2,
   },
   xpBadge: {
@@ -155,13 +149,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: "rgba(56, 189, 248, 0.08)",
   },
   xpBadgeDone: {
     backgroundColor: colors.successDim,
+    borderColor: "rgba(92, 201, 160, 0.08)",
   },
   xpText: {
-    fontSize: 13,
-    fontWeight: "700",
+    ...fonts.mono,
+    fontSize: 12,
     color: colors.primary,
   },
   xpTextDone: {

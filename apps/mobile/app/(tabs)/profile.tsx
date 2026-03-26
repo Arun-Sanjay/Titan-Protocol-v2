@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius } from "../../src/theme";
+import { colors, spacing, radius, fonts, shadows } from "../../src/theme";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
 import { Card } from "../../src/components/ui/Card";
@@ -94,12 +94,12 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg },
   title: { fontSize: 28, fontWeight: "800", color: colors.text, marginTop: spacing.lg },
   rankBadge: { alignItems: "center", marginTop: spacing["2xl"] },
-  rankLetter: { fontSize: 32, fontWeight: "900", letterSpacing: 2 },
-  levelText: { fontSize: 14, color: colors.textSecondary, marginTop: spacing.xs },
+  rankLetter: { ...fonts.monoValue, fontSize: 32, fontWeight: "900", letterSpacing: 2, textShadowColor: "rgba(56, 189, 248, 0.6)", textShadowRadius: 12 },
+  levelText: { ...fonts.kicker, marginTop: spacing.xs },
   xpWrap: { marginTop: spacing.xl, marginBottom: spacing.lg },
   statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, marginTop: spacing.xl },
-  statCard: { flex: 1, minWidth: "45%", alignItems: "center" },
-  statValue: { fontSize: 24, fontWeight: "800", color: colors.text },
+  statCard: { flex: 1, minWidth: "45%", alignItems: "center", ...shadows.card },
+  statValue: { ...fonts.monoValue },
   statLabel: { fontSize: 12, color: colors.textSecondary, marginTop: spacing.xs },
   nextRankCard: { marginTop: spacing.xl, alignItems: "center" },
   nextRankTitle: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, letterSpacing: 1 },

@@ -3,7 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from "react-nati
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, radius } from "../../src/theme";
+import { colors, spacing, radius, shadows } from "../../src/theme";
 import { Card } from "../../src/components/ui/Card";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { storage } from "../../src/db/storage";
@@ -114,10 +114,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.surfaceBorder,
+    borderColor: colors.panelBorder,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     marginBottom: spacing.sm,
+    ...shadows.card,
   },
   dangerRow: { borderColor: colors.danger + "30" },
   settingTitle: { fontSize: 16, fontWeight: "600", color: colors.text },

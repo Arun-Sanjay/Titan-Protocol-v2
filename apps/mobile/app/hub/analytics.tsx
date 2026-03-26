@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Rect } from "react-native-svg";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, radius } from "../../src/theme";
+import { colors, spacing, radius, fonts } from "../../src/theme";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { Card } from "../../src/components/ui/Card";
 import { useEngineStore } from "../../src/stores/useEngineStore";
@@ -135,7 +135,7 @@ export default function AnalyticsScreen() {
             {dailyScores.map((d, i) => {
               const barH = (d.score / maxScore) * (chartHeight - 20);
               const x = i * (barWidth + 2) + 2;
-              const barColor = d.score >= 70 ? colors.success : d.score >= 40 ? colors.primary : colors.danger;
+              const barColor = colors.primary;
               return (
                 <Rect
                   key={d.dateKey}
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   rangeBtnTextActive: { color: colors.primary },
   statsRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg },
   statCard: { flex: 1, alignItems: "center" },
-  statValue: { fontSize: 24, fontWeight: "800", color: colors.text },
+  statValue: { ...fonts.monoValue },
   statLabel: { fontSize: 12, color: colors.textSecondary, marginTop: spacing.xs },
   chartCard: { overflow: "hidden" },
   engineRow: { flexDirection: "row", alignItems: "center", marginBottom: spacing.md, gap: spacing.md },

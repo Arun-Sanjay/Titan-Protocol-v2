@@ -7,7 +7,7 @@ import Animated, {
   withSequence,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { colors } from "../../theme";
+import { colors, shadows } from "../../theme";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -55,11 +55,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: "rgba(56, 189, 248, 0.30)",
+    ...shadows.panelGlow,
   },
   icon: {
     fontSize: 32,

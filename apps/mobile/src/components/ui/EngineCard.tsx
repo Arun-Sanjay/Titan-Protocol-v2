@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import Animated, {
@@ -7,8 +7,8 @@ import Animated, {
   withTiming,
   Easing,
 } from "react-native-reanimated";
-import { Card } from "./Card";
-import { colors, spacing, radius } from "../../theme";
+import { Panel } from "./Panel";
+import { colors, spacing, fonts, shadows } from "../../theme";
 import type { EngineKey } from "../../db/schema";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -31,6 +31,7 @@ type Props = {
 export const EngineCard = React.memo(function EngineCard({ engine, score, completedCount, totalCount, onPress }: Props) {
   const meta = ENGINE_META[engine];
   const progress = useSharedValue(0);
+  const lastScore = useRef(-1);
 
   const size = 52;
   const strokeWidth = 4;
@@ -38,10 +39,13 @@ export const EngineCard = React.memo(function EngineCard({ engine, score, comple
   const circumference = 2 * Math.PI * r;
 
   useEffect(() => {
-    progress.value = withTiming(score / 100, {
-      duration: 800,
-      easing: Easing.bezierFn(0.25, 0.1, 0.25, 1),
-    });
+    if (lastScore.current !== score) {
+      lastScore.current = score;
+      progress.value = withTiming(score / 100, {
+        duration: 800,
+        easing: Easing.bezierFn(0.25, 0.1, 0.25, 1),
+      });
+    }
   }, [score]);
 
   const animatedProps = useAnimatedProps(() => ({
@@ -49,16 +53,15 @@ export const EngineCard = React.memo(function EngineCard({ engine, score, comple
   }));
 
   return (
-    <Card onPress={onPress} glowColor={meta.color} style={styles.card}>
+    <Panel onPress={onPress} glowColor={meta.color} style={styles.card}>
       <View style={styles.top}>
-        {/* Mini ring */}
         <View style={styles.ringWrap}>
           <Svg width={size} height={size}>
             <Circle
               cx={size / 2}
               cy={size / 2}
               r={r}
-              stroke={colors.surfaceBorder}
+              stroke="rgba(255, 255, 255, 0.06)"
               strokeWidth={strokeWidth}
               fill="none"
             />
@@ -78,14 +81,16 @@ export const EngineCard = React.memo(function EngineCard({ engine, score, comple
           <Text style={styles.ringIcon}>{meta.icon}</Text>
         </View>
 
-        <Text style={[styles.score, { color: meta.color }]}>{score}%</Text>
+        <Text style={[styles.score, { color: meta.color, textShadowColor: meta.color + "30", textShadowRadius: 8 }]}>
+          {score}%
+        </Text>
       </View>
 
       <Text style={styles.label}>{meta.label}</Text>
       <Text style={styles.count}>
         {completedCount}/{totalCount} cleared
       </Text>
-    </Card>
+    </Panel>
   );
 });
 
@@ -111,8 +116,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   score: {
+    ...fonts.monoValue,
     fontSize: 22,
-    fontWeight: "800",
   },
   label: {
     fontSize: 16,
@@ -120,7 +125,8 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   count: {
-    fontSize: 12,
+    ...fonts.mono,
+    fontSize: 11,
     color: colors.textSecondary,
     marginTop: 2,
   },

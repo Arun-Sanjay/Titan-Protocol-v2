@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors, spacing, radius } from "../../theme";
+import { colors, spacing, radius, fonts, shadows } from "../../theme";
 
 type Props = {
   streak: number;
@@ -28,19 +28,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: "rgba(251, 191, 36, 0.15)",
     gap: spacing.xs,
     alignSelf: "center",
+    ...shadows.glow,
+    shadowColor: colors.warning,
+    shadowOpacity: 0.1,
   },
   fire: {},
   count: {
+    ...fonts.mono,
     fontSize: 16,
     fontWeight: "800",
     color: colors.warning,
   },
   label: {
+    ...fonts.kicker,
     fontSize: 10,
-    fontWeight: "600",
     color: colors.warning,
-    letterSpacing: 1,
   },
 });
