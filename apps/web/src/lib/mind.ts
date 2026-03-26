@@ -1,7 +1,8 @@
-import { db, ensureEngineMeta, getEngineStartDate, touchEngineDate, type Task, type Completion } from "./db";
-import { assertDateISO, todayISO, monthBounds } from "./date";
+import { createEngineTaskLogHelpers, ensureEngineMeta, getEngineStartDate, touchEngineDate, db, type MindTask, type MindMeta, type Completion } from "./db";
+import { computeBodyDayScore } from "./bodyScore";
+import { assertDateISO, todayISO } from "./date";
 
-export type MindMeta = { id: "mind"; startDate: string; createdAt: number };
+export type { MindMeta };
 
 export async function ensureMindMeta(dateISO: string): Promise<MindMeta> {
   return ensureEngineMeta("mind", dateISO) as Promise<MindMeta>;
@@ -9,6 +10,10 @@ export async function ensureMindMeta(dateISO: string): Promise<MindMeta> {
 
 export async function getMindStartDate(): Promise<string | null> {
   return getEngineStartDate("mind");
+}
+
+export async function listMindTasks(): Promise<MindTask[]> {
+  return mindTaskLog.listTasks();
 }
 
 export async function addMindTask({
@@ -21,44 +26,30 @@ export async function addMindTask({
   kind: "main" | "secondary";
   dateISO?: string;
   daysPerWeek?: number;
-}): Promise<Task & { id: number }> {
-  const id = await db.tasks.add({
-    engine: "mind",
-    title,
-    kind,
-    createdAt: Date.now(),
-    daysPerWeek,
-    isActive: true,
-  });
+}): Promise<MindTask & { id: number }> {
+  const id = await mindTaskLog.addTask(title, kind, daysPerWeek);
   if (dateISO) {
     await ensureMindMeta(assertDateISO(dateISO));
   }
   return { id, engine: "mind", title, kind, createdAt: Date.now(), daysPerWeek, isActive: true };
 }
 
-export async function listMindTasks(): Promise<Task[]> {
-  return db.tasks.where({ engine: "mind" }).filter((t) => t.isActive !== false).toArray();
-}
-
 export async function deleteMindTask(taskId: string | number): Promise<void> {
   const numId = typeof taskId === "string" ? Number(taskId) : taskId;
   if (!numId) return;
-  await db.transaction("rw", db.tasks, db.completions, async () => {
-    await db.tasks.delete(numId);
-    await db.completions.where({ taskId: numId }).delete();
-  });
+  await mindTaskLog.deleteTask(numId);
 }
 
 export async function updateMindTaskKind(taskId: string | number, kind: "main" | "secondary"): Promise<void> {
   const numId = typeof taskId === "string" ? Number(taskId) : taskId;
   if (!numId) return;
-  await db.tasks.update(numId, { kind });
+  await mindTaskLog.updateTaskPriority(numId, kind);
 }
 
 export async function renameMindTask(taskId: string | number, title: string): Promise<void> {
   const numId = typeof taskId === "string" ? Number(taskId) : taskId;
   if (!numId) return;
-  await db.tasks.update(numId, { title });
+  await mindTaskLog.renameTask(numId, title);
 }
 
 export async function listMindCompletions(dateISO: string): Promise<Completion[]> {
@@ -66,6 +57,10 @@ export async function listMindCompletions(dateISO: string): Promise<Completion[]
   return db.completions.where("[engine+dateKey]").equals(["mind", safeDate]).toArray();
 }
 
+/**
+ * Set completion explicitly (used by command_center and goals).
+ * Unlike toggleTaskForDate, this takes an explicit boolean.
+ */
 export async function setMindTaskCompletion(dateISO: string, taskId: string | number, completed: boolean): Promise<Completion | null> {
   const safeDate = assertDateISO(dateISO ?? todayISO());
   const numId = typeof taskId === "string" ? Number(taskId) : taskId;
@@ -87,59 +82,29 @@ export async function setMindTaskCompletion(dateISO: string, taskId: string | nu
   return existing ?? null;
 }
 
+export function computeMindDayScoreFromLog(tasks: MindTask[], completedTaskIds: number[]) {
+  const completedSet = new Set(completedTaskIds);
+  const tasksWithCompletion = tasks.map((task) => ({
+    ...task,
+    completed: completedSet.has(task.id ?? -1),
+  }));
+  return computeBodyDayScore(tasksWithCompletion as Array<MindTask & { completed: boolean }>);
+}
+
 export async function computeMindDayScore(dateISO: string) {
-  const safeDate = assertDateISO(dateISO ?? todayISO());
-  const [tasks, completions] = await Promise.all([listMindTasks(), listMindCompletions(safeDate)]);
-  const completedSet = new Set(completions.map((c) => c.taskId));
-
-  const mainTasks = tasks.filter((task) => task.kind === "main");
-  const secondaryTasks = tasks.filter((task) => task.kind === "secondary");
-
-  const mainDone = mainTasks.filter((task) => completedSet.has(task.id!)).length;
-  const secondaryDone = secondaryTasks.filter((task) => completedSet.has(task.id!)).length;
-
-  const mainTotal = mainTasks.length;
-  const secondaryTotal = secondaryTasks.length;
-  const pointsTotal = mainTotal * 2 + secondaryTotal;
-  const pointsDone = mainDone * 2 + secondaryDone;
-  const percent = pointsTotal === 0 ? 0 : Math.round((pointsDone / pointsTotal) * 100);
-
-  return {
-    percent,
-    mainDone,
-    mainTotal,
-    secondaryDone,
-    secondaryTotal,
-    pointsDone,
-    pointsTotal,
-  };
+  const log = await mindTaskLog.getLog(dateISO);
+  const tasks = await mindTaskLog.listTasks();
+  return computeMindDayScoreFromLog(tasks, log?.completedTaskIds ?? []);
 }
 
 export async function getMindScoreMapForRange(dateISO: string) {
   const safeDate = assertDateISO(dateISO ?? todayISO());
-  const { start, end } = monthBounds(safeDate);
-  const [tasks, completions] = await Promise.all([
-    listMindTasks(),
-    db.completions.where("[engine+dateKey]").between(["mind", start], ["mind", end], true, false).toArray(),
-  ]);
-
-  const byDate = new Map<string, Set<number>>();
-  for (const completion of completions) {
-    const set = byDate.get(completion.dateKey) ?? new Set<number>();
-    set.add(completion.taskId);
-    byDate.set(completion.dateKey, set);
-  }
-
-  const mainTasks = tasks.filter((task) => task.kind === "main");
-  const secondaryTasks = tasks.filter((task) => task.kind === "secondary");
-
-  const map: Record<string, number> = {};
-  for (const [dk, set] of byDate) {
-    const mainDone = mainTasks.filter((task) => set.has(task.id!)).length;
-    const secondaryDone = secondaryTasks.filter((task) => set.has(task.id!)).length;
-    const pointsTotal = mainTasks.length * 2 + secondaryTasks.length;
-    const pointsDone = mainDone * 2 + secondaryDone;
-    map[dk] = pointsTotal === 0 ? 0 : Math.round((pointsDone / pointsTotal) * 100);
-  }
-  return map;
+  const { start, end } = await import("./date").then((m) => m.monthBounds(safeDate));
+  return mindTaskLog.getScoreMapForRange(start, end);
 }
+
+const mindTaskLog = createEngineTaskLogHelpers<MindTask, { id?: number; dateKey: string; completedTaskIds: number[]; createdAt: number }>({
+  engine: "mind",
+  computePercentFromLog: (tasks, completedTaskIds) => computeMindDayScoreFromLog(tasks, completedTaskIds).percent,
+  onDateTouched: (dateKey) => touchEngineDate("mind", dateKey),
+});

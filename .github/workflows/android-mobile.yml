@@ -36,13 +36,48 @@ jobs:
       - name: Generate native project
         run: npx expo prebuild --platform android --no-install
 
+      - name: Inject signing config
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+            cat >> android/gradle.properties <<EOF
+          TITAN_RELEASE_STORE_FILE=release.keystore
+          TITAN_RELEASE_STORE_PASSWORD=$KEYSTORE_PASSWORD
+          TITAN_RELEASE_KEY_ALIAS=$KEY_ALIAS
+          TITAN_RELEASE_KEY_PASSWORD=$KEY_PASSWORD
+          EOF
+
+            # Patch app/build.gradle to use signing config
+            sed -i 's/signingConfigs {/signingConfigs {\n        release {\n            storeFile file(TITAN_RELEASE_STORE_FILE)\n            storePassword TITAN_RELEASE_STORE_PASSWORD\n            keyAlias TITAN_RELEASE_KEY_ALIAS\n            keyPassword TITAN_RELEASE_KEY_PASSWORD\n        }/' android/app/build.gradle
+            sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/' android/app/build.gradle
+            echo "✓ Release signing configured"
+          else
+            echo "⚠ No keystore secrets found — building debug APK"
+          fi
+
       - name: Build APK
         run: |
           cd android
-          ./gradlew assembleRelease
+          if [ -f app/release.keystore ]; then
+            ./gradlew assembleRelease
+          else
+            ./gradlew assembleDebug
+          fi
+
+      - name: Set version string
+        id: version
+        run: echo "tag=$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: titan-protocol-android
-          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+          name: titan-protocol-android-${{ steps.version.outputs.tag }}
+          path: |
+            apps/mobile/android/app/build/outputs/apk/release/*.apk
+            apps/mobile/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

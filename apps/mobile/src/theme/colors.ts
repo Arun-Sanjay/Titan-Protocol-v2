@@ -6,7 +6,7 @@ export const colors = {
   surface: "rgba(0, 0, 0, 0.97)",
   surfaceHero: "rgba(0, 0, 0, 0.985)",
   surfaceLight: "rgba(0, 0, 0, 0.95)",
-  surfaceBorder: "rgba(255, 255, 255, 0.11)",
+  surfaceBorder: "rgba(255, 255, 255, 0.12)",
   surfaceBorderStrong: "rgba(255, 255, 255, 0.24)",
 
   // Primary accent — clean white (HUD uses white accents, not cyan)
@@ -16,16 +16,16 @@ export const colors = {
   primaryMuted: "rgba(255, 255, 255, 0.50)",
 
   // Status
-  success: "#5cc9a0",
-  successDim: "rgba(92, 201, 160, 0.15)",
+  success: "#34d399",
+  successDim: "rgba(52, 211, 153, 0.15)",
   warning: "#FBBF24",
   warningDim: "rgba(251, 191, 36, 0.15)",
-  danger: "#de6b7d",
-  dangerDim: "rgba(222, 107, 125, 0.15)",
+  danger: "#f87171",
+  dangerDim: "rgba(248, 113, 113, 0.15)",
 
   // Text
-  text: "rgba(247, 250, 255, 0.96)",
-  textSecondary: "rgba(233, 240, 255, 0.72)",
+  text: "rgba(245, 248, 255, 0.92)",
+  textSecondary: "rgba(210, 216, 230, 0.62)",
   textMuted: "rgba(210, 220, 242, 0.52)",
 
   // Rank colors
@@ -38,25 +38,48 @@ export const colors = {
 
   // Engine colors
   body: "#00FF88",
+  bodyDim: "rgba(0, 255, 136, 0.12)",
   mind: "#A78BFA",
+  mindDim: "rgba(167, 139, 250, 0.12)",
   money: "#FBBF24",
+  moneyDim: "rgba(251, 191, 36, 0.12)",
   general: "#60A5FA",
+  generalDim: "rgba(96, 165, 250, 0.12)",
 
   // Panel specific (HUD — white tinted, not cyan)
-  panelBorder: "rgba(255, 255, 255, 0.11)",
+  panelBorder: "rgba(255, 255, 255, 0.12)",
   panelBorderHover: "rgba(255, 255, 255, 0.26)",
   panelHighlight: "rgba(255, 255, 255, 0.10)",
-  panelInnerBorder: "rgba(255, 255, 255, 0.03)",
+  panelInnerBorder: "rgba(255, 255, 255, 0.04)",
   glowLine: "rgba(242, 247, 255, 0.5)",
   glowSoft: "rgba(188, 202, 247, 0.14)",
+
+  // Card chrome — matches web's chrome-panel gradient
+  cardHighlight: "rgba(255, 255, 255, 0.06)",
+  cardBorderActive: "rgba(255, 255, 255, 0.40)",
+
+  // Heatmap colors — matches web exactly
+  heatGreen: "rgba(90, 236, 160, 0.18)",
+  heatGreenBorder: "rgba(112, 244, 176, 0.58)",
+  heatYellow: "rgba(255, 204, 60, 0.20)",
+  heatYellowBorder: "rgba(255, 212, 86, 0.60)",
+  heatRed: "rgba(255, 82, 82, 0.24)",
+  heatRedBorder: "rgba(255, 98, 98, 0.58)",
+  heatGray: "rgba(140, 148, 166, 0.20)",
+  heatGrayBorder: "rgba(190, 200, 220, 0.24)",
 
   // Tab bar — matches sidebar
   tabBar: "#080809",
   tabBarBorder: "rgba(255, 255, 255, 0.06)",
 
-  // Accent for interactive elements (using success green like desktop)
-  accent: "#5cc9a0",
-  accentDim: "rgba(92, 201, 160, 0.15)",
+  // Accent for interactive elements
+  accent: "#34d399",
+  accentDim: "rgba(52, 211, 153, 0.15)",
+
+  // Input surfaces
+  inputBg: "rgba(255, 255, 255, 0.04)",
+  inputBorder: "rgba(255, 255, 255, 0.10)",
+  inputFocusBorder: "rgba(255, 255, 255, 0.30)",
 } as const;
 
 export type ColorKey = keyof typeof colors;

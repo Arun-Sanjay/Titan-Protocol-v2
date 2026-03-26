@@ -31,12 +31,15 @@ const styles = StyleSheet.create({
   title: {
     ...fonts.title,
     textTransform: "uppercase",
-    letterSpacing: 2,
+    letterSpacing: -0.5,
+    fontSize: 30,
+    fontWeight: "800",
   },
   subtitle: {
     fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    letterSpacing: 0.5,
+    color: colors.textMuted,
+    marginTop: 6,
+    letterSpacing: 0.3,
+    lineHeight: 20,
   },
 });

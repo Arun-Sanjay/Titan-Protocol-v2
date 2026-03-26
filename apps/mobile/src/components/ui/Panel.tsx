@@ -80,11 +80,12 @@ const styles = StyleSheet.create({
   topEdge: {
     position: "absolute",
     top: 0,
-    left: 14,
-    right: 14,
+    left: 16,
+    right: 16,
     height: 1,
     backgroundColor: colors.glowLine,
-    opacity: 0.58,
+    opacity: 0.45,
+    borderRadius: 1,
   },
   innerBorder: {
     position: "absolute",
@@ -95,5 +96,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.panelInnerBorder,
+    // Creates the web's subtle inner glow effect
+    shadowColor: "rgba(255, 255, 255, 1)",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
   },
 });

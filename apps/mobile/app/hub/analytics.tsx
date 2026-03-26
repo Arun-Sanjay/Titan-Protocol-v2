@@ -6,7 +6,8 @@ import Svg, { Rect } from "react-native-svg";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, fonts } from "../../src/theme";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
-import { Card } from "../../src/components/ui/Card";
+import { Panel } from "../../src/components/ui/Panel";
+import { HeatmapGrid } from "../../src/components/ui/HeatmapGrid";
 import { useEngineStore } from "../../src/stores/useEngineStore";
 import type { EngineKey } from "../../src/db/schema";
 
@@ -31,24 +32,34 @@ function getDateKeys(range: Range): string[] {
   return keys;
 }
 
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function AnalyticsScreen() {
   const router = useRouter();
-  const [range, setRange] = useState<Range>(7);
+  const [range, setRange] = useState<Range>(30);
   const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
+  const loadDateRange = useEngineStore((s) => s.loadDateRange);
   const scores = useEngineStore((s) => s.scores);
 
   const dateKeys = useMemo(() => getDateKeys(range), [range]);
 
   useEffect(() => {
-    for (const dk of dateKeys) {
-      loadAllEngines(dk);
+    const today = getTodayKey();
+    loadAllEngines(today);
+    // Load range data
+    if (dateKeys.length > 0) {
+      loadDateRange(dateKeys[0], dateKeys[dateKeys.length - 1]);
     }
   }, [dateKeys]);
 
   const dailyScores = useMemo(() => {
     return dateKeys.map((dk) => {
       const vals = ENGINES.map((e) => scores[`${e}:${dk}`] ?? 0);
-      const avg = vals.every((v) => v === 0) ? 0 : Math.round(vals.reduce((a, b) => a + b, 0) / 4);
+      const active = vals.filter((v) => v > 0);
+      const avg = active.length === 0 ? 0 : Math.round(vals.reduce((a, b) => a + b, 0) / 4);
       return { dateKey: dk, score: avg };
     });
   }, [dateKeys, scores]);
@@ -59,23 +70,49 @@ export default function AnalyticsScreen() {
     return Math.round(nonZero.reduce((a, b) => a + b.score, 0) / nonZero.length);
   }, [dailyScores]);
 
-  const streak = useMemo(() => {
-    let count = 0;
+  // Streak calculation
+  const { currentStreak, bestStreak } = useMemo(() => {
+    let current = 0;
     for (let i = dailyScores.length - 1; i >= 0; i--) {
-      if (dailyScores[i].score > 0) count++;
+      if (dailyScores[i].score > 0) current++;
       else break;
     }
-    return count;
+    let best = 0;
+    let running = 0;
+    for (const d of dailyScores) {
+      if (d.score > 0) {
+        running++;
+        if (running > best) best = running;
+      } else {
+        running = 0;
+      }
+    }
+    return { currentStreak: current, bestStreak: best };
   }, [dailyScores]);
 
   const bestDay = useMemo(() => {
-    return dailyScores.reduce((best, d) => d.score > best.score ? d : best, { dateKey: "", score: 0 });
+    return dailyScores.reduce((b, d) => d.score > b.score ? d : b, { dateKey: "", score: 0 });
   }, [dailyScores]);
 
-  // Simple bar chart
+  // Consistent days (60%+ threshold)
+  const consistentDays = useMemo(() => {
+    return dailyScores.filter((d) => d.score >= 60).length;
+  }, [dailyScores]);
+
+  // Heatmap data (90 days for grid — needs { dateKey, score } shape)
+  const heatmapData = useMemo(() => {
+    const keys = getDateKeys(90);
+    return keys.map((dk) => {
+      const vals = ENGINES.map((e) => scores[`${e}:${dk}`] ?? 0);
+      const active = vals.filter((v) => v > 0);
+      const score = active.length === 0 ? 0 : Math.round(vals.reduce((a, b) => a + b, 0) / 4);
+      return { dateKey: dk, score };
+    });
+  }, [scores]);
+
+  // Bar chart config
   const barWidth = range <= 7 ? 28 : range <= 30 ? 8 : 3;
   const chartHeight = 160;
-  const maxScore = 100;
 
   const engineBreakdown = useMemo(() => {
     return ENGINES.map((engine) => {
@@ -86,13 +123,23 @@ export default function AnalyticsScreen() {
     });
   }, [dateKeys, scores]);
 
+  // Task reliability per engine
+  const taskReliability = useMemo(() => {
+    return ENGINES.map((engine) => {
+      const totalDays = dateKeys.length;
+      const activeDays = dateKeys.filter((dk) => (scores[`${engine}:${dk}`] ?? 0) > 0).length;
+      const perfectDays = dateKeys.filter((dk) => (scores[`${engine}:${dk}`] ?? 0) === 100).length;
+      return { engine, activeDays, perfectDays, totalDays };
+    });
+  }, [dateKeys, scores]);
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backText}>←</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>Analytics</Text>
+        <Text style={styles.headerTitle}>ANALYTICS</Text>
         <View style={{ width: 48 }} />
       </View>
 
@@ -112,30 +159,29 @@ export default function AnalyticsScreen() {
           ))}
         </View>
 
-        {/* Stats */}
+        {/* Stats row */}
         <View style={styles.statsRow}>
-          <Card style={styles.statCard}>
+          <Panel style={styles.statCard}>
             <Text style={styles.statValue}>{avgScore}%</Text>
-            <Text style={styles.statLabel}>Avg Score</Text>
-          </Card>
-          <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{streak}</Text>
-            <Text style={styles.statLabel}>Streak</Text>
-          </Card>
-          <Card style={styles.statCard}>
+            <Text style={styles.statLabel}>AVG SCORE</Text>
+          </Panel>
+          <Panel style={styles.statCard}>
+            <Text style={styles.statValue}>{currentStreak}</Text>
+            <Text style={styles.statLabel}>STREAK</Text>
+          </Panel>
+          <Panel style={styles.statCard}>
             <Text style={styles.statValue}>{bestDay.score}%</Text>
-            <Text style={styles.statLabel}>Best Day</Text>
-          </Card>
+            <Text style={styles.statLabel}>BEST DAY</Text>
+          </Panel>
         </View>
 
-        {/* Bar chart */}
-        <SectionHeader title="Daily Titan Score" />
-        <Card style={styles.chartCard}>
+        {/* Titan Score Trend (bar chart) */}
+        <SectionHeader title="TITAN SCORE TREND" />
+        <Panel style={styles.chartCard}>
           <Svg width="100%" height={chartHeight}>
             {dailyScores.map((d, i) => {
-              const barH = (d.score / maxScore) * (chartHeight - 20);
+              const barH = (d.score / 100) * (chartHeight - 20);
               const x = i * (barWidth + 2) + 2;
-              const barColor = colors.primary;
               return (
                 <Rect
                   key={d.dateKey}
@@ -144,27 +190,73 @@ export default function AnalyticsScreen() {
                   width={barWidth}
                   height={Math.max(barH, 2)}
                   rx={2}
-                  fill={barColor}
-                  opacity={0.8}
+                  fill={colors.primary}
+                  opacity={d.score > 0 ? 0.8 : 0.15}
                 />
               );
             })}
           </Svg>
-        </Card>
+        </Panel>
 
-        {/* Engine breakdown */}
-        <SectionHeader title="Engine Breakdown" />
-        {engineBreakdown.map((eb) => (
-          <View key={eb.engine} style={styles.engineRow}>
-            <Text style={[styles.engineLabel, { color: ENGINE_COLORS[eb.engine] }]}>
-              {eb.engine.charAt(0).toUpperCase() + eb.engine.slice(1)}
-            </Text>
-            <View style={styles.engineBar}>
-              <View style={[styles.engineFill, { width: `${eb.avg}%`, backgroundColor: ENGINE_COLORS[eb.engine] }]} />
+        {/* Engine Performance */}
+        <SectionHeader title="ENGINE PERFORMANCE" />
+        <Panel>
+          {engineBreakdown.map((eb, idx) => (
+            <View key={eb.engine} style={[styles.engineRow, idx < engineBreakdown.length - 1 && styles.engineRowBorder]}>
+              <Text style={[styles.engineLabel, { color: ENGINE_COLORS[eb.engine] }]}>
+                {eb.engine.charAt(0).toUpperCase() + eb.engine.slice(1)}
+              </Text>
+              <View style={styles.engineBar}>
+                <View style={[styles.engineFill, { width: `${eb.avg}%`, backgroundColor: ENGINE_COLORS[eb.engine] }]} />
+              </View>
+              <Text style={styles.engineScore}>{eb.avg}%</Text>
             </View>
-            <Text style={styles.engineScore}>{eb.avg}%</Text>
-          </View>
-        ))}
+          ))}
+        </Panel>
+
+        {/* Consistency Heatmap */}
+        <SectionHeader title="CONSISTENCY HEATMAP" />
+        <Panel>
+          <HeatmapGrid data={heatmapData} />
+        </Panel>
+
+        {/* Streak Stats */}
+        <SectionHeader title="STREAK STATS" />
+        <View style={styles.streakRow}>
+          <Panel style={styles.streakCard}>
+            <Text style={styles.streakValue}>{currentStreak}</Text>
+            <Text style={styles.streakLabel}>CURRENT</Text>
+          </Panel>
+          <Panel style={styles.streakCard}>
+            <Text style={styles.streakValue}>{bestStreak}</Text>
+            <Text style={styles.streakLabel}>BEST</Text>
+          </Panel>
+          <Panel style={styles.streakCard}>
+            <Text style={styles.streakValue}>{consistentDays}</Text>
+            <Text style={styles.streakLabel}>60%+ DAYS</Text>
+          </Panel>
+        </View>
+
+        {/* Task Reliability */}
+        <SectionHeader title="TASK RELIABILITY" />
+        <Panel>
+          {taskReliability.map((tr, idx) => (
+            <View key={tr.engine} style={[styles.reliabilityRow, idx < taskReliability.length - 1 && styles.reliabilityBorder]}>
+              <View style={[styles.reliabilityDot, { backgroundColor: ENGINE_COLORS[tr.engine] }]} />
+              <Text style={styles.reliabilityEngine}>
+                {tr.engine.charAt(0).toUpperCase() + tr.engine.slice(1)}
+              </Text>
+              <View style={styles.reliabilityStats}>
+                <Text style={styles.reliabilityValue}>{tr.activeDays}/{tr.totalDays}</Text>
+                <Text style={styles.reliabilitySub}>active</Text>
+              </View>
+              <View style={styles.reliabilityStats}>
+                <Text style={styles.reliabilityValue}>{tr.perfectDays}</Text>
+                <Text style={styles.reliabilitySub}>perfect</Text>
+              </View>
+            </View>
+          ))}
+        </Panel>
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -177,22 +269,34 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   backBtn: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   backText: { fontSize: 24, color: colors.text },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text, letterSpacing: 2 },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
-  rangePicker: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, padding: 4 },
+  rangePicker: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, padding: 4, borderWidth: 1, borderColor: colors.panelBorder },
   rangeBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, alignItems: "center" },
   rangeBtnActive: { backgroundColor: colors.primaryDim },
-  rangeBtnText: { fontSize: 14, fontWeight: "700", color: colors.textSecondary },
-  rangeBtnTextActive: { color: colors.primary },
+  rangeBtnText: { fontSize: 14, fontWeight: "700", color: colors.textMuted, letterSpacing: 1 },
+  rangeBtnTextActive: { color: colors.text },
   statsRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg },
-  statCard: { flex: 1, alignItems: "center" },
-  statValue: { ...fonts.monoValue },
-  statLabel: { fontSize: 12, color: colors.textSecondary, marginTop: spacing.xs },
-  chartCard: { overflow: "hidden" },
-  engineRow: { flexDirection: "row", alignItems: "center", marginBottom: spacing.md, gap: spacing.md },
-  engineLabel: { width: 70, fontSize: 13, fontWeight: "700" },
-  engineBar: { flex: 1, height: 8, backgroundColor: colors.surfaceBorder, borderRadius: radius.full, overflow: "hidden" },
+  statCard: { flex: 1, alignItems: "center", paddingVertical: spacing.lg },
+  statValue: { ...fonts.monoValue, fontSize: 22 },
+  statLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginTop: 6 },
+  chartCard: { overflow: "hidden", paddingVertical: spacing.md },
+  engineRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
+  engineRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.panelBorder },
+  engineLabel: { width: 70, fontSize: 13, fontWeight: "700", textTransform: "capitalize" },
+  engineBar: { flex: 1, height: 8, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: radius.full, overflow: "hidden" },
   engineFill: { height: "100%", borderRadius: radius.full },
-  engineScore: { width: 40, fontSize: 13, fontWeight: "600", color: colors.textSecondary, textAlign: "right" },
+  engineScore: { width: 40, ...fonts.mono, fontSize: 13, color: colors.textSecondary, textAlign: "right" },
+  streakRow: { flexDirection: "row", gap: spacing.md },
+  streakCard: { flex: 1, alignItems: "center", paddingVertical: spacing.lg },
+  streakValue: { ...fonts.monoValue, fontSize: 28 },
+  streakLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginTop: 6 },
+  reliabilityRow: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.md, gap: spacing.md },
+  reliabilityBorder: { borderBottomWidth: 1, borderBottomColor: colors.panelBorder },
+  reliabilityDot: { width: 8, height: 8, borderRadius: 4 },
+  reliabilityEngine: { flex: 1, fontSize: 14, fontWeight: "600", color: colors.text, textTransform: "capitalize" },
+  reliabilityStats: { alignItems: "center", width: 55 },
+  reliabilityValue: { ...fonts.mono, fontSize: 14, color: colors.text },
+  reliabilitySub: { fontSize: 9, color: colors.textMuted, marginTop: 2, textTransform: "uppercase", letterSpacing: 1 },
 });
