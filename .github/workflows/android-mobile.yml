@@ -36,7 +36,7 @@ jobs:
       - name: Generate native project
         run: npx expo prebuild --platform android --no-install
 
-      - name: Inject signing config
+      - name: Setup signing
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -45,29 +45,32 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
-            cat >> android/gradle.properties <<EOF
-          TITAN_RELEASE_STORE_FILE=release.keystore
-          TITAN_RELEASE_STORE_PASSWORD=$KEYSTORE_PASSWORD
-          TITAN_RELEASE_KEY_ALIAS=$KEY_ALIAS
-          TITAN_RELEASE_KEY_PASSWORD=$KEY_PASSWORD
-          EOF
-
-            # Patch app/build.gradle to use signing config
-            sed -i 's/signingConfigs {/signingConfigs {\n        release {\n            storeFile file(TITAN_RELEASE_STORE_FILE)\n            storePassword TITAN_RELEASE_STORE_PASSWORD\n            keyAlias TITAN_RELEASE_KEY_ALIAS\n            keyPassword TITAN_RELEASE_KEY_PASSWORD\n        }/' android/app/build.gradle
-            sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/' android/app/build.gradle
-            echo "✓ Release signing configured"
+            echo "TITAN_STORE_FILE=$(pwd)/android/app/release.keystore" >> android/gradle.properties
+            echo "TITAN_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> android/gradle.properties
+            echo "TITAN_KEY_ALIAS=$KEY_ALIAS" >> android/gradle.properties
+            echo "TITAN_KEY_PASSWORD=$KEY_PASSWORD" >> android/gradle.properties
+            echo "✓ Production signing configured"
           else
-            echo "⚠ No keystore secrets found — building debug APK"
+            echo "⚠ No secrets — generating debug keystore for release build"
+            keytool -genkey -v \
+              -keystore android/app/release.keystore \
+              -alias titan \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=Titan Protocol, O=Titan, L=Dev, ST=Dev, C=US"
+            echo "TITAN_STORE_FILE=$(pwd)/android/app/release.keystore" >> android/gradle.properties
+            echo "TITAN_STORE_PASSWORD=android" >> android/gradle.properties
+            echo "TITAN_KEY_ALIAS=titan" >> android/gradle.properties
+            echo "TITAN_KEY_PASSWORD=android" >> android/gradle.properties
           fi
 
-      - name: Build APK
-        run: |
-          cd android
-          if [ -f app/release.keystore ]; then
-            ./gradlew assembleRelease
-          else
-            ./gradlew assembleDebug
-          fi
+          # Inject signingConfig into build.gradle
+          cd android/app
+          sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file(TITAN_STORE_FILE)\n            storePassword TITAN_STORE_PASSWORD\n            keyAlias TITAN_KEY_ALIAS\n            keyPassword TITAN_KEY_PASSWORD\n        }\n    }' build.gradle
+          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/g' build.gradle
+
+      - name: Build Release APK
+        run: cd android && ./gradlew assembleRelease
 
       - name: Set version string
         id: version
@@ -77,7 +80,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: titan-protocol-android-${{ steps.version.outputs.tag }}
-          path: |
-            apps/mobile/android/app/build/outputs/apk/release/*.apk
-            apps/mobile/android/app/build/outputs/apk/debug/*.apk
+          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
