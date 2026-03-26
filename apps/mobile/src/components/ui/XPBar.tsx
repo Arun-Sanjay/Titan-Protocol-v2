@@ -14,7 +14,7 @@ type Props = {
   level: number;
 };
 
-export function XPBar({ xp, level }: Props) {
+export const XPBar = React.memo(function XPBar({ xp, level }: Props) {
   const rank = getRankForLevel(level);
   const currentLevelXP = xp - (level - 1) * 500;
   const needed = 500;
@@ -46,7 +46,7 @@ export function XPBar({ xp, level }: Props) {
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

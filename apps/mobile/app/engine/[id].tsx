@@ -1,12 +1,12 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, TextInput,
-  Pressable, Alert, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, Pressable, Alert,
+  KeyboardAvoidingView, Platform,
 } from "react-native";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { FlashList } from "@shopify/flash-list";
 import * as Haptics from "expo-haptics";
-import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { colors, spacing, radius, TOUCH_MIN } from "../../src/theme";
 import { PowerRing } from "../../src/components/ui/PowerRing";
 import { MissionRow } from "../../src/components/ui/MissionRow";
@@ -14,11 +14,8 @@ import { DateNavigator } from "../../src/components/ui/DateNavigator";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { FAB } from "../../src/components/ui/FAB";
 import { getTodayKey } from "../../src/lib/date";
-import {
-  listTasks, getCompletedIds, toggleTask, computeScore,
-  addTask, deleteTask, updateTaskKind,
-} from "../../src/db/engine";
-import { awardXP, updateStreak, XP_REWARDS } from "../../src/db/gamification";
+import { useEngineStore } from "../../src/stores/useEngineStore";
+import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
 import type { EngineKey, Task } from "../../src/db/schema";
 
 const ENGINE_META: Record<EngineKey, { icon: string; label: string; color: string }> = {
@@ -28,6 +25,12 @@ const ENGINE_META: Record<EngineKey, { icon: string; label: string; color: strin
   general: { icon: "⚙️", label: "General Engine", color: colors.general },
 };
 
+type ListItem =
+  | { type: "header"; title: string; right: string }
+  | { type: "task"; task: Task; completed: boolean }
+  | { type: "add"; kind: "main" | "secondary" }
+  | { type: "empty"; kind: "main" | "secondary" };
+
 export default function EngineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const engine = id as EngineKey;
@@ -35,88 +38,127 @@ export default function EngineScreen() {
   const router = useRouter();
 
   const [dateKey, setDateKey] = useState(getTodayKey());
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [completedIds, setCompletedIds] = useState<Set<number>>(new Set());
-  const [score, setScore] = useState(0);
-  const [newTitle, setNewTitle] = useState("");
-  const [newKind, setNewKind] = useState<"main" | "secondary">("main");
-  const [busy, setBusy] = useState(false);
-  const bottomSheetRef = useRef<BottomSheet>(null);
 
-  const loadData = useCallback(() => {
-    try {
-      const t = listTasks(engine);
-      const c = getCompletedIds(engine, dateKey);
-      setTasks(t);
-      setCompletedIds(c);
-      setScore(computeScore(t, c));
-    } catch (err) {
-      console.error("[Engine] loadData failed:", err);
-    }
+  const loadEngine = useEngineStore((s) => s.loadEngine);
+  const toggleTask = useEngineStore((s) => s.toggleTask);
+  const deleteTaskAction = useEngineStore((s) => s.deleteTask);
+  const tasks = useEngineStore((s) => s.tasks[engine] ?? []);
+  const completionIds = useEngineStore((s) => s.completions[`${engine}:${dateKey}`] ?? []);
+  const score = useEngineStore((s) => s.scores[`${engine}:${dateKey}`] ?? 0);
+
+  const awardXP = useProfileStore((s) => s.awardXP);
+  const updateStreak = useProfileStore((s) => s.updateStreak);
+
+  useEffect(() => {
+    loadEngine(engine, dateKey);
   }, [engine, dateKey]);
 
-  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+  const completedIds = useMemo(() => new Set(completionIds), [completionIds]);
 
-  const mainTasks = tasks.filter((t) => t.kind === "main");
-  const sideTasks = tasks.filter((t) => t.kind === "secondary");
-  const mainCompleted = mainTasks.filter((t) => completedIds.has(t.id!)).length;
-  const sideCompleted = sideTasks.filter((t) => completedIds.has(t.id!)).length;
+  const mainTasks = useMemo(() => tasks.filter((t) => t.kind === "main"), [tasks]);
+  const sideTasks = useMemo(() => tasks.filter((t) => t.kind === "secondary"), [tasks]);
+  const mainCompleted = useMemo(() => mainTasks.filter((t) => completedIds.has(t.id!)).length, [mainTasks, completedIds]);
+  const sideCompleted = useMemo(() => sideTasks.filter((t) => completedIds.has(t.id!)).length, [sideTasks, completedIds]);
 
-  const handleToggle = (task: Task) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const completed = toggleTask(engine, task.id!, dateKey);
-      if (completed) {
-        const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
-        awardXP(dateKey, "task_complete", xp);
-        updateStreak(dateKey);
-      }
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      loadData();
-    } catch (err) {
-      console.error("[Engine] toggle failed:", err);
-      Alert.alert("Error", "Failed to update task.");
-    } finally {
-      setBusy(false);
+  const handleToggle = useCallback((task: Task) => {
+    const completed = toggleTask(engine, task.id!, dateKey);
+    if (completed) {
+      const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
+      awardXP(dateKey, "task_complete", xp);
+      updateStreak(dateKey);
     }
-  };
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [engine, dateKey]);
 
-  const handleDelete = (task: Task) => {
+  const handleDelete = useCallback((task: Task) => {
     Alert.alert("Delete Mission", `Delete "${task.title}"?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete", style: "destructive",
         onPress: () => {
-          try { deleteTask(task.id!); loadData(); }
-          catch (err) { console.error("[Engine] delete failed:", err); }
+          deleteTaskAction(engine, task.id!);
+          loadEngine(engine, dateKey);
         },
       },
     ]);
-  };
+  }, [engine, dateKey]);
 
-  const openAddSheet = (kind: "main" | "secondary") => {
-    setNewKind(kind);
-    setNewTitle("");
-    bottomSheetRef.current?.expand();
-  };
+  const openAddModal = useCallback((kind: "main" | "secondary") => {
+    router.push({
+      pathname: "/(modals)/add-task",
+      params: { engine, kind, dateKey },
+    });
+  }, [engine, dateKey]);
 
-  const handleAddTask = () => {
-    if (!newTitle.trim() || busy) return;
-    setBusy(true);
-    try {
-      addTask(engine, newTitle.trim(), newKind);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setNewTitle("");
-      bottomSheetRef.current?.close();
-      loadData();
-    } catch (err) {
-      console.error("[Engine] addTask failed:", err);
-      Alert.alert("Error", "Failed to create task.");
-    } finally {
-      setBusy(false);
+  // Build a flat list of items for FlashList
+  const listData = useMemo((): ListItem[] => {
+    const items: ListItem[] = [];
+
+    items.push({ type: "header", title: "Missions", right: `${mainCompleted}/${mainTasks.length}` });
+    if (mainTasks.length === 0) {
+      items.push({ type: "empty", kind: "main" });
+    } else {
+      for (const t of mainTasks) {
+        items.push({ type: "task", task: t, completed: completedIds.has(t.id!) });
+      }
+      items.push({ type: "add", kind: "main" });
     }
-  };
+
+    items.push({ type: "header", title: "Side Quests", right: `${sideCompleted}/${sideTasks.length}` });
+    if (sideTasks.length === 0) {
+      items.push({ type: "empty", kind: "secondary" });
+    } else {
+      for (const t of sideTasks) {
+        items.push({ type: "task", task: t, completed: completedIds.has(t.id!) });
+      }
+      items.push({ type: "add", kind: "secondary" });
+    }
+
+    return items;
+  }, [mainTasks, sideTasks, completedIds, mainCompleted, sideCompleted]);
+
+  const renderItem = useCallback(({ item }: { item: ListItem }) => {
+    switch (item.type) {
+      case "header":
+        return <SectionHeader title={item.title} right={item.right} />;
+      case "task":
+        return (
+          <MissionRow
+            title={item.task.title}
+            xp={item.task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST}
+            completed={item.completed}
+            kind={item.task.kind}
+            onToggle={() => handleToggle(item.task)}
+            onDelete={() => handleDelete(item.task)}
+          />
+        );
+      case "empty":
+        return (
+          <Pressable onPress={() => openAddModal(item.kind)} style={styles.emptyAdd}>
+            <Text style={styles.emptyAddText}>
+              {item.kind === "main" ? "+ Add your first mission" : "+ Add a side quest"}
+            </Text>
+          </Pressable>
+        );
+      case "add":
+        return (
+          <Pressable onPress={() => openAddModal(item.kind)} style={styles.inlineAdd}>
+            <Text style={styles.inlineAddText}>
+              {item.kind === "main" ? "+ Add Mission" : "+ Add Side Quest"}
+            </Text>
+          </Pressable>
+        );
+    }
+  }, [handleToggle, handleDelete, openAddModal]);
+
+  const ListHeader = useMemo(() => (
+    <>
+      <DateNavigator dateKey={dateKey} onChange={setDateKey} />
+      <View style={styles.ringWrap}>
+        <PowerRing score={score} size={160} strokeWidth={8} />
+      </View>
+    </>
+  ), [dateKey, score]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -131,83 +173,20 @@ export default function EngineScreen() {
           <View style={{ width: 48 }} />
         </View>
 
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <DateNavigator dateKey={dateKey} onChange={setDateKey} />
+        <FlashList
+          data={listData}
+          renderItem={renderItem}
+          keyExtractor={(item, index) =>
+            item.type === "task" ? `task-${item.task.id}` : `${item.type}-${index}`
+          }
 
-          <View style={styles.ringWrap}>
-            <PowerRing score={score} size={160} strokeWidth={8} />
-          </View>
+          ListHeaderComponent={ListHeader}
+          ListFooterComponent={<View style={{ height: 120 }} />}
+          contentContainerStyle={{ paddingHorizontal: spacing.lg }}
+          showsVerticalScrollIndicator={false}
+        />
 
-          <SectionHeader title="Missions" right={`${mainCompleted}/${mainTasks.length}`} />
-          {mainTasks.length === 0 ? (
-            <Pressable onPress={() => openAddSheet("main")} style={styles.emptyAdd}>
-              <Text style={styles.emptyAddText}>+ Add your first mission</Text>
-            </Pressable>
-          ) : (
-            mainTasks.map((task) => (
-              <MissionRow
-                key={task.id} title={task.title} xp={XP_REWARDS.MAIN_TASK}
-                completed={completedIds.has(task.id!)} kind="main"
-                onToggle={() => handleToggle(task)} onDelete={() => handleDelete(task)}
-              />
-            ))
-          )}
-          {mainTasks.length > 0 && (
-            <Pressable onPress={() => openAddSheet("main")} style={styles.inlineAdd}>
-              <Text style={styles.inlineAddText}>+ Add Mission</Text>
-            </Pressable>
-          )}
-
-          <SectionHeader title="Side Quests" right={`${sideCompleted}/${sideTasks.length}`} />
-          {sideTasks.length === 0 ? (
-            <Pressable onPress={() => openAddSheet("secondary")} style={styles.emptyAdd}>
-              <Text style={styles.emptyAddText}>+ Add a side quest</Text>
-            </Pressable>
-          ) : (
-            sideTasks.map((task) => (
-              <MissionRow
-                key={task.id} title={task.title} xp={XP_REWARDS.SIDE_QUEST}
-                completed={completedIds.has(task.id!)} kind="secondary"
-                onToggle={() => handleToggle(task)} onDelete={() => handleDelete(task)}
-              />
-            ))
-          )}
-          {sideTasks.length > 0 && (
-            <Pressable onPress={() => openAddSheet("secondary")} style={styles.inlineAdd}>
-              <Text style={styles.inlineAddText}>+ Add Side Quest</Text>
-            </Pressable>
-          )}
-
-          <View style={{ height: 120 }} />
-        </ScrollView>
-
-        <FAB onPress={() => openAddSheet("main")} />
-
-        <BottomSheet
-          ref={bottomSheetRef} index={-1} snapPoints={[280]}
-          enablePanDownToClose backgroundStyle={styles.sheetBg} handleIndicatorStyle={styles.sheetHandle}
-        >
-          <BottomSheetView style={styles.sheet}>
-            <Text style={styles.sheetTitle}>{newKind === "main" ? "New Mission" : "New Side Quest"}</Text>
-            <TextInput
-              value={newTitle} onChangeText={setNewTitle}
-              placeholder={newKind === "main" ? "e.g. Workout" : "e.g. Walk 10k steps"}
-              placeholderTextColor={colors.textSecondary} style={styles.sheetInput}
-              autoFocus onSubmitEditing={handleAddTask}
-            />
-            <View style={styles.kindToggle}>
-              <Pressable onPress={() => setNewKind("main")} style={[styles.kindBtn, newKind === "main" && styles.kindBtnActive]}>
-                <Text style={[styles.kindBtnText, newKind === "main" && styles.kindBtnTextActive]}>Mission (+{XP_REWARDS.MAIN_TASK} XP)</Text>
-              </Pressable>
-              <Pressable onPress={() => setNewKind("secondary")} style={[styles.kindBtn, newKind === "secondary" && styles.kindBtnActive]}>
-                <Text style={[styles.kindBtnText, newKind === "secondary" && styles.kindBtnTextActive]}>Side Quest (+{XP_REWARDS.SIDE_QUEST} XP)</Text>
-              </Pressable>
-            </View>
-            <Pressable onPress={handleAddTask} style={styles.sheetSubmit}>
-              <Text style={styles.sheetSubmitText}>Add</Text>
-            </Pressable>
-          </BottomSheetView>
-        </BottomSheet>
+        <FAB onPress={() => openAddModal("main")} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -219,23 +198,9 @@ const styles = StyleSheet.create({
   backBtn: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
   backText: { fontSize: 24, color: colors.text },
   headerTitle: { fontSize: 18, fontWeight: "700" },
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: spacing.lg },
   ringWrap: { alignItems: "center", marginVertical: spacing.xl },
   emptyAdd: { borderWidth: 1, borderColor: colors.surfaceBorder, borderStyle: "dashed", borderRadius: radius.md, paddingVertical: spacing.xl, alignItems: "center" },
   emptyAddText: { fontSize: 15, color: colors.primary, fontWeight: "600" },
   inlineAdd: { paddingVertical: spacing.sm, alignItems: "center", marginTop: spacing.xs },
   inlineAddText: { fontSize: 14, color: colors.primary, fontWeight: "600" },
-  sheetBg: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
-  sheetHandle: { backgroundColor: colors.textMuted, width: 40 },
-  sheet: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl, gap: spacing.md },
-  sheetTitle: { fontSize: 18, fontWeight: "700", color: colors.text },
-  sheetInput: { backgroundColor: colors.surfaceLight, borderRadius: radius.md, borderWidth: 1, borderColor: colors.surfaceBorder, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, color: colors.text, fontSize: 16 },
-  kindToggle: { flexDirection: "row", gap: spacing.sm },
-  kindBtn: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.sm, backgroundColor: colors.surfaceLight, alignItems: "center", borderWidth: 1, borderColor: colors.surfaceBorder },
-  kindBtnActive: { backgroundColor: colors.primaryDim, borderColor: colors.primary + "50" },
-  kindBtnText: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
-  kindBtnTextActive: { color: colors.primary },
-  sheetSubmit: { backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center" },
-  sheetSubmitText: { color: "#000", fontWeight: "700", fontSize: 16 },
 });

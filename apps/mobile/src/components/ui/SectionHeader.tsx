@@ -7,14 +7,14 @@ type Props = {
   right?: string;
 };
 
-export function SectionHeader({ title, right }: Props) {
+export const SectionHeader = React.memo(function SectionHeader({ title, right }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{title}</Text>
       {right && <Text style={styles.right}>{right}</Text>}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

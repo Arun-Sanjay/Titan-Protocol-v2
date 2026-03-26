@@ -9,7 +9,7 @@ type Props = {
   onChange: (dateKey: string) => void;
 };
 
-export function DateNavigator({ dateKey, onChange }: Props) {
+export const DateNavigator = React.memo(function DateNavigator({ dateKey, onChange }: Props) {
   const isToday = dateKey === getTodayKey();
 
   const go = (delta: number) => {
@@ -33,7 +33,7 @@ export function DateNavigator({ dateKey, onChange }: Props) {
       </Pressable>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

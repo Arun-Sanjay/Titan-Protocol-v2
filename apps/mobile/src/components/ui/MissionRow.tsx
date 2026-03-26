@@ -20,7 +20,7 @@ type Props = {
   onDelete?: () => void;
 };
 
-export function MissionRow({ title, xp, completed, kind, onToggle, onDelete }: Props) {
+export const MissionRow = React.memo(function MissionRow({ title, xp, completed, kind, onToggle, onDelete }: Props) {
   const translateX = useSharedValue(0);
   const checkScale = useSharedValue(completed ? 1 : 0);
 
@@ -94,7 +94,7 @@ export function MissionRow({ title, xp, completed, kind, onToggle, onDelete }: P
       </Animated.View>
     </GestureDetector>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

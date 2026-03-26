@@ -15,7 +15,7 @@ type Props = {
   onPress: () => void;
 };
 
-export function FAB({ onPress }: Props) {
+export const FAB = React.memo(function FAB({ onPress }: Props) {
   const scale = useSharedValue(1);
   const rotation = useSharedValue(0);
 
@@ -42,7 +42,7 @@ export function FAB({ onPress }: Props) {
       <Text style={styles.icon}>+</Text>
     </AnimatedPressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   fab: {

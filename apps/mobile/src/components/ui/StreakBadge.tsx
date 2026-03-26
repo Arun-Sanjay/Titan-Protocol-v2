@@ -6,7 +6,7 @@ type Props = {
   streak: number;
 };
 
-export function StreakBadge({ streak }: Props) {
+export const StreakBadge = React.memo(function StreakBadge({ streak }: Props) {
   if (streak === 0) return null;
 
   const fireSize = streak >= 30 ? 28 : streak >= 14 ? 24 : streak >= 7 ? 20 : 16;
@@ -18,7 +18,7 @@ export function StreakBadge({ streak }: Props) {
       <Text style={styles.label}>DAY STREAK</Text>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

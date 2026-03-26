@@ -28,7 +28,7 @@ type Props = {
   onPress: () => void;
 };
 
-export function EngineCard({ engine, score, completedCount, totalCount, onPress }: Props) {
+export const EngineCard = React.memo(function EngineCard({ engine, score, completedCount, totalCount, onPress }: Props) {
   const meta = ENGINE_META[engine];
   const progress = useSharedValue(0);
 
@@ -87,7 +87,7 @@ export function EngineCard({ engine, score, completedCount, totalCount, onPress 
       </Text>
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

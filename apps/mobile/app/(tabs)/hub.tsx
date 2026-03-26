@@ -12,18 +12,19 @@ type HubItem = {
   label: string;
   route: string;
   color: string;
+  ready: boolean;
 };
 
 const HUB_ITEMS: HubItem[] = [
-  { icon: "🎯", ionicon: "timer", label: "Focus Timer", route: "/hub/focus", color: colors.primary },
-  { icon: "📊", ionicon: "bar-chart", label: "Analytics", route: "/hub/analytics", color: colors.mind },
-  { icon: "⚡", ionicon: "flash", label: "Command Center", route: "/hub/command", color: colors.warning },
-  { icon: "💰", ionicon: "wallet", label: "Finance Tracker", route: "/hub/finance", color: colors.money },
-  { icon: "💪", ionicon: "barbell", label: "Workouts", route: "/hub/workouts", color: colors.body },
-  { icon: "😴", ionicon: "moon", label: "Sleep Tracker", route: "/hub/sleep", color: colors.mind },
-  { icon: "⚖️", ionicon: "scale", label: "Weight Tracker", route: "/hub/weight", color: colors.general },
-  { icon: "🍎", ionicon: "nutrition", label: "Nutrition", route: "/hub/nutrition", color: colors.body },
-  { icon: "⚙️", ionicon: "settings", label: "System", route: "/hub/settings", color: colors.textSecondary },
+  { icon: "🎯", ionicon: "timer", label: "Focus Timer", route: "/hub/focus", color: colors.primary, ready: true },
+  { icon: "📊", ionicon: "bar-chart", label: "Analytics", route: "/hub/analytics", color: colors.mind, ready: true },
+  { icon: "⚡", ionicon: "flash", label: "Command Center", route: "/hub/command", color: colors.warning, ready: true },
+  { icon: "💰", ionicon: "wallet", label: "Finance Tracker", route: "/hub/cashflow", color: colors.money, ready: false },
+  { icon: "💪", ionicon: "barbell", label: "Workouts", route: "/hub/workouts", color: colors.body, ready: false },
+  { icon: "😴", ionicon: "moon", label: "Sleep Tracker", route: "/hub/sleep", color: colors.mind, ready: false },
+  { icon: "⚖️", ionicon: "scale", label: "Weight Tracker", route: "/hub/weight", color: colors.general, ready: false },
+  { icon: "🍎", ionicon: "nutrition", label: "Nutrition", route: "/hub/nutrition", color: colors.body, ready: false },
+  { icon: "⚙️", ionicon: "settings", label: "Settings", route: "/settings", color: colors.textSecondary, ready: true },
 ];
 
 export default function HubScreen() {
@@ -45,8 +46,7 @@ export default function HubScreen() {
               key={item.route}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                // For now, just navigate to placeholder
-                // router.push(item.route);
+                router.push(item.route as any);
               }}
               style={({ pressed }) => [
                 styles.card,
@@ -58,6 +58,11 @@ export default function HubScreen() {
                 <Text style={styles.emoji}>{item.icon}</Text>
               </View>
               <Text style={styles.label}>{item.label}</Text>
+              {!item.ready && (
+                <View style={styles.comingSoon}>
+                  <Text style={styles.comingSoonText}>SOON</Text>
+                </View>
+              )}
             </Pressable>
           ))}
         </View>
@@ -72,23 +77,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: colors.text,
-    marginTop: spacing.lg,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    marginBottom: spacing.xl,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md,
-  },
+  title: { fontSize: 28, fontWeight: "800", color: colors.text, marginTop: spacing.lg },
+  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: spacing.xs, marginBottom: spacing.xl },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   card: {
     width: "47%",
     backgroundColor: colors.surface,
@@ -98,24 +89,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
   },
-  cardPressed: {
-    transform: [{ scale: 0.97 }],
-    opacity: 0.8,
+  cardPressed: { transform: [{ scale: 0.97 }], opacity: 0.8 },
+  iconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
+  emoji: { fontSize: 28 },
+  label: { fontSize: 14, fontWeight: "600", color: colors.text, textAlign: "center" },
+  comingSoon: {
+    position: "absolute",
+    top: spacing.sm,
+    right: spacing.sm,
+    backgroundColor: colors.warningDim,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emoji: {
-    fontSize: 28,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-    textAlign: "center",
-  },
+  comingSoonText: { fontSize: 8, fontWeight: "800", color: colors.warning, letterSpacing: 1 },
 });

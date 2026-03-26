@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Circle, Defs, LinearGradient, Stop } from "react-native-svg";
 import Animated, {
@@ -19,18 +19,22 @@ type Props = {
   showRank?: boolean;
 };
 
-export function PowerRing({ score, size = 200, strokeWidth = 10, showRank = true }: Props) {
+export const PowerRing = React.memo(function PowerRing({ score, size = 200, strokeWidth = 10, showRank = true }: Props) {
   const progress = useSharedValue(0);
+  const lastScore = useRef(-1);
   const rank = getDailyRank(score);
 
   const r = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * r;
 
   useEffect(() => {
-    progress.value = withTiming(score / 100, {
-      duration: 1200,
-      easing: Easing.bezierFn(0.25, 0.1, 0.25, 1),
-    });
+    if (lastScore.current !== score) {
+      lastScore.current = score;
+      progress.value = withTiming(score / 100, {
+        duration: 1200,
+        easing: Easing.bezierFn(0.25, 0.1, 0.25, 1),
+      });
+    }
   }, [score]);
 
   const animatedProps = useAnimatedProps(() => ({
@@ -89,7 +93,7 @@ export function PowerRing({ score, size = 200, strokeWidth = 10, showRank = true
       </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

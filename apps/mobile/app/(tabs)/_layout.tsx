@@ -38,6 +38,8 @@ export default function TabLayout() {
         tabBarShowLabel: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
+        animation: "fade",
+        freezeOnBlur: true,
       }}
     >
       <Tabs.Screen
@@ -69,6 +71,14 @@ export default function TabLayout() {
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon name="grid" label="Hub" focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name="person" label="Profile" focused={focused} />
           ),
         }}
       />

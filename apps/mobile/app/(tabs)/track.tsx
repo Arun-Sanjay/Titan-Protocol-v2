@@ -1,19 +1,18 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
   TextInput, Alert,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, TOUCH_MIN } from "../../src/theme";
 import { Card } from "../../src/components/ui/Card";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { getTodayKey } from "../../src/lib/date";
-import { listHabits, toggleHabit, getHabitLogsForDate, addHabit, deleteHabit } from "../../src/db/habits";
-import { getJournalEntry, saveJournalEntry } from "../../src/db/journal";
-import { listGoals } from "../../src/db/goals";
-import type { Habit } from "../../src/db/schema";
+import { useHabitStore } from "../../src/stores/useHabitStore";
+import { useJournalStore } from "../../src/stores/useJournalStore";
+import { useGoalStore } from "../../src/stores/useGoalStore";
+import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
 
 type Tab = "habits" | "journal" | "goals";
 
@@ -50,74 +49,52 @@ export default function TrackScreen() {
 // ─── Habits Tab ────────────────────────────────────────────────────────────
 
 function HabitsTab({ dateKey }: { dateKey: string }) {
-  const [habits, setHabits] = useState<Habit[]>([]);
-  const [completedIds, setCompletedIds] = useState<Set<number>>(new Set());
+  const habits = useHabitStore((s) => s.habits);
+  const completedIds = useHabitStore((s) => s.completedIds[dateKey] ?? []);
+  const load = useHabitStore((s) => s.load);
+  const toggle = useHabitStore((s) => s.toggleHabit);
+  const add = useHabitStore((s) => s.addHabit);
+  const remove = useHabitStore((s) => s.deleteHabit);
+  const awardXP = useProfileStore((s) => s.awardXP);
+
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => {
-    try {
-      setHabits(listHabits());
-      setCompletedIds(getHabitLogsForDate(dateKey));
-    } catch (err) {
-      console.error("[Habits] load failed:", err);
-    }
-  }, [dateKey]);
+  useEffect(() => { load(dateKey); }, [dateKey]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const completedSet = React.useMemo(() => new Set(completedIds), [completedIds]);
 
   const handleToggle = (id: number) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      toggleHabit(id, dateKey);
-      load();
-    } catch (err) {
-      console.error("[Habits] toggle failed:", err);
-    } finally {
-      setBusy(false);
-    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const completed = toggle(id, dateKey);
+    if (completed) awardXP(dateKey, "habit_complete", XP_REWARDS.HABIT_COMPLETE);
   };
 
   const handleAdd = () => {
-    if (!newTitle.trim() || busy) return;
-    setBusy(true);
-    try {
-      addHabit(newTitle.trim(), "✓");
-      setNewTitle("");
-      setShowAdd(false);
-      load();
-    } catch (err) {
-      console.error("[Habits] add failed:", err);
-    } finally {
-      setBusy(false);
-    }
+    if (!newTitle.trim()) return;
+    add(newTitle.trim(), "✓");
+    setNewTitle("");
+    setShowAdd(false);
   };
 
   const handleDelete = (id: number) => {
     Alert.alert("Delete Habit", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete", style: "destructive",
-        onPress: () => {
-          try { deleteHabit(id); load(); }
-          catch (err) { console.error("[Habits] delete failed:", err); }
-        },
-      },
+      { text: "Delete", style: "destructive", onPress: () => remove(id) },
     ]);
   };
 
   return (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <SectionHeader title="Daily Habits" right={`${completedIds.size}/${habits.length}`} />
+      <SectionHeader title="Daily Habits" right={`${completedSet.size}/${habits.length}`} />
 
       {habits.map((h) => {
-        const done = completedIds.has(h.id!);
+        const done = completedSet.has(h.id!);
         return (
           <Pressable
-            key={h.id} onPress={() => handleToggle(h.id!)} onLongPress={() => handleDelete(h.id!)}
+            key={h.id}
+            onPress={() => handleToggle(h.id!)}
+            onLongPress={() => handleDelete(h.id!)}
             style={[styles.habitRow, done && styles.habitRowDone]}
           >
             <View style={[styles.habitCheck, done && styles.habitCheckDone]}>
@@ -154,30 +131,28 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
 // ─── Journal Tab ───────────────────────────────────────────────────────────
 
 function JournalTab({ dateKey }: { dateKey: string }) {
+  const entry = useJournalStore((s) => s.entries[dateKey]);
+  const loadEntry = useJournalStore((s) => s.loadEntry);
+  const saveEntry = useJournalStore((s) => s.saveEntry);
+  const awardXP = useProfileStore((s) => s.awardXP);
+
   const [content, setContent] = useState("");
   const [saved, setSaved] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      try {
-        const entry = getJournalEntry(dateKey);
-        setContent(entry?.content ?? "");
-      } catch (err) {
-        console.error("[Journal] load failed:", err);
-      }
-    }, [dateKey])
-  );
+  useEffect(() => {
+    loadEntry(dateKey);
+  }, [dateKey]);
+
+  useEffect(() => {
+    setContent(entry?.content ?? "");
+  }, [entry]);
 
   const handleSave = () => {
-    try {
-      saveJournalEntry(dateKey, content);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (err) {
-      console.error("[Journal] save failed:", err);
-      Alert.alert("Error", "Failed to save journal entry.");
-    }
+    saveEntry(dateKey, content);
+    awardXP(dateKey, "journal_entry", XP_REWARDS.JOURNAL_ENTRY);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   return (
@@ -201,14 +176,10 @@ function JournalTab({ dateKey }: { dateKey: string }) {
 // ─── Goals Tab ─────────────────────────────────────────────────────────────
 
 function GoalsTab() {
-  const [goals, setGoals] = useState<any[]>([]);
+  const goals = useGoalStore((s) => s.goals);
+  const load = useGoalStore((s) => s.load);
 
-  useFocusEffect(
-    useCallback(() => {
-      try { setGoals(listGoals()); }
-      catch (err) { console.error("[Goals] load failed:", err); }
-    }, [])
-  );
+  useEffect(() => { load(); }, []);
 
   return (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>

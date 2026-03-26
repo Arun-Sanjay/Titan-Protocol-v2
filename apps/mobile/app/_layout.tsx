@@ -23,7 +23,16 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: colors.bg },
           animation: "slide_from_right",
         }}
-      />
+      >
+        <Stack.Screen name="(tabs)" options={{ animation: "none" }} />
+        <Stack.Screen
+          name="(modals)/add-task"
+          options={{
+            presentation: "modal",
+            animation: "slide_from_bottom",
+          }}
+        />
+      </Stack>
     </GestureHandlerRootView>
   );
 }

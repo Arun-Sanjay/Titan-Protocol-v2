@@ -13,7 +13,7 @@ type Props = {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export function Card({ children, onPress, style, glowColor }: Props) {
+export const Card = React.memo(function Card({ children, onPress, style, glowColor }: Props) {
   const scale = useSharedValue(1);
 
   const animStyle = useAnimatedStyle(() => ({
@@ -53,7 +53,7 @@ export function Card({ children, onPress, style, glowColor }: Props) {
       {children}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {
