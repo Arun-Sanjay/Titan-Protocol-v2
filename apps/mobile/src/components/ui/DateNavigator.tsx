@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, TOUCH_MIN, fonts } from "../../theme";
@@ -12,23 +12,33 @@ type Props = {
 export const DateNavigator = React.memo(function DateNavigator({ dateKey, onChange }: Props) {
   const isToday = dateKey === getTodayKey();
 
-  const go = (delta: number) => {
+  const goPrev = useCallback(() => {
     Haptics.selectionAsync();
-    onChange(addDays(dateKey, delta));
-  };
+    onChange(addDays(dateKey, -1));
+  }, [dateKey, onChange]);
+
+  const goNext = useCallback(() => {
+    Haptics.selectionAsync();
+    onChange(addDays(dateKey, 1));
+  }, [dateKey, onChange]);
+
+  const goToday = useCallback(() => {
+    Haptics.selectionAsync();
+    onChange(getTodayKey());
+  }, [onChange]);
 
   return (
     <View style={styles.container}>
-      <Pressable onPress={() => go(-1)} style={styles.arrow}>
+      <Pressable onPress={goPrev} style={styles.arrow}>
         <Text style={styles.arrowText}>◀</Text>
       </Pressable>
 
-      <Pressable onPress={() => onChange(getTodayKey())} style={styles.dateWrap}>
+      <Pressable onPress={goToday} style={styles.dateWrap}>
         <Text style={styles.date}>{formatDateDisplay(dateKey)}</Text>
         {isToday && <Text style={styles.todayBadge}>TODAY</Text>}
       </Pressable>
 
-      <Pressable onPress={() => go(1)} style={styles.arrow}>
+      <Pressable onPress={goNext} style={styles.arrow}>
         <Text style={styles.arrowText}>▶</Text>
       </Pressable>
     </View>
@@ -64,7 +74,7 @@ const styles = StyleSheet.create({
   todayBadge: {
     ...fonts.kicker,
     fontSize: 9,
-    color: colors.primary,
+    color: colors.text,
     marginTop: 2,
   },
 });

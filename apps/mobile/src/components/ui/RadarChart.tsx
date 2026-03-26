@@ -5,7 +5,7 @@ import { colors, fonts } from "../../theme";
 import type { EngineKey } from "../../db/schema";
 
 type Props = {
-  scores: Record<EngineKey, number>; // 0-100
+  scores: Record<EngineKey, number>;
   size?: number;
 };
 
@@ -21,25 +21,23 @@ function polarToXY(cx: number, cy: number, r: number, angleIndex: number, total:
   return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
 }
 
-export const RadarChart = React.memo(function RadarChart({ scores, size = 180 }: Props) {
+export const RadarChart = React.memo(function RadarChart({ scores, size = 160 }: Props) {
+  // The SVG chart is drawn inside a smaller area, with padding for labels
+  const labelPadding = 30;
+  const chartSize = size - labelPadding * 2;
   const cx = size / 2;
   const cy = size / 2;
-  const maxR = size / 2 - 24; // leave room for labels
+  const maxR = chartSize / 2;
   const n = AXES.length;
 
-  // Grid rings at 25%, 50%, 75%, 100%
   const gridLevels = [0.25, 0.5, 0.75, 1.0];
 
-  // Data polygon points
   const dataPoints = AXES.map((axis, i) => {
     const val = (scores[axis.key] ?? 0) / 100;
-    const r = val * maxR;
+    const r = Math.max(val, 0.02) * maxR; // min 2% so polygon is always visible
     return polarToXY(cx, cy, r, i, n);
   });
   const dataPolygon = dataPoints.map((p) => `${p.x},${p.y}`).join(" ");
-
-  // Label positions (slightly outside max radius)
-  const labelR = maxR + 18;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
@@ -65,10 +63,7 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 180 }:
           return (
             <Line
               key={i}
-              x1={cx}
-              y1={cy}
-              x2={p.x}
-              y2={p.y}
+              x1={cx} y1={cy} x2={p.x} y2={p.y}
               stroke="rgba(255, 255, 255, 0.06)"
               strokeWidth={1}
             />
@@ -86,19 +81,13 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 180 }:
 
         {/* Data dots */}
         {dataPoints.map((p, i) => (
-          <Circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r={3}
-            fill="rgba(247, 250, 255, 0.9)"
-          />
+          <Circle key={i} cx={p.x} cy={p.y} r={3} fill="rgba(247, 250, 255, 0.9)" />
         ))}
       </Svg>
 
-      {/* Labels */}
+      {/* Labels positioned outside the chart area */}
       {AXES.map((axis, i) => {
-        const pos = polarToXY(cx, cy, labelR, i, n);
+        const pos = polarToXY(cx, cy, maxR + 16, i, n);
         return (
           <Text
             key={axis.key}
@@ -106,9 +95,9 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 180 }:
               styles.label,
               {
                 position: "absolute",
-                left: pos.x - 24,
+                left: pos.x - 28,
                 top: pos.y - 7,
-                width: 48,
+                width: 56,
                 textAlign: "center",
               },
             ]}
@@ -124,6 +113,8 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 180 }:
 const styles = StyleSheet.create({
   container: {
     position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
   },
   label: {
     ...fonts.kicker,

@@ -151,14 +151,15 @@ export default function EngineScreen() {
     }
   }, [handleToggle, handleDelete, openAddModal]);
 
-  const ListHeader = useMemo(() => (
+  // NOT memoized — DateNavigator needs fresh dateKey on every render
+  const ListHeader = (
     <>
       <DateNavigator dateKey={dateKey} onChange={setDateKey} />
       <View style={styles.ringWrap}>
         <PowerRing score={score} size={160} strokeWidth={8} />
       </View>
     </>
-  ), [dateKey, score]);
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
