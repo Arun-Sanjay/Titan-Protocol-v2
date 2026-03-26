@@ -1,7 +1,7 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import Svg, { Polygon, Line, Circle } from "react-native-svg";
-import { colors, fonts } from "../../theme";
+import { View, StyleSheet } from "react-native";
+import Svg, { Polygon, Line, Circle, Text as SvgText } from "react-native-svg";
+import { colors } from "../../theme";
 import type { EngineKey } from "../../db/schema";
 
 type Props = {
@@ -21,23 +21,23 @@ function polarToXY(cx: number, cy: number, r: number, angleIndex: number, total:
   return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
 }
 
-export const RadarChart = React.memo(function RadarChart({ scores, size = 160 }: Props) {
-  // The SVG chart is drawn inside a smaller area, with padding for labels
-  const labelPadding = 30;
-  const chartSize = size - labelPadding * 2;
+export const RadarChart = React.memo(function RadarChart({ scores, size = 200 }: Props) {
   const cx = size / 2;
   const cy = size / 2;
-  const maxR = chartSize / 2;
+  const maxR = size * 0.32; // chart radius is 32% of total size, leaving room for labels
   const n = AXES.length;
 
   const gridLevels = [0.25, 0.5, 0.75, 1.0];
 
   const dataPoints = AXES.map((axis, i) => {
     const val = (scores[axis.key] ?? 0) / 100;
-    const r = Math.max(val, 0.02) * maxR; // min 2% so polygon is always visible
+    const r = Math.max(val, 0.03) * maxR;
     return polarToXY(cx, cy, r, i, n);
   });
   const dataPolygon = dataPoints.map((p) => `${p.x},${p.y}`).join(" ");
+
+  // Label positions — far enough outside the chart
+  const labelR = maxR + 22;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
@@ -83,42 +83,33 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 160 }:
         {dataPoints.map((p, i) => (
           <Circle key={i} cx={p.x} cy={p.y} r={3} fill="rgba(247, 250, 255, 0.9)" />
         ))}
-      </Svg>
 
-      {/* Labels positioned outside the chart area */}
-      {AXES.map((axis, i) => {
-        const pos = polarToXY(cx, cy, maxR + 16, i, n);
-        return (
-          <Text
-            key={axis.key}
-            style={[
-              styles.label,
-              {
-                position: "absolute",
-                left: pos.x - 28,
-                top: pos.y - 7,
-                width: 56,
-                textAlign: "center",
-              },
-            ]}
-          >
-            {axis.label}
-          </Text>
-        );
-      })}
+        {/* Labels rendered as SVG Text — no clipping */}
+        {AXES.map((axis, i) => {
+          const pos = polarToXY(cx, cy, labelR, i, n);
+          return (
+            <SvgText
+              key={axis.key}
+              x={pos.x}
+              y={pos.y + 3}
+              textAnchor="middle"
+              fontSize={10}
+              fontWeight="600"
+              letterSpacing={1}
+              fill={colors.textSecondary}
+            >
+              {axis.label}
+            </SvgText>
+          );
+        })}
+      </Svg>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: {
-    position: "relative",
     alignItems: "center",
     justifyContent: "center",
-  },
-  label: {
-    ...fonts.kicker,
-    fontSize: 9,
-    color: colors.textSecondary,
   },
 });

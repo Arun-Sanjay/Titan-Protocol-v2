@@ -1,7 +1,7 @@
-import React, { useCallback } from "react";
+import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, radius, TOUCH_MIN, fonts } from "../../theme";
+import { colors, spacing, TOUCH_MIN, fonts } from "../../theme";
 import { formatDateDisplay, addDays, getTodayKey } from "../../lib/date";
 
 type Props = {
@@ -9,41 +9,45 @@ type Props = {
   onChange: (dateKey: string) => void;
 };
 
-export const DateNavigator = React.memo(function DateNavigator({ dateKey, onChange }: Props) {
+// NOT memoized — must always reflect current dateKey to avoid stale closure bugs
+export function DateNavigator({ dateKey, onChange }: Props) {
   const isToday = dateKey === getTodayKey();
-
-  const goPrev = useCallback(() => {
-    Haptics.selectionAsync();
-    onChange(addDays(dateKey, -1));
-  }, [dateKey, onChange]);
-
-  const goNext = useCallback(() => {
-    Haptics.selectionAsync();
-    onChange(addDays(dateKey, 1));
-  }, [dateKey, onChange]);
-
-  const goToday = useCallback(() => {
-    Haptics.selectionAsync();
-    onChange(getTodayKey());
-  }, [onChange]);
 
   return (
     <View style={styles.container}>
-      <Pressable onPress={goPrev} style={styles.arrow}>
+      <Pressable
+        onPress={() => {
+          Haptics.selectionAsync();
+          onChange(addDays(dateKey, -1));
+        }}
+        style={styles.arrow}
+      >
         <Text style={styles.arrowText}>◀</Text>
       </Pressable>
 
-      <Pressable onPress={goToday} style={styles.dateWrap}>
+      <Pressable
+        onPress={() => {
+          Haptics.selectionAsync();
+          onChange(getTodayKey());
+        }}
+        style={styles.dateWrap}
+      >
         <Text style={styles.date}>{formatDateDisplay(dateKey)}</Text>
         {isToday && <Text style={styles.todayBadge}>TODAY</Text>}
       </Pressable>
 
-      <Pressable onPress={goNext} style={styles.arrow}>
+      <Pressable
+        onPress={() => {
+          Haptics.selectionAsync();
+          onChange(addDays(dateKey, 1));
+        }}
+        style={styles.arrow}
+      >
         <Text style={styles.arrowText}>▶</Text>
       </Pressable>
     </View>
   );
-});
+}
 
 const styles = StyleSheet.create({
   container: {

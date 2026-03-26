@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, Pressable, Alert,
   KeyboardAvoidingView, Platform,
@@ -38,19 +38,27 @@ export default function EngineScreen() {
   const router = useRouter();
 
   const [dateKey, setDateKey] = useState(getTodayKey());
+  const lastLoadRef = useRef("");
 
   const loadEngine = useEngineStore((s) => s.loadEngine);
   const toggleTask = useEngineStore((s) => s.toggleTask);
   const deleteTaskAction = useEngineStore((s) => s.deleteTask);
   const tasks = useEngineStore((s) => s.tasks[engine] ?? []);
-  const completionIds = useEngineStore((s) => s.completions[`${engine}:${dateKey}`] ?? []);
-  const score = useEngineStore((s) => s.scores[`${engine}:${dateKey}`] ?? 0);
+  const allCompletions = useEngineStore((s) => s.completions);
+  const allScores = useEngineStore((s) => s.scores);
+
+  const completionIds = allCompletions[`${engine}:${dateKey}`] ?? [];
+  const score = allScores[`${engine}:${dateKey}`] ?? 0;
 
   const awardXP = useProfileStore((s) => s.awardXP);
   const updateStreak = useProfileStore((s) => s.updateStreak);
 
   useEffect(() => {
-    loadEngine(engine, dateKey);
+    const key = `${engine}:${dateKey}`;
+    if (lastLoadRef.current !== key) {
+      lastLoadRef.current = key;
+      loadEngine(engine, dateKey);
+    }
   }, [engine, dateKey]);
 
   const completedIds = useMemo(() => new Set(completionIds), [completionIds]);

@@ -139,7 +139,7 @@ export default function HQScreen() {
 
           <Panel style={styles.radarPanel}>
             <Text style={styles.radarLabel}>ENGINE OVERVIEW</Text>
-            <RadarChart scores={analytics.engineScores} size={160} />
+            <RadarChart scores={analytics.engineScores} size={180} />
           </Panel>
         </View>
 
