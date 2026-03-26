@@ -52,11 +52,11 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.text,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(56, 189, 248, 0.30)",
+    borderColor: "rgba(255, 255, 255, 0.30)",
     ...shadows.panelGlow,
   },
   icon: {

@@ -15,18 +15,16 @@ function TabIcon({ name, label, focused }: TabIconProps) {
       <Ionicons
         name={name}
         size={20}
-        color={focused ? colors.primary : colors.textSecondary}
-        style={focused ? styles.iconGlow : undefined}
+        color={focused ? colors.text : colors.textMuted}
       />
       <Text
         style={[
           styles.label,
-          { color: focused ? colors.primary : colors.textSecondary },
+          { color: focused ? colors.textSecondary : colors.textMuted },
         ]}
       >
         {label}
       </Text>
-      {focused && <View style={styles.activeDot} />}
     </View>
   );
 }
@@ -38,8 +36,8 @@ export default function TabLayout() {
         headerShown: false,
         tabBarStyle: styles.tabBar,
         tabBarShowLabel: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarActiveTintColor: colors.text,
+        tabBarInactiveTintColor: colors.textMuted,
         animation: "fade",
         freezeOnBlur: true,
       }}
@@ -103,21 +101,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 3,
   },
-  iconGlow: {
-    textShadowColor: colors.primary,
-    textShadowRadius: 8,
-  },
   label: {
     fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 1,
+    fontWeight: "600",
+    letterSpacing: 0.8,
     textTransform: "uppercase",
-  },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.primary,
-    marginTop: 2,
   },
 });

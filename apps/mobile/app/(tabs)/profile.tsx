@@ -12,13 +12,16 @@ import { getRankForLevel, RANKS } from "../../src/db/gamification";
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const profile = useProfileStore((s) => s.profile);
+  const xp = useProfileStore((s) => s.profile.xp);
+  const level = useProfileStore((s) => s.profile.level);
+  const streak = useProfileStore((s) => s.profile.streak);
+  const bestStreak = useProfileStore((s) => s.profile.best_streak);
   const load = useProfileStore((s) => s.load);
 
   useEffect(() => { load(); }, []);
 
-  const rank = getRankForLevel(profile.level);
-  const nextRank = RANKS.find((r) => r.minLevel > profile.level);
+  const rank = getRankForLevel(level);
+  const nextRank = RANKS.find((r) => r.minLevel > level);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -33,30 +36,30 @@ export default function ProfileScreen() {
           <Text style={[styles.rankLetter, { color: rank.color }]}>
             {rank.name.toUpperCase()}
           </Text>
-          <Text style={styles.levelText}>Level {profile.level}</Text>
+          <Text style={styles.levelText}>Level {level}</Text>
         </View>
 
         <View style={styles.xpWrap}>
-          <XPBar xp={profile.xp} level={profile.level} />
+          <XPBar xp={xp} level={level} />
         </View>
 
-        <StreakBadge streak={profile.streak} />
+        <StreakBadge streak={streak} />
 
         <View style={styles.statsGrid}>
           <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{profile.xp.toLocaleString()}</Text>
+            <Text style={styles.statValue}>{xp.toLocaleString()}</Text>
             <Text style={styles.statLabel}>Total XP</Text>
           </Card>
           <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{profile.streak}</Text>
+            <Text style={styles.statValue}>{streak}</Text>
             <Text style={styles.statLabel}>Current Streak</Text>
           </Card>
           <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{profile.best_streak}</Text>
+            <Text style={styles.statValue}>{bestStreak}</Text>
             <Text style={styles.statLabel}>Best Streak</Text>
           </Card>
           <Card style={styles.statCard}>
-            <Text style={styles.statValue}>{profile.level}</Text>
+            <Text style={styles.statValue}>{level}</Text>
             <Text style={styles.statLabel}>Level</Text>
           </Card>
         </View>
@@ -68,7 +71,7 @@ export default function ProfileScreen() {
               {nextRank.name.toUpperCase()}
             </Text>
             <Text style={styles.nextRankLevel}>
-              Reach Level {nextRank.minLevel} ({nextRank.minLevel - profile.level} levels to go)
+              Reach Level {nextRank.minLevel} ({nextRank.minLevel - level} levels to go)
             </Text>
           </Card>
         )}

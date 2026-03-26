@@ -16,7 +16,7 @@ type Props = {
 
 export const TitanProgress = React.memo(function TitanProgress({
   value,
-  color = colors.primary,
+  color = colors.text,
   height = 7,
 }: Props) {
   const width = useSharedValue(0);
@@ -37,14 +37,7 @@ export const TitanProgress = React.memo(function TitanProgress({
       <Animated.View
         style={[
           styles.fill,
-          {
-            height,
-            backgroundColor: color,
-            shadowColor: color,
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.3,
-            shadowRadius: 10,
-          },
+          { height, backgroundColor: color },
           fillStyle,
         ]}
       />
@@ -58,7 +51,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.92)",
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: "rgba(56, 189, 248, 0.06)",
+    borderColor: "rgba(255, 255, 255, 0.12)",
     overflow: "hidden",
   },
   fill: {

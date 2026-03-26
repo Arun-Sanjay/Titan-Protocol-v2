@@ -1,7 +1,6 @@
 import React from "react";
 import { View, Pressable, StyleSheet, ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
-import { LinearGradient } from "react-native-svg";
 import * as Haptics from "expo-haptics";
 import { colors, radius, spacing, shadows } from "../../theme";
 
@@ -36,14 +35,13 @@ export const Panel = React.memo(function Panel({ children, onPress, style, glowC
   };
 
   const borderColor = glowColor ? glowColor + "18" : colors.panelBorder;
-  const glowShadow = glowColor
-    ? { ...shadows.glow, shadowColor: glowColor }
-    : shadows.panel;
 
   const content = (
     <>
-      {/* Top edge highlight — simulates desktop inset top glow */}
-      <View style={[styles.topEdge, hero && styles.topEdgeHero]} />
+      {/* Top edge highlight — matches desktop inset 0 1px rgba(255,255,255,0.1) */}
+      <View style={styles.topEdge} />
+      {/* Inner border overlay — matches desktop ::after */}
+      <View style={styles.innerBorder} />
       {children}
     </>
   );
@@ -54,7 +52,7 @@ export const Panel = React.memo(function Panel({ children, onPress, style, glowC
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        style={[styles.panel, glowShadow, { borderColor }, hero && styles.hero, animStyle, style]}
+        style={[styles.panel, shadows.panel, { borderColor }, hero && styles.hero, animStyle, style]}
       >
         {content}
       </AnimatedPressable>
@@ -74,21 +72,29 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.panelBorder,
-    padding: spacing.lg,
+    padding: 20,
     overflow: "hidden",
   },
   hero: {
-    backgroundColor: "rgba(4, 8, 16, 0.97)",
+    backgroundColor: colors.surfaceHero,
   },
   topEdge: {
     position: "absolute",
     top: 0,
+    left: 14,
+    right: 14,
+    height: 1,
+    backgroundColor: colors.glowLine,
+    opacity: 0.58,
+  },
+  innerBorder: {
+    position: "absolute",
+    top: 0,
     left: 0,
     right: 0,
-    height: 1,
-    backgroundColor: colors.panelHighlight,
-  },
-  topEdgeHero: {
-    backgroundColor: "rgba(56, 189, 248, 0.18)",
+    bottom: 0,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.panelInnerBorder,
   },
 });

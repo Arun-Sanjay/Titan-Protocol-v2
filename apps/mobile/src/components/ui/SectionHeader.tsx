@@ -26,11 +26,11 @@ const styles = StyleSheet.create({
   },
   title: {
     ...fonts.kicker,
-    color: colors.primary,
+    color: colors.textMuted,
   },
   right: {
     ...fonts.mono,
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
 });

@@ -42,7 +42,7 @@ export const fonts = {
     color: colors.text,
   } satisfies TextStyle,
 
-  // Desktop kicker style — uppercase, wide spacing, small, cyan
+  // Desktop kicker style — uppercase, wide spacing, muted color
   kicker: {
     fontSize: 10,
     fontWeight: "700",
@@ -65,7 +65,6 @@ export const fonts = {
     color: colors.textSecondary,
   } satisfies TextStyle,
 
-  // Monospace — for values, numbers, timer
   mono: {
     fontSize: 14,
     fontWeight: "600",
@@ -92,6 +91,6 @@ export const fonts = {
     fontSize: 14,
     fontWeight: "700",
     fontFamily: monoFont,
-    color: colors.primary,
+    color: colors.textSecondary,
   } satisfies TextStyle,
 };

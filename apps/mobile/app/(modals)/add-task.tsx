@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.surfaceBorder,
   },
-  kindBtnActive: { backgroundColor: colors.primaryDim, borderColor: colors.primary + "50" },
+  kindBtnActive: { backgroundColor: colors.primaryDim, borderColor: colors.surfaceBorderStrong },
   kindBtnText: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
   kindBtnTextActive: { color: colors.primary },
   submit: {

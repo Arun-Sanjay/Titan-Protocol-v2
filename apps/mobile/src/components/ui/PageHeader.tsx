@@ -25,15 +25,18 @@ const styles = StyleSheet.create({
   },
   kicker: {
     ...fonts.kicker,
-    color: colors.primary,
+    color: colors.textMuted,
     marginBottom: spacing.xs,
   },
   title: {
     ...fonts.title,
+    textTransform: "uppercase",
+    letterSpacing: 2,
   },
   subtitle: {
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: spacing.xs,
+    letterSpacing: 0.5,
   },
 });

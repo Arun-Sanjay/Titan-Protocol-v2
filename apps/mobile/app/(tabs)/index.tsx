@@ -29,7 +29,9 @@ export default function HQScreen() {
   const tasks = useMemo(() => selectAllTasksForDate(storeTasks, storeCompletions, dateKey), [storeTasks, storeCompletions, dateKey]);
   const totalScore = useMemo(() => selectTotalScore(scores, dateKey), [scores, dateKey]);
 
-  const profile = useProfileStore((s) => s.profile);
+  const profileXp = useProfileStore((s) => s.profile.xp);
+  const profileLevel = useProfileStore((s) => s.profile.level);
+  const profileStreak = useProfileStore((s) => s.profile.streak);
   const loadProfile = useProfileStore((s) => s.load);
   const awardXP = useProfileStore((s) => s.awardXP);
   const updateStreak = useProfileStore((s) => s.updateStreak);
@@ -79,14 +81,14 @@ export default function HQScreen() {
       <PageHeader kicker="COMMAND // HQ" title={getGreeting()} />
 
       <View style={styles.xpWrap}>
-        <XPBar xp={profile.xp} level={profile.level} />
+        <XPBar xp={profileXp} level={profileLevel} />
       </View>
 
       <View style={styles.ringWrap}>
         <PowerRing score={totalScore} size={200} />
       </View>
 
-      <StreakBadge streak={profile.streak} />
+      <StreakBadge streak={profileStreak} />
 
       <SectionHeader title="ENGINES" />
       <View style={styles.engineGrid}>
@@ -115,7 +117,7 @@ export default function HQScreen() {
         </View>
       )}
     </>
-  ), [profile, totalScore, scores, dateKey, tasks.length, completedCount, engineCounts]);
+  ), [profileXp, profileLevel, profileStreak, totalScore, scores, dateKey, tasks.length, completedCount, engineCounts]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

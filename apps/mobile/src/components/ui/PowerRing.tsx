@@ -41,11 +41,8 @@ export const PowerRing = React.memo(function PowerRing({ score, size = 200, stro
     strokeDashoffset: circumference * (1 - progress.value),
   }));
 
-  const ringColor =
-    score >= 90 ? colors.warning :
-    score >= 70 ? colors.primary :
-    score >= 40 ? "#F97316" :
-    colors.danger;
+  // HUD theme: white gradient ring
+  const ringColor = "rgba(247, 250, 255, 0.9)";
 
   return (
     <View style={[styles.container, { width: size, height: size }, shadows.ring]}>
@@ -53,7 +50,7 @@ export const PowerRing = React.memo(function PowerRing({ score, size = 200, stro
         <Defs>
           <LinearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0%" stopColor={ringColor} stopOpacity="0.6" />
-            <Stop offset="100%" stopColor={ringColor} stopOpacity="1" />
+            <Stop offset="100%" stopColor={ringColor} stopOpacity="0.95" />
           </LinearGradient>
         </Defs>
 
@@ -82,7 +79,7 @@ export const PowerRing = React.memo(function PowerRing({ score, size = 200, stro
 
       <View style={styles.center}>
         {showRank && (
-          <Text style={[styles.rank, { color: rank.color, textShadowColor: rank.color + "40", textShadowRadius: 12 }]}>
+          <Text style={[styles.rank, { color: rank.color }]}>
             {rank.letter}
           </Text>
         )}
@@ -116,6 +113,7 @@ const styles = StyleSheet.create({
   label: {
     ...fonts.kicker,
     fontSize: 10,
+    color: colors.textMuted,
     marginTop: 2,
   },
 });
