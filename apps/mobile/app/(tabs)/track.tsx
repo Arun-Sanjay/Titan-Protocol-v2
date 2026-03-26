@@ -77,7 +77,7 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
       for (let i = 0; i < 90; i++) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        const dk = d.toISOString().slice(0, 10);
+        const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const logs = getJSON<number[]>(`habit_logs:${dk}`, []);
         if (logs.includes(h.id!)) {
           streak++;
@@ -98,7 +98,7 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
       for (let i = 83; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        const dk = d.toISOString().slice(0, 10);
+        const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const logs = getJSON<number[]>(`habit_logs:${dk}`, []);
         cells.push({ dateKey: dk, completed: logs.includes(h.id!) });
       }
@@ -281,7 +281,7 @@ function GoalsTab({ dateKey }: { dateKey: string }) {
       type: "count",
       target: 1,
       unit: "tasks",
-      deadline: newDeadline || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+      deadline: newDeadline || (() => { const dd = new Date(Date.now() + 30 * 86400000); return `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(dd.getDate()).padStart(2, "0")}`; })(),
     });
     setNewTitle("");
     setNewDeadline("");

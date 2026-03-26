@@ -27,7 +27,7 @@ export function listJournalEntries(limit = 30): JournalEntry[] {
   for (let i = 0; i < 90 && entries.length < limit; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const dateKey = d.toISOString().slice(0, 10);
+    const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const entry = getJournalEntry(dateKey);
     if (entry && entry.content) {
       entries.push(entry);

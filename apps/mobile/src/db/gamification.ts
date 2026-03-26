@@ -78,7 +78,7 @@ export function updateStreak(dateKey: string): number {
   const today = new Date(dateKey);
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayKey = yesterday.toISOString().slice(0, 10);
+  const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
 
   let newStreak: number;
   if (profile.last_active_date === yesterdayKey) {

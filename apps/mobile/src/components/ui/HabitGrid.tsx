@@ -34,7 +34,7 @@ export const HabitGrid = React.memo(function HabitGrid({
   // Generate date grid: weeks × 7 days, ending today
   const grid = useMemo(() => {
     const today = new Date();
-    const todayKey = today.toISOString().slice(0, 10);
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const dayOfWeek = today.getDay(); // 0=Sun
     const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 
@@ -48,7 +48,7 @@ export const HabitGrid = React.memo(function HabitGrid({
     for (let i = startOffset; i >= -6 + mondayOffset; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      const dk = d.toISOString().slice(0, 10);
+      const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const isFuture = dk > todayKey;
 
       currentWeek.push({

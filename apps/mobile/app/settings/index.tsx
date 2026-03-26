@@ -21,8 +21,9 @@ export default function SettingsScreen() {
         if (val !== undefined) data[key] = val;
       }
       const json = JSON.stringify(data, null, 2);
-      const now = new Date().toISOString().slice(0, 10);
-      setLastBackup(now);
+      const now = new Date();
+      const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      setLastBackup(nowKey);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
         "Backup Ready",

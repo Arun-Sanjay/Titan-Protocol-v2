@@ -1,11 +1,12 @@
 import { useMemo, useEffect } from "react";
 import { useEngineStore, ENGINES, selectTotalScore } from "../stores/useEngineStore";
 import type { EngineKey } from "../db/schema";
+import { toLocalDateKey } from "../lib/date";
 
 function getDateKey(daysAgo: number): string {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
-  return d.toISOString().slice(0, 10);
+  return toLocalDateKey(d);
 }
 
 function getDateRange(daysBack: number): { start: string; end: string } {

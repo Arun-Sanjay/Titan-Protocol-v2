@@ -152,7 +152,7 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
     const end = new Date(endDate + "T00:00:00");
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dk = d.toISOString().slice(0, 10);
+      const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       for (const engine of ENGINES) {
         const cKey = `${engine}:${dk}`;
         if (get().scores[cKey] !== undefined) continue; // already loaded
