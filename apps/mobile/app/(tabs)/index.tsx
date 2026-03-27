@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from "react";
-import { View, Text, StyleSheet, RefreshControl, Pressable, ScrollView } from "react-native";
+import { View, Text, StyleSheet, RefreshControl, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, fonts, shadows, radius } from "../../src/theme";
@@ -40,6 +40,8 @@ const ENGINE_COLORS: Record<EngineKey, string> = {
 
 export default function HQScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const sparkCardWidth = (screenWidth - spacing.lg * 2 - spacing.sm) / 2 - 24; // account for padding
   const analytics = useAnalyticsData();
 
   const storeTasks = useEngineStore((s) => s.tasks);
@@ -161,7 +163,7 @@ export default function HQScreen() {
                 </Text>
                 <Text style={styles.sparkValue}>{analytics.engineScores[engine]}%</Text>
               </View>
-              <SparklineChart data={analytics.sparklineData[engine]} width={140} height={36} color={ENGINE_COLORS[engine]} />
+              <SparklineChart data={analytics.sparklineData[engine]} width={sparkCardWidth} height={36} color={ENGINE_COLORS[engine]} />
               <Text style={styles.sparkSub}>
                 Today: {analytics.engineScores[engine]}%
               </Text>
@@ -239,10 +241,10 @@ const styles = StyleSheet.create({
   radarLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.sm },
 
   // Sparkline grid
-  sparkGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "space-between" },
-  sparkCard: { width: "48%" },
+  sparkGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  sparkCard: { width: "48%", flexGrow: 1 },
   sparkHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
-  sparkLabel: { ...fonts.kicker, fontSize: 9 },
+  sparkLabel: { ...fonts.kicker, fontSize: 11, letterSpacing: 2 },
   sparkValue: { ...fonts.mono, fontSize: 16, fontWeight: "800", color: colors.text },
   sparkSub: { ...fonts.mono, fontSize: 10, color: colors.textMuted, marginTop: spacing.xs },
 

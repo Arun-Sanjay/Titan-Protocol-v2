@@ -1,12 +1,11 @@
 import React from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius } from "../../src/theme";
 import { PageHeader } from "../../src/components/ui/PageHeader";
-import { Panel } from "../../src/components/ui/Panel";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 
 type HubItem = {
@@ -32,8 +31,34 @@ const HUB_ITEMS: HubItem[] = [
   { icon: "⚙️", ionicon: "settings", label: "Settings", route: "/hub/settings", color: colors.textSecondary, ready: true },
 ];
 
-export default function HubScreen() {
+function HubCard({ item, cardWidth, index }: { item: HubItem; cardWidth: number; index: number }) {
   const router = useRouter();
+
+  return (
+    <Pressable
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        router.push(item.route as any);
+      }}
+      style={({ pressed }) => [
+        styles.card,
+        { width: cardWidth, borderColor: item.color + "20" },
+        pressed && styles.cardPressed,
+      ]}
+    >
+      <View style={[styles.iconCircle, { backgroundColor: item.color + "15" }]}>
+        <Text style={styles.emoji}>{item.icon}</Text>
+      </View>
+      <Text style={styles.label} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+        {item.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+export default function HubScreen() {
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = (screenWidth - spacing.lg * 2 - spacing.md) / 2;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -47,25 +72,7 @@ export default function HubScreen() {
 
         <View style={styles.grid}>
           {HUB_ITEMS.map((item, i) => (
-            <Panel
-              key={item.route}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push(item.route as any);
-              }}
-              style={{ ...styles.card, borderColor: item.color + "20" }}
-              delay={i * 50}
-            >
-              <View style={[styles.iconCircle, { backgroundColor: item.color + "15" }]}>
-                <Text style={styles.emoji}>{item.icon}</Text>
-              </View>
-              <Text style={styles.label}>{item.label}</Text>
-              {!item.ready && (
-                <View style={styles.comingSoon}>
-                  <Text style={styles.comingSoonText}>SOON</Text>
-                </View>
-              )}
-            </Panel>
+            <HubCard key={item.route} item={item} cardWidth={cardWidth} index={i} />
           ))}
         </View>
 
@@ -79,28 +86,33 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+  },
   card: {
-    width: "47%",
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    padding: spacing.xl,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
     alignItems: "center",
-    gap: spacing.md,
+    gap: 12,
   },
-  cardPressed: { transform: [{ scale: 0.97 }], opacity: 0.8 },
-  iconCircle: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
+  cardPressed: { transform: [{ scale: 0.96 }], opacity: 0.7 },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   emoji: { fontSize: 28 },
-  label: { fontSize: 14, fontWeight: "600", color: colors.text, textAlign: "center" },
-  comingSoon: {
-    position: "absolute",
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.warningDim,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
+    textAlign: "center",
   },
-  comingSoonText: { fontSize: 8, fontWeight: "800", color: colors.warning, letterSpacing: 1 },
 });

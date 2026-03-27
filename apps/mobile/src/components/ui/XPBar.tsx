@@ -23,7 +23,7 @@ export const XPBar = React.memo(function XPBar({ xp, level }: Props) {
         </Text>
         <Text style={styles.xpText}>{xp.toLocaleString()} XP</Text>
       </View>
-      <TitanProgress value={fraction} color={colors.text} />
+      <TitanProgress value={fraction * 100} color={rank.color} height={6} />
     </View>
   );
 });

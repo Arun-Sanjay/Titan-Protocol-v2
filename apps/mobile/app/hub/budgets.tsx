@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
+  FlatList,
   ScrollView,
   StyleSheet,
   Pressable,
@@ -10,6 +11,10 @@ import {
   Platform,
   Alert,
 } from "react-native";
+import Animated, {
+  FadeInDown,
+  Easing,
+} from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,93 +22,113 @@ import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, fonts } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
-import { useBudgetStore } from "../../src/stores/useBudgetStore";
+import { PageHeader } from "../../src/components/ui/PageHeader";
+import { TitanProgress } from "../../src/components/ui/TitanProgress";
+import { MetricValue } from "../../src/components/ui/MetricValue";
+import {
+  useBudgetStore,
+  getBudgetStatus,
+  getBudgetStatusColor,
+  getDailyRemaining,
+  type Budget,
+  type BudgetStatus,
+} from "../../src/stores/useBudgetStore";
 import {
   useMoneyStore,
   computeMonthTotals,
   EXPENSE_CATEGORIES,
+  CATEGORY_ICONS,
+  CATEGORY_COLORS,
 } from "../../src/stores/useMoneyStore";
 import { getMonthKey, getMonthLabel } from "../../src/lib/date";
 import { formatCurrency } from "../../src/lib/format";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Month Navigation Component ─────────────────────────────────────────────
 
-function getBarColor(pct: number): string {
-  if (pct > 1) return colors.danger;
-  if (pct >= 0.8) return colors.warning;
-  return colors.success;
-}
-
-const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
-  Food: "fast-food-outline",
-  Transport: "car-outline",
-  Shopping: "bag-outline",
-  Bills: "receipt-outline",
-  Health: "heart-outline",
-  Entertainment: "game-controller-outline",
-  Education: "school-outline",
-  Other: "ellipsis-horizontal-circle-outline",
-};
-
-// ─── Budget Card ─────────────────────────────────────────────────────────────
-
-function BudgetCard({
-  category,
-  limit,
-  spent,
-  onDelete,
+const MonthNav = React.memo(function MonthNav({
+  label,
+  onPrev,
+  onNext,
+  canGoNext,
 }: {
-  category: string;
-  limit: number;
-  spent: number;
-  onDelete: () => void;
+  label: string;
+  onPrev: () => void;
+  onNext: () => void;
+  canGoNext: boolean;
 }) {
-  const pct = limit > 0 ? spent / limit : 0;
-  const barColor = getBarColor(pct);
-  const remaining = limit - spent;
-  const icon = CATEGORY_ICONS[category] ?? "ellipsis-horizontal-circle-outline";
+  return (
+    <View style={styles.monthNav}>
+      <Pressable
+        onPress={() => { onPrev(); Haptics.selectionAsync(); }}
+        hitSlop={12}
+      >
+        <Ionicons name="chevron-back" size={22} color={colors.money} />
+      </Pressable>
+      <Text style={styles.monthLabelText}>{label}</Text>
+      <Pressable
+        onPress={() => { if (canGoNext) { onNext(); Haptics.selectionAsync(); } }}
+        disabled={!canGoNext}
+        hitSlop={12}
+      >
+        <Ionicons
+          name="chevron-forward"
+          size={22}
+          color={canGoNext ? colors.money : colors.textMuted}
+        />
+      </Pressable>
+    </View>
+  );
+});
+
+// ─── Total Budget Overview ──────────────────────────────────────────────────
+
+const TotalBudgetOverview = React.memo(function TotalBudgetOverview({
+  totalSpent,
+  totalBudget,
+}: {
+  totalSpent: number;
+  totalBudget: number;
+}) {
+  const pct = totalBudget > 0 ? totalSpent / totalBudget : 0;
+  const pctClamped = Math.min(pct, 1);
+  const status = getBudgetStatus(totalBudget, totalSpent);
+  const statusColor = getBudgetStatusColor(status);
+  const remaining = totalBudget - totalSpent;
 
   return (
-    <Panel style={styles.budgetCard}>
-      <View style={styles.budgetHeader}>
-        <View style={styles.budgetLeft}>
-          <View style={[styles.budgetIcon, { backgroundColor: barColor + "18" }]}>
-            <Ionicons name={icon} size={18} color={barColor} />
-          </View>
-          <View>
-            <Text style={styles.budgetCategory}>{category}</Text>
-            <Text style={styles.budgetMeta}>
-              {formatCurrency(spent)} of {formatCurrency(limit)}
-            </Text>
-          </View>
-        </View>
-        <Pressable onPress={onDelete} hitSlop={12}>
-          <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-        </Pressable>
-      </View>
-
-      {/* Progress Bar */}
-      <View style={styles.barTrack}>
-        <View
-          style={[
-            styles.barFill,
-            {
-              width: `${Math.min(pct * 100, 100)}%`,
-              backgroundColor: barColor,
-            },
-          ]}
+    <Panel style={styles.totalPanel} delay={50} tone="hero">
+      <View style={styles.totalTopRow}>
+        <MetricValue
+          label="SPENT"
+          value={formatCurrency(totalSpent)}
+          size="md"
+          color={statusColor}
+        />
+        <Text style={styles.totalOf}>of</Text>
+        <MetricValue
+          label="BUDGET"
+          value={formatCurrency(totalBudget)}
+          size="md"
+          color={colors.money}
         />
       </View>
 
-      {/* Footer */}
-      <View style={styles.budgetFooter}>
-        <Text style={[styles.budgetPct, { color: barColor }]}>
-          {Math.round(pct * 100)}%
+      <View style={styles.totalBarContainer}>
+        <TitanProgress
+          value={pctClamped * 100}
+          color={statusColor}
+          height={8}
+        />
+      </View>
+
+      <View style={styles.totalFooter}>
+        <Text style={[styles.totalPctText, { color: statusColor }]}>
+          {Math.round(pct * 100)}% used
         </Text>
         <Text
           style={[
-            styles.budgetRemaining,
-            { color: remaining >= 0 ? colors.textSecondary : colors.danger },
+            styles.totalRemainingText,
+            { color: remaining >= 0 ? colors.textSecondary : "#F87171" },
           ]}
         >
           {remaining >= 0
@@ -113,11 +138,104 @@ function BudgetCard({
       </View>
     </Panel>
   );
-}
+});
 
-// ─── Add Budget Form ─────────────────────────────────────────────────────────
+// ─── Budget Card ────────────────────────────────────────────────────────────
 
-function AddBudgetForm({
+type BudgetCardProps = {
+  budget: Budget;
+  spent: number;
+  monthKey: string;
+  onDelete: () => void;
+  index: number;
+};
+
+const BudgetCard = React.memo(function BudgetCard({
+  budget,
+  spent,
+  monthKey,
+  onDelete,
+  index,
+}: BudgetCardProps) {
+  const { category, monthlyLimit } = budget;
+  const pct = monthlyLimit > 0 ? spent / monthlyLimit : 0;
+  const pctClamped = Math.min(pct, 1);
+  const status = getBudgetStatus(monthlyLimit, spent);
+  const statusColor = getBudgetStatusColor(status);
+  const remaining = monthlyLimit - spent;
+  const dailyBudget = getDailyRemaining(monthlyLimit, spent, monthKey);
+  const icon = CATEGORY_ICONS[category] ?? "ellipsis-horizontal-circle-outline";
+  const catColor = CATEGORY_COLORS[category] ?? colors.textMuted;
+  const isOver = status === "over";
+
+  return (
+    <Animated.View entering={FadeInDown.delay(index * 60).duration(400).easing(Easing.out(Easing.cubic))}>
+      <Panel style={styles.budgetCard} glowColor={isOver ? "#F87171" : undefined}>
+        {/* Header row */}
+        <View style={styles.budgetHeader}>
+          <View style={styles.budgetLeft}>
+            <View style={[styles.budgetIcon, { backgroundColor: catColor + "18" }]}>
+              <Ionicons name={icon as any} size={18} color={catColor} />
+            </View>
+            <View style={styles.budgetTitleCol}>
+              <Text style={styles.budgetCategory}>{category}</Text>
+              <Text style={styles.budgetMeta}>
+                {formatCurrency(spent)}{" "}
+                <Text style={{ color: colors.textMuted }}>of</Text>{" "}
+                {formatCurrency(monthlyLimit)}
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            onPress={onDelete}
+            hitSlop={12}
+            style={styles.budgetDeleteBtn}
+          >
+            <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
+        {/* Progress Bar */}
+        <TitanProgress
+          value={pctClamped * 100}
+          color={statusColor}
+          height={6}
+        />
+
+        {/* Footer */}
+        <View style={styles.budgetFooter}>
+          <View style={styles.budgetFooterLeft}>
+            <Text style={[styles.budgetPct, { color: statusColor }]}>
+              {Math.round(pct * 100)}%
+            </Text>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+          </View>
+          <View style={styles.budgetFooterRight}>
+            <Text
+              style={[
+                styles.budgetRemaining,
+                { color: remaining >= 0 ? colors.textSecondary : "#F87171" },
+              ]}
+            >
+              {remaining >= 0
+                ? `${formatCurrency(remaining)} left`
+                : `${formatCurrency(Math.abs(remaining))} over`}
+            </Text>
+            {remaining > 0 && dailyBudget > 0 && (
+              <Text style={styles.budgetDaily}>
+                ~{formatCurrency(dailyBudget)}/day
+              </Text>
+            )}
+          </View>
+        </View>
+      </Panel>
+    </Animated.View>
+  );
+});
+
+// ─── Add Budget Form ────────────────────────────────────────────────────────
+
+const AddBudgetForm = React.memo(function AddBudgetForm({
   onClose,
   existingCategories,
 }: {
@@ -126,107 +244,124 @@ function AddBudgetForm({
 }) {
   const addBudget = useBudgetStore((s) => s.addBudget);
 
+  const existingKey = useMemo(
+    () => [...existingCategories].sort().join(","),
+    [existingCategories],
+  );
+
   const availableCategories = useMemo(
     () => EXPENSE_CATEGORIES.filter((c) => !existingCategories.has(c)),
-    [existingCategories]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [existingKey],
   );
 
   const [category, setCategory] = useState(availableCategories[0] ?? "");
   const [limitStr, setLimitStr] = useState("");
 
   const handleLimitChange = useCallback((text: string) => {
-    // Reject multiple decimal points
     if (text.includes(".") && text.indexOf(".") !== text.lastIndexOf(".")) return;
-    setLimitStr(text);
+    let cleaned = text.replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    if (parts[1] && parts[1].length > 2) cleaned = parts[0] + "." + parts[1].slice(0, 2);
+    setLimitStr(cleaned);
   }, []);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     const parsed = parseFloat(limitStr);
     if (!category || !Number.isFinite(parsed) || parsed <= 0 || parsed > 999999.99) return;
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addBudget(category, Math.round(parsed * 100) / 100);
     onClose();
-  };
+  }, [category, limitStr, addBudget, onClose]);
 
   if (availableCategories.length === 0) {
     return (
-      <Panel style={styles.formPanel}>
+      <Animated.View entering={FadeInDown.duration(300).easing(Easing.out(Easing.cubic))}>
+        <Panel style={styles.formPanel}>
+          <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>Add Budget</Text>
+            <Pressable onPress={onClose} hitSlop={12}>
+              <Ionicons name="close" size={22} color={colors.textMuted} />
+            </Pressable>
+          </View>
+          <View style={styles.allBudgetedContainer}>
+            <Ionicons name="checkmark-circle" size={24} color={colors.success} />
+            <Text style={styles.allBudgetedText}>
+              All categories already have budgets.
+            </Text>
+          </View>
+        </Panel>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View entering={FadeInDown.duration(300).easing(Easing.out(Easing.cubic))}>
+      <Panel style={styles.formPanel} glowColor={colors.money}>
         <View style={styles.formHeader}>
           <Text style={styles.formTitle}>Add Budget</Text>
           <Pressable onPress={onClose} hitSlop={12}>
             <Ionicons name="close" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
-        <Text style={styles.emptyFormText}>
-          All categories already have budgets.
-        </Text>
-      </Panel>
-    );
-  }
 
-  return (
-    <Panel style={styles.formPanel}>
-      <View style={styles.formHeader}>
-        <Text style={styles.formTitle}>Add Budget</Text>
-        <Pressable onPress={onClose} hitSlop={12}>
-          <Ionicons name="close" size={22} color={colors.textMuted} />
+        {/* Category Chips */}
+        <Text style={styles.fieldLabel}>CATEGORY</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+        >
+          {availableCategories.map((cat) => {
+            const active = category === cat;
+            const catColor = CATEGORY_COLORS[cat] ?? colors.textMuted;
+            return (
+              <Pressable
+                key={cat}
+                style={[
+                  styles.chip,
+                  active && { backgroundColor: catColor, borderColor: catColor },
+                ]}
+                onPress={() => { setCategory(cat); Haptics.selectionAsync(); }}
+              >
+                <Ionicons
+                  name={(CATEGORY_ICONS[cat] ?? "ellipsis-horizontal-circle-outline") as any}
+                  size={14}
+                  color={active ? "#000" : catColor}
+                />
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                  {cat}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Monthly Limit */}
+        <Text style={styles.fieldLabel}>MONTHLY LIMIT</Text>
+        <View style={[styles.limitRow, { borderColor: colors.money + "40" }]}>
+          <Text style={[styles.limitCurrency, { color: colors.money }]}>$</Text>
+          <TextInput
+            style={styles.limitInput}
+            placeholder="0.00"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="decimal-pad"
+            value={limitStr}
+            onChangeText={handleLimitChange}
+            autoFocus
+          />
+        </View>
+
+        {/* Save */}
+        <Pressable style={styles.saveBtn} onPress={handleSave}>
+          <Ionicons name="add" size={18} color="#000" />
+          <Text style={styles.saveBtnText}>Create Budget</Text>
         </Pressable>
-      </View>
-
-      {/* Category Chips */}
-      <Text style={styles.fieldLabel}>Category</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRow}
-      >
-        {availableCategories.map((cat) => {
-          const active = category === cat;
-          return (
-            <Pressable
-              key={cat}
-              style={[styles.chip, active && styles.chipActive]}
-              onPress={() => {
-                setCategory(cat);
-                Haptics.selectionAsync();
-              }}
-            >
-              <Ionicons
-                name={CATEGORY_ICONS[cat] ?? "ellipsis-horizontal-circle-outline"}
-                size={14}
-                color={active ? "#000" : colors.textSecondary}
-              />
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                {cat}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* Monthly Limit */}
-      <Text style={styles.fieldLabel}>Monthly Limit</Text>
-      <View style={styles.limitRow}>
-        <Text style={styles.limitCurrency}>$</Text>
-        <TextInput
-          style={styles.limitInput}
-          placeholder="0.00"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="decimal-pad"
-          value={limitStr}
-          onChangeText={handleLimitChange}
-          autoFocus
-        />
-      </View>
-
-      {/* Save */}
-      <Pressable style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveBtnText}>Create Budget</Text>
-      </Pressable>
-    </Panel>
+      </Panel>
+    </Animated.View>
   );
-}
+});
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
@@ -243,6 +378,7 @@ export default function BudgetsScreen() {
   const [monthOffset, setMonthOffset] = useState(0);
   const currentMonth = useMemo(() => {
     const d = new Date();
+    d.setDate(1);
     d.setMonth(d.getMonth() + monthOffset);
     return getMonthKey(d);
   }, [monthOffset]);
@@ -255,33 +391,49 @@ export default function BudgetsScreen() {
 
   const monthTotals = useMemo(
     () => computeMonthTotals(transactions, currentMonth),
-    [transactions, currentMonth]
+    [transactions, currentMonth],
   );
 
   const existingCategories = useMemo(
     () => new Set(budgets.map((b) => b.category)),
-    [budgets]
+    [budgets],
   );
 
-  // Total budget vs total spent
+  // Total budget vs total spent (only for budgeted categories)
   const totalBudget = useMemo(
     () => budgets.reduce((sum, b) => sum + b.monthlyLimit, 0),
-    [budgets]
+    [budgets],
   );
   const totalBudgeted = useMemo(
     () =>
       budgets.reduce(
         (sum, b) => sum + (monthTotals.byCategory[b.category] ?? 0),
-        0
+        0,
       ),
-    [budgets, monthTotals.byCategory]
+    [budgets, monthTotals.byCategory],
   );
 
-  const totalPct = totalBudget > 0 ? totalBudgeted / totalBudget : 0;
+  // Sort budgets: over-budget first, then by percentage descending
+  const sortedBudgets = useMemo(() => {
+    return [...budgets].sort((a, b) => {
+      const aSpent = monthTotals.byCategory[a.category] ?? 0;
+      const bSpent = monthTotals.byCategory[b.category] ?? 0;
+      const aPct = a.monthlyLimit > 0 ? aSpent / a.monthlyLimit : 0;
+      const bPct = b.monthlyLimit > 0 ? bSpent / b.monthlyLimit : 0;
+
+      // Over-budget items first
+      const aOver = aPct > 1 ? 1 : 0;
+      const bOver = bPct > 1 ? 1 : 0;
+      if (aOver !== bOver) return bOver - aOver;
+
+      // Then by percentage descending
+      return bPct - aPct;
+    });
+  }, [budgets, monthTotals.byCategory]);
 
   const handleDelete = useCallback(
     (id: number) => {
-      Alert.alert("Delete Budget", "Are you sure you want to delete this budget?", [
+      Alert.alert("Delete Budget", "Remove this budget?", [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
@@ -293,13 +445,109 @@ export default function BudgetsScreen() {
         },
       ]);
     },
-    [deleteBudget]
+    [deleteBudget],
   );
 
-  const handleOpenForm = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setShowForm(true);
-  }, []);
+  const renderBudgetCard = useCallback(
+    ({ item, index }: { item: Budget; index: number }) => (
+      <BudgetCard
+        budget={item}
+        spent={monthTotals.byCategory[item.category] ?? 0}
+        monthKey={currentMonth}
+        onDelete={() => handleDelete(item.id)}
+        index={index}
+      />
+    ),
+    [monthTotals.byCategory, currentMonth, handleDelete],
+  );
+
+  const budgetKeyExtractor = useCallback((item: Budget) => String(item.id), []);
+
+  const listHeader = useMemo(
+    () => (
+      <>
+        {/* Page Header */}
+        <PageHeader kicker="MONEY ENGINE" title="Budgets" />
+
+        {/* Month Navigation */}
+        <MonthNav
+          label={monthLabel}
+          onPrev={() => setMonthOffset((o) => o - 1)}
+          onNext={() => setMonthOffset((o) => o + 1)}
+          canGoNext={monthOffset < 0}
+        />
+
+        {/* Total Budget Overview */}
+        {budgets.length > 0 && (
+          <TotalBudgetOverview
+            totalSpent={totalBudgeted}
+            totalBudget={totalBudget}
+          />
+        )}
+
+        {/* Section Header */}
+        <SectionHeader
+          title="Monthly Budgets"
+          right={`${budgets.length} active`}
+          accentColor={colors.money}
+        />
+      </>
+    ),
+    [monthLabel, monthOffset, budgets.length, totalBudgeted, totalBudget],
+  );
+
+  const listEmpty = useMemo(
+    () => (
+      <Panel style={styles.emptyPanel}>
+        <Ionicons name="pie-chart-outline" size={36} color={colors.textMuted} />
+        <Text style={styles.emptyText}>No budgets set</Text>
+        <Text style={styles.emptySubtext}>
+          Create category budgets to track your spending limits and stay on target
+        </Text>
+      </Panel>
+    ),
+    [],
+  );
+
+  const listFooter = useMemo(
+    () => (
+      <>
+        {showForm ? (
+          <AddBudgetForm
+            onClose={() => setShowForm(false)}
+            existingCategories={existingCategories}
+          />
+        ) : (
+          <Pressable
+            style={styles.addBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setShowForm(true);
+            }}
+          >
+            <Ionicons name="add" size={20} color="#000" />
+            <Text style={styles.addBtnText}>Add Budget</Text>
+          </Pressable>
+        )}
+
+        {/* Unbudgeted spending notice */}
+        {budgets.length > 0 && monthTotals.spent > totalBudgeted && (
+          <Animated.View entering={FadeInDown.delay(200).duration(400).easing(Easing.out(Easing.cubic))}>
+            <Panel style={styles.unbudgetedPanel} tone="subtle">
+              <Ionicons name="alert-circle-outline" size={18} color={colors.warning} />
+              <View style={styles.unbudgetedInfo}>
+                <Text style={styles.unbudgetedTitle}>Unbudgeted Spending</Text>
+                <Text style={styles.unbudgetedAmount}>
+                  {formatCurrency(Math.round((monthTotals.spent - totalBudgeted) * 100) / 100)} spent in categories without budgets
+                </Text>
+              </View>
+            </Panel>
+          </Animated.View>
+        )}
+      </>
+    ),
+    [showForm, existingCategories, budgets.length, monthTotals.spent, totalBudgeted],
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -308,7 +556,10 @@ export default function BudgetsScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>Budgets</Text>
+        <View style={styles.headerCenter}>
+          <Ionicons name="pie-chart-outline" size={18} color={colors.money} />
+          <Text style={styles.headerTitle}>Budgets</Text>
+        </View>
         <View style={{ width: 48 }} />
       </View>
 
@@ -316,118 +567,29 @@ export default function BudgetsScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView
+        <FlatList
           style={styles.body}
           contentContainerStyle={styles.bodyContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-        >
-          {/* Month Navigation */}
-          <View style={styles.monthNav}>
-            <Pressable onPress={() => setMonthOffset((o) => o - 1)}>
-              <Ionicons name="chevron-back" size={20} color={colors.text} />
-            </Pressable>
-            <Text style={styles.monthLabelText}>{monthLabel}</Text>
-            <Pressable
-              onPress={() => {
-                if (monthOffset < 0) setMonthOffset((o) => o + 1);
-              }}
-              disabled={monthOffset >= 0}
-            >
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={monthOffset >= 0 ? colors.textMuted : colors.text}
-              />
-            </Pressable>
-          </View>
-
-          {/* Total Summary */}
-          {budgets.length > 0 && (
-            <Panel style={styles.totalPanel}>
-              <View style={styles.totalRow}>
-                <View style={styles.totalStat}>
-                  <Text style={[styles.totalValue, { color: colors.danger }]}>
-                    {formatCurrency(totalBudgeted)}
-                  </Text>
-                  <Text style={styles.totalLabel}>Spent</Text>
-                </View>
-                <View style={styles.totalDivider} />
-                <View style={styles.totalStat}>
-                  <Text style={[styles.totalValue, { color: colors.money }]}>
-                    {formatCurrency(totalBudget)}
-                  </Text>
-                  <Text style={styles.totalLabel}>Budget</Text>
-                </View>
-              </View>
-              <View style={styles.totalBarTrack}>
-                <View
-                  style={[
-                    styles.totalBarFill,
-                    {
-                      width: `${Math.min(totalPct * 100, 100)}%`,
-                      backgroundColor: getBarColor(totalPct),
-                    },
-                  ]}
-                />
-              </View>
-              <Text
-                style={[styles.totalPct, { color: getBarColor(totalPct) }]}
-              >
-                {Math.round(totalPct * 100)}% of total budget used
-              </Text>
-            </Panel>
-          )}
-
-          {/* Budget Cards */}
-          <SectionHeader
-            title="Monthly Budgets"
-            right={`${budgets.length} active`}
-          />
-
-          {budgets.length === 0 ? (
-            <Panel style={styles.emptyPanel}>
-              <Ionicons
-                name="pie-chart-outline"
-                size={32}
-                color={colors.textMuted}
-              />
-              <Text style={styles.emptyText}>No budgets set</Text>
-              <Text style={styles.emptySubtext}>
-                Create category budgets to track your spending limits
-              </Text>
-            </Panel>
-          ) : (
-            <View style={styles.cardList}>
-              {budgets.map((budget) => (
-                <BudgetCard
-                  key={budget.id}
-                  category={budget.category}
-                  limit={budget.monthlyLimit}
-                  spent={monthTotals.byCategory[budget.category] ?? 0}
-                  onDelete={() => handleDelete(budget.id)}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Add Budget */}
-          {showForm ? (
-            <AddBudgetForm
-              onClose={() => setShowForm(false)}
-              existingCategories={existingCategories}
-            />
-          ) : (
-            <Pressable style={styles.addBtn} onPress={handleOpenForm}>
-              <Ionicons name="add" size={20} color="#000" />
-              <Text style={styles.addBtnText}>Add Budget</Text>
-            </Pressable>
-          )}
-        </ScrollView>
+          data={sortedBudgets}
+          keyExtractor={budgetKeyExtractor}
+          renderItem={renderBudgetCard}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          ListFooterComponent={listFooter}
+          ItemSeparatorComponent={BudgetSeparator}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+// ─── Separator ───────────────────────────────────────────────────────────────
+
+const BudgetSeparator = React.memo(function BudgetSeparator() {
+  return <View style={styles.budgetSeparator} />;
+});
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
@@ -446,6 +608,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  headerCenter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: "700",
@@ -459,9 +626,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.lg,
+    gap: spacing.xl,
     paddingVertical: spacing.md,
-    marginTop: spacing.sm,
   },
   monthLabelText: {
     fontSize: 16,
@@ -469,55 +635,49 @@ const styles = StyleSheet.create({
     color: colors.text,
     minWidth: 160,
     textAlign: "center",
+    letterSpacing: 0.5,
   },
 
-  // ── Total Summary ──
+  // ── Total Overview ──
   totalPanel: {
-    alignItems: "center",
     paddingVertical: spacing["2xl"],
-    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xl,
   },
-  totalRow: {
+  totalTopRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xl,
+    justifyContent: "center",
+    gap: spacing.lg,
   },
-  totalStat: { alignItems: "center" },
-  totalValue: {
+  totalOf: {
+    fontSize: 14,
+    color: colors.textMuted,
+    fontWeight: "500",
+    marginTop: -spacing.lg,
+  },
+  totalBarContainer: {
+    marginTop: spacing.xl,
+  },
+  totalFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.md,
+  },
+  totalPctText: {
     ...fonts.mono,
-    fontSize: 22,
+    fontSize: 14,
     fontWeight: "700",
   },
-  totalLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  totalDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: colors.surfaceBorder,
-  },
-  totalBarTrack: {
-    width: "100%",
-    height: 8,
-    backgroundColor: colors.inputBg,
-    borderRadius: radius.full,
-    overflow: "hidden",
-    marginTop: spacing.lg,
-  },
-  totalBarFill: {
-    height: 8,
-    borderRadius: radius.full,
-  },
-  totalPct: {
+  totalRemainingText: {
     fontSize: 13,
-    fontWeight: "600",
-    marginTop: spacing.sm,
+    fontWeight: "500",
   },
 
   // ── Budget Cards ──
-  cardList: { gap: spacing.md },
+  budgetSeparator: {
+    height: spacing.md,
+  },
   budgetCard: {
     gap: spacing.md,
   },
@@ -530,47 +690,64 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
+    flex: 1,
   },
   budgetIcon: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
   },
+  budgetTitleCol: {
+    flex: 1,
+  },
   budgetCategory: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
     color: colors.text,
   },
   budgetMeta: {
     ...fonts.mono,
-    fontSize: 12,
-    color: colors.textMuted,
+    fontSize: 13,
+    color: colors.textSecondary,
     marginTop: 2,
   },
-  barTrack: {
-    height: 6,
-    backgroundColor: colors.inputBg,
-    borderRadius: radius.full,
-    overflow: "hidden",
-  },
-  barFill: {
-    height: 6,
-    borderRadius: radius.full,
+  budgetDeleteBtn: {
+    padding: spacing.sm,
   },
   budgetFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
+  budgetFooterLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  budgetFooterRight: {
+    alignItems: "flex-end",
+  },
   budgetPct: {
     ...fonts.mono,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
   },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   budgetRemaining: {
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  budgetDaily: {
+    ...fonts.mono,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 2,
   },
 
   // ── Add Button ──
@@ -604,11 +781,16 @@ const styles = StyleSheet.create({
     ...fonts.heading,
     fontSize: 17,
   },
-  emptyFormText: {
+  allBudgetedContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.xl,
+  },
+  allBudgetedText: {
     fontSize: 14,
     color: colors.textSecondary,
-    textAlign: "center",
-    paddingVertical: spacing.lg,
   },
   fieldLabel: {
     ...fonts.kicker,
@@ -629,10 +811,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inputBg,
     borderWidth: 1,
     borderColor: colors.inputBorder,
-  },
-  chipActive: {
-    backgroundColor: colors.money,
-    borderColor: colors.money,
   },
   chipText: {
     fontSize: 13,
@@ -665,15 +843,39 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
   saveBtn: {
+    flexDirection: "row",
     backgroundColor: colors.money,
     borderRadius: radius.full,
     paddingVertical: spacing.md,
     alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
   },
   saveBtnText: {
     fontSize: 16,
     fontWeight: "700",
     color: "#000",
+  },
+
+  // ── Unbudgeted Notice ──
+  unbudgetedPanel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  unbudgetedInfo: {
+    flex: 1,
+  },
+  unbudgetedTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.warning,
+  },
+  unbudgetedAmount: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
   },
 
   // ── Empty State ──
@@ -691,5 +893,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textMuted,
     textAlign: "center",
+    paddingHorizontal: spacing.xl,
   },
 });
