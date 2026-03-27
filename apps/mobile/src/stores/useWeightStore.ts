@@ -16,15 +16,24 @@ const GOAL_KEY = "weight_goal";
 
 // ─── Store ──────────────────────────────────────────────────────────────────
 
+type GoalProgress = {
+  pct: number;
+  remaining: number;
+  direction: "gain" | "lose" | "maintain";
+  overshot?: boolean;
+};
+
 type WeightState = {
   entries: WeightEntry[];
   goalWeight: number | null;
 
   load: () => void;
   addEntry: (dateKey: string, weightKg: number) => void;
+  deleteEntry: (dateKey: string) => void;
   setGoalWeight: (kg: number | null) => void;
   getLatest: () => WeightEntry | null;
   getChangeFromFirst: () => { change: number; startWeight: number } | null;
+  getGoalProgress: () => GoalProgress | null;
 };
 
 export const useWeightStore = create<WeightState>()((set, get) => ({
@@ -57,6 +66,13 @@ export const useWeightStore = create<WeightState>()((set, get) => ({
     set({ entries: updated });
   },
 
+  // Bug 10: Add deleteEntry
+  deleteEntry: (dateKey) => {
+    const updated = get().entries.filter((e) => e.dateKey !== dateKey);
+    setJSON(ENTRIES_KEY, updated);
+    set({ entries: updated });
+  },
+
   setGoalWeight: (kg) => {
     setJSON(GOAL_KEY, kg);
     set({ goalWeight: kg });
@@ -77,5 +93,20 @@ export const useWeightStore = create<WeightState>()((set, get) => ({
       change: +(last.weightKg - first.weightKg).toFixed(1),
       startWeight: first.weightKg,
     };
+  },
+
+  // Bug 9: Direction-aware goal progress
+  getGoalProgress: () => {
+    const { entries, goalWeight } = get();
+    if (!goalWeight || entries.length === 0) return null;
+    const start = entries[0].weightKg;
+    const current = entries[entries.length - 1].weightKg;
+    const totalDistance = Math.abs(goalWeight - start);
+    if (totalDistance === 0) return { pct: 100, remaining: 0, direction: "maintain" as const };
+    const direction: "gain" | "lose" = goalWeight > start ? "gain" : "lose";
+    const progress = direction === "lose" ? start - current : current - start;
+    const pct = Math.min(Math.round((Math.max(progress, 0) / totalDistance) * 100), 100);
+    const remaining = direction === "lose" ? current - goalWeight : goalWeight - current;
+    return { pct, remaining, direction, overshot: remaining < 0 };
   },
 }));

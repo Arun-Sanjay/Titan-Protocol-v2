@@ -24,10 +24,9 @@ import {
   GymSession,
   GymSet,
 } from "../../src/stores/useGymStore";
+import { getTodayKey } from "../../src/lib/date";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-const getTodayKey = () => new Date().toISOString().slice(0, 10);
 
 function formatDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -146,7 +145,25 @@ const SetRow = React.memo(function SetRow({ gymSet, onUpdate }: SetRowProps) {
 
 export default function WorkoutsScreen() {
   const router = useRouter();
-  const store = useGymStore();
+
+  // Bug #6: Use individual selectors for each piece of state and action
+  const exercises = useGymStore((s) => s.exercises);
+  const templates = useGymStore((s) => s.templates);
+  const sessions = useGymStore((s) => s.sessions);
+  const sets = useGymStore((s) => s.sets);
+  const activeSessionId = useGymStore((s) => s.activeSessionId);
+  const templateExercises = useGymStore((s) => s.templateExercises);
+  const load = useGymStore((s) => s.load);
+  const addExercise = useGymStore((s) => s.addExercise);
+  const createTemplate = useGymStore((s) => s.createTemplate);
+  const startSession = useGymStore((s) => s.startSession);
+  const addSet = useGymStore((s) => s.addSet);
+  const updateSet = useGymStore((s) => s.updateSet);
+  const endSession = useGymStore((s) => s.endSession);
+  const cancelSession = useGymStore((s) => s.cancelSession);
+  const getSessionSets = useGymStore((s) => s.getSessionSets);
+  const getTemplateExercises = useGymStore((s) => s.getTemplateExercises);
+  const deleteTemplate = useGymStore((s) => s.deleteTemplate);
 
   // Local UI state
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
@@ -163,15 +180,15 @@ export default function WorkoutsScreen() {
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Bug #9: Fix useEffect dependency
   useEffect(() => {
-    store.load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    load();
+  }, [load]);
 
   // Active session
   const activeSession = useMemo(
-    () => store.sessions.find((s) => s.id === store.activeSessionId) ?? null,
-    [store.sessions, store.activeSessionId]
+    () => sessions.find((s) => s.id === activeSessionId) ?? null,
+    [sessions, activeSessionId]
   );
 
   // Timer effect
@@ -191,24 +208,48 @@ export default function WorkoutsScreen() {
   // Active session exercises
   const activeExercises = useMemo(() => {
     if (!activeSession) return [];
-    return store.getTemplateExercises(activeSession.templateId);
-  }, [activeSession, store.templateExercises, store.exercises]);
+    return getTemplateExercises(activeSession.templateId);
+  }, [activeSession, templateExercises, exercises, getTemplateExercises]);
 
   // Active session sets
   const activeSets = useMemo(() => {
     if (!activeSession) return [];
-    return store.getSessionSets(activeSession.id);
-  }, [activeSession, store.sets]);
+    return getSessionSets(activeSession.id);
+  }, [activeSession, sets, getSessionSets]);
 
   // Recent completed sessions (last 5)
   const recentSessions = useMemo(
     () =>
-      store.sessions
+      sessions
         .filter((s) => s.endedAt !== null)
         .sort((a, b) => b.startedAt - a.startedAt)
         .slice(0, 5),
-    [store.sessions]
+    [sessions]
   );
+
+  // Bug #7: Precompute template exercise counts
+  const templateExCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const t of templates) {
+      counts[t.id] = getTemplateExercises(t.id).length;
+    }
+    return counts;
+  }, [templates, templateExercises, exercises, getTemplateExercises]);
+
+  // Bug #7: Precompute recent session stats
+  const recentSessionStats = useMemo(() => {
+    const stats: Record<number, { setCount: number; volume: number; duration: number }> = {};
+    for (const session of recentSessions) {
+      const sessionSets = getSessionSets(session.id);
+      const volume = sessionSets.reduce((sum, s) => sum + s.weight * s.reps, 0);
+      const duration =
+        session.endedAt && session.startedAt
+          ? session.endedAt - session.startedAt
+          : 0;
+      stats[session.id] = { setCount: sessionSets.length, volume, duration };
+    }
+    return stats;
+  }, [recentSessions, sets, getSessionSets]);
 
   // ─── Handlers ───────────────────────────────────────────────────────────
 
@@ -222,19 +263,19 @@ export default function WorkoutsScreen() {
       Alert.alert("Error", "Select at least one exercise.");
       return;
     }
-    store.createTemplate(name, Array.from(selectedExerciseIds));
+    createTemplate(name, Array.from(selectedExerciseIds));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setTemplateName("");
     setSelectedExerciseIds(new Set());
     setShowCreateTemplate(false);
-  }, [templateName, selectedExerciseIds, store]);
+  }, [templateName, selectedExerciseIds, createTemplate]);
 
   const handleStartSession = useCallback(
     (templateId: number) => {
-      store.startSession(templateId, getTodayKey());
+      startSession(templateId, getTodayKey());
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     },
-    [store]
+    [startSession]
   );
 
   const handleDeleteTemplate = useCallback(
@@ -245,31 +286,46 @@ export default function WorkoutsScreen() {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            store.deleteTemplate(id);
+            deleteTemplate(id);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           },
         },
       ]);
     },
-    [store]
+    [deleteTemplate]
   );
 
   const handleAddSet = useCallback(
     (exerciseId: number) => {
       if (!activeSession) return;
-      store.addSet(activeSession.id, exerciseId, 0, 0);
+      addSet(activeSession.id, exerciseId, 0, 0);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    [activeSession, store]
+    [activeSession, addSet]
   );
 
   const handleFinishWorkout = useCallback(() => {
     if (!activeSession) return;
-    store.endSession(activeSession.id);
+    endSession(activeSession.id);
     setSummarySessionId(activeSession.id);
     setShowSummary(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [activeSession, store]);
+  }, [activeSession, endSession]);
+
+  // Bug #3: Cancel workout handler
+  const handleCancelWorkout = useCallback(() => {
+    Alert.alert("Cancel Workout", "Are you sure? All progress will be lost.", [
+      { text: "Keep Going", style: "cancel" },
+      {
+        text: "Cancel Workout",
+        style: "destructive",
+        onPress: () => {
+          cancelSession();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        },
+      },
+    ]);
+  }, [cancelSession]);
 
   const handleQuickAdd = useCallback(() => {
     const name = quickName.trim();
@@ -277,12 +333,12 @@ export default function WorkoutsScreen() {
       Alert.alert("Error", "Enter an exercise name.");
       return;
     }
-    const id = store.addExercise(name, quickMuscle, quickEquipment);
+    const id = addExercise(name, quickMuscle, quickEquipment);
     setSelectedExerciseIds((prev) => new Set([...prev, id]));
     setQuickName("");
     setShowQuickAdd(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [quickName, quickMuscle, quickEquipment, store]);
+  }, [quickName, quickMuscle, quickEquipment, addExercise]);
 
   const toggleExercise = useCallback((id: number) => {
     setSelectedExerciseIds((prev) => {
@@ -297,8 +353,8 @@ export default function WorkoutsScreen() {
   // ─── Summary View ───────────────────────────────────────────────────────
 
   if (showSummary && summarySessionId) {
-    const session = store.sessions.find((s) => s.id === summarySessionId);
-    const sessionSets = store.getSessionSets(summarySessionId);
+    const session = sessions.find((s) => s.id === summarySessionId);
+    const sessionSets = getSessionSets(summarySessionId);
     const totalSets = sessionSets.length;
     const totalVolume = sessionSets.reduce((sum, s) => sum + s.weight * s.reps, 0);
     const duration =
@@ -376,6 +432,12 @@ export default function WorkoutsScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Bug #3: Cancel Workout button */}
+            <Pressable style={styles.cancelBtn} onPress={handleCancelWorkout}>
+              <Ionicons name="close-circle-outline" size={18} color={colors.danger} />
+              <Text style={styles.cancelBtnText}>Cancel Workout</Text>
+            </Pressable>
+
             {activeExercises.map((exercise) => {
               const exerciseSets = activeSets
                 .filter((s) => s.exerciseId === exercise.id)
@@ -408,10 +470,8 @@ export default function WorkoutsScreen() {
                     <SetRow
                       key={gs.id}
                       gymSet={gs}
-                      onUpdate={() => {
-                        /* Sets are committed on blur via store.addSet pattern;
-                           for edits, we update in-place — for MVP,
-                           sets are add-only and weight/reps display only */
+                      onUpdate={(weight, reps) => {
+                        updateSet(gs.id, weight, reps);
                       }}
                     />
                   ))}
@@ -462,7 +522,7 @@ export default function WorkoutsScreen() {
           {/* ── Templates ──────────────────────────────────────────── */}
           <SectionHeader title="Start Workout" />
 
-          {store.templates.length === 0 && !showCreateTemplate && (
+          {templates.length === 0 && !showCreateTemplate && (
             <Panel style={styles.emptyPanel}>
               <Ionicons
                 name="barbell-outline"
@@ -476,18 +536,15 @@ export default function WorkoutsScreen() {
             </Panel>
           )}
 
-          {store.templates.map((t) => {
-            const exCount = store.getTemplateExercises(t.id).length;
-            return (
-              <TemplateCard
-                key={t.id}
-                template={t}
-                exerciseCount={exCount}
-                onStart={() => handleStartSession(t.id)}
-                onDelete={() => handleDeleteTemplate(t.id)}
-              />
-            );
-          })}
+          {templates.map((t) => (
+            <TemplateCard
+              key={t.id}
+              template={t}
+              exerciseCount={templateExCounts[t.id] ?? 0}
+              onStart={() => handleStartSession(t.id)}
+              onDelete={() => handleDeleteTemplate(t.id)}
+            />
+          ))}
 
           {/* Create template toggle */}
           {!showCreateTemplate && (
@@ -519,7 +576,7 @@ export default function WorkoutsScreen() {
 
               <Text style={styles.formSubtitle}>Select Exercises</Text>
 
-              {store.exercises.map((ex) => {
+              {exercises.map((ex) => {
                 const selected = selectedExerciseIds.has(ex.id);
                 return (
                   <Pressable
@@ -661,31 +718,24 @@ export default function WorkoutsScreen() {
             </Panel>
           ) : (
             recentSessions.map((session) => {
-              const tmpl = store.templates.find(
-                (t) => t.id === session.templateId
-              );
-              const duration =
-                session.endedAt && session.startedAt
-                  ? session.endedAt - session.startedAt
-                  : 0;
-              const sessionSets = store.getSessionSets(session.id);
-              const volume = sessionSets.reduce(
-                (sum, s) => sum + s.weight * s.reps,
-                0
-              );
+              const stats = recentSessionStats[session.id] ?? {
+                setCount: 0,
+                volume: 0,
+                duration: 0,
+              };
 
               return (
                 <Panel key={session.id} style={styles.recentCard}>
                   <View style={styles.recentRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.recentName}>
-                        {tmpl?.name ?? "Workout"}
+                        {session.templateName ?? "Workout"}
                       </Text>
                       <Text style={styles.recentMeta}>
                         {formatDate(session.dateKey)} &middot;{" "}
-                        {formatDuration(duration)} &middot;{" "}
-                        {sessionSets.length} sets &middot;{" "}
-                        {volume.toLocaleString()} kg
+                        {formatDuration(stats.duration)} &middot;{" "}
+                        {stats.setCount} sets &middot;{" "}
+                        {stats.volume.toLocaleString()} kg
                       </Text>
                     </View>
                     <Ionicons
@@ -967,6 +1017,20 @@ const styles = StyleSheet.create({
     borderTopColor: colors.panelBorder,
   },
   addSetText: { fontSize: 13, fontWeight: "600", color: colors.body },
+
+  // Cancel button
+  cancelBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: radius.md,
+  },
+  cancelBtnText: { fontSize: 14, fontWeight: "600", color: colors.danger },
 
   // Finish button
   finishBtn: {

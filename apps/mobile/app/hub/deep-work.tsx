@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
+  AppState,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,10 +24,8 @@ import {
   DeepWorkCategory,
   DeepWorkTask,
 } from "../../src/stores/useDeepWorkStore";
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-const getTodayKey = () => new Date().toISOString().slice(0, 10);
+import { getTodayKey, toLocalDateKey, addDays } from "../../src/lib/date";
+import { formatCurrency } from "../../src/lib/format";
 
 const CATEGORIES: DeepWorkCategory[] = [
   "Main Job / College",
@@ -60,10 +59,6 @@ const CATEGORY_DIM_COLORS: Record<DeepWorkCategory, string> = {
   Other: "rgba(255, 255, 255, 0.06)",
 };
 
-function formatCurrency(val: number): string {
-  return "$" + val.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
 // ─── Task Row ───────────────────────────────────────────────────────────────
 
 type TaskRowProps = {
@@ -86,17 +81,19 @@ const TaskRow = React.memo(function TaskRow({
   const [earningsStr, setEarningsStr] = useState(
     earnings > 0 ? earnings.toString() : ""
   );
+  const isFocusedRef = useRef(false);
   const catColor = CATEGORY_COLORS[task.category];
   const catDimColor = CATEGORY_DIM_COLORS[task.category];
 
   const handleEarningsBlur = useCallback(() => {
+    isFocusedRef.current = false;
     const val = parseFloat(earningsStr) || 0;
     onEarningsChange(val);
   }, [earningsStr, onEarningsChange]);
 
-  // Sync external earnings changes
+  // Sync external earnings changes (skip while input is focused to avoid flicker)
   useEffect(() => {
-    setEarningsStr(earnings > 0 ? earnings.toString() : "");
+    if (!isFocusedRef.current) setEarningsStr(earnings > 0 ? earnings.toString() : "");
   }, [earnings]);
 
   return (
@@ -152,6 +149,7 @@ const TaskRow = React.memo(function TaskRow({
             style={styles.earningsInput}
             value={earningsStr}
             onChangeText={setEarningsStr}
+            onFocus={() => { isFocusedRef.current = true; }}
             onBlur={handleEarningsBlur}
             keyboardType="decimal-pad"
             placeholder="0.00"
@@ -168,8 +166,26 @@ const TaskRow = React.memo(function TaskRow({
 
 export default function DeepWorkScreen() {
   const router = useRouter();
-  const store = useDeepWorkStore();
-  const todayKey = getTodayKey();
+
+  // Bug 7: Use individual selectors instead of `const store = useDeepWorkStore()`
+  const load = useDeepWorkStore((s) => s.load);
+  const tasks = useDeepWorkStore((s) => s.tasks);
+  const logs = useDeepWorkStore((s) => s.logs);
+  const addTask = useDeepWorkStore((s) => s.addTask);
+  const deleteTask = useDeepWorkStore((s) => s.deleteTask);
+  const logWork = useDeepWorkStore((s) => s.logWork);
+  const getLogsByDate = useDeepWorkStore((s) => s.getLogsByDate);
+  const getWeeklyEarnings = useDeepWorkStore((s) => s.getWeeklyEarnings);
+
+  // Bug 3: AppState listener to refresh todayKey past midnight
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setAppActive((c) => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+  const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
   // Add task form
   const [showAddForm, setShowAddForm] = useState(false);
@@ -177,12 +193,11 @@ export default function DeepWorkScreen() {
   const [newCategory, setNewCategory] = useState<DeepWorkCategory>("Main Job / College");
 
   useEffect(() => {
-    store.load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    load();
+  }, [load]);
 
   // Today's logs
-  const todayLogs = useMemo(() => store.getLogsByDate(todayKey), [store.logs, todayKey]);
+  const todayLogs = useMemo(() => getLogsByDate(todayKey), [logs, todayKey, getLogsByDate]);
 
   // Today's total earnings
   const todayEarnings = useMemo(
@@ -194,32 +209,30 @@ export default function DeepWorkScreen() {
   const categoryBreakdown = useMemo(() => {
     const map: Partial<Record<DeepWorkCategory, number>> = {};
     for (const log of todayLogs) {
-      const task = store.tasks.find((t) => t.id === log.taskId);
+      const task = tasks.find((t) => t.id === log.taskId);
       if (task) {
         map[task.category] = (map[task.category] ?? 0) + log.earningsToday;
       }
     }
     return map;
-  }, [todayLogs, store.tasks]);
+  }, [todayLogs, tasks]);
 
   // Weekly stats
   const weeklyEarnings = useMemo(
-    () => store.getWeeklyEarnings(todayKey),
-    [store.logs, todayKey]
+    () => getWeeklyEarnings(todayKey),
+    [logs, todayKey, getWeeklyEarnings]
   );
 
+  // Bug 4: Count days with ANY log entry (earnings > 0 OR completed), not just completed
   const weeklyDaysWorked = useMemo(() => {
-    const end = new Date(todayKey);
-    const start = new Date(end);
-    start.setDate(start.getDate() - 6);
-    const startKey = start.toISOString().slice(0, 10);
+    const startKey = addDays(todayKey, -6);
     const daysSet = new Set(
-      store.logs
-        .filter((l) => l.dateKey >= startKey && l.dateKey <= todayKey && l.completed)
+      logs
+        .filter((l) => l.dateKey >= startKey && l.dateKey <= todayKey && (l.completed || l.earningsToday > 0))
         .map((l) => l.dateKey)
     );
     return daysSet.size;
-  }, [store.logs, todayKey]);
+  }, [logs, todayKey]);
 
   const weeklyAvg = weeklyDaysWorked > 0 ? weeklyEarnings / weeklyDaysWorked : 0;
 
@@ -231,12 +244,12 @@ export default function DeepWorkScreen() {
       Alert.alert("Error", "Enter a task name.");
       return;
     }
-    store.addTask(name, newCategory);
+    addTask(name, newCategory);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setNewTaskName("");
     setNewCategory("Main Job / College");
     setShowAddForm(false);
-  }, [newTaskName, newCategory, store]);
+  }, [newTaskName, newCategory, addTask]);
 
   const handleDeleteTask = useCallback(
     (id: number) => {
@@ -246,27 +259,27 @@ export default function DeepWorkScreen() {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            store.deleteTask(id);
+            deleteTask(id);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           },
         },
       ]);
     },
-    [store]
+    [deleteTask]
   );
 
   const handleToggle = useCallback(
     (taskId: number, completed: boolean, currentEarnings: number) => {
-      store.logWork(taskId, todayKey, completed, currentEarnings);
+      logWork(taskId, todayKey, completed, currentEarnings);
     },
-    [store, todayKey]
+    [logWork, todayKey]
   );
 
   const handleEarningsChange = useCallback(
     (taskId: number, earnings: number, currentCompleted: boolean) => {
-      store.logWork(taskId, todayKey, currentCompleted, earnings);
+      logWork(taskId, todayKey, currentCompleted, earnings);
     },
-    [store, todayKey]
+    [logWork, todayKey]
   );
 
   // ─── Render ─────────────────────────────────────────────────────────────
@@ -324,10 +337,10 @@ export default function DeepWorkScreen() {
           {/* ── Task List ──────────────────────────────────────────── */}
           <SectionHeader
             title="Tasks"
-            right={`${store.tasks.length} total`}
+            right={`${tasks.length} total`}
           />
 
-          {store.tasks.length === 0 && !showAddForm && (
+          {tasks.length === 0 && !showAddForm && (
             <Panel style={styles.emptyPanel}>
               <Ionicons
                 name="code-working-outline"
@@ -341,7 +354,7 @@ export default function DeepWorkScreen() {
             </Panel>
           )}
 
-          {store.tasks.map((task) => {
+          {tasks.map((task) => {
             const log = todayLogs.find((l) => l.taskId === task.id);
             const completed = log?.completed ?? false;
             const earnings = log?.earningsToday ?? 0;

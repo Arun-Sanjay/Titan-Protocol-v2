@@ -39,3 +39,15 @@ export function getDayOfWeek(dateKey: string): string {
   const d = new Date(dateKey + "T00:00:00");
   return d.toLocaleDateString("en-US", { weekday: "short" });
 }
+
+export function getMonthKey(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+export function getMonthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-");
+  const d = new Date(parseInt(y), parseInt(m) - 1, 1);
+  return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}

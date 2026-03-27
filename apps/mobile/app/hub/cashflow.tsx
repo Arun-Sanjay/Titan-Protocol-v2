@@ -3,11 +3,13 @@ import {
   View,
   Text,
   ScrollView,
+  SectionList,
   StyleSheet,
   Pressable,
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,22 +25,10 @@ import {
   INCOME_CATEGORIES,
   type MoneyTx,
 } from "../../src/stores/useMoneyStore";
+import { getTodayKey, getMonthKey, getMonthLabel, addDays } from "../../src/lib/date";
+import { formatCurrency } from "../../src/lib/format";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getTodayKey(): string {
-  const today = new Date();
-  return today.toISOString().slice(0, 10);
-}
-
-function getMonthKey(): string {
-  const today = new Date();
-  return today.toISOString().slice(0, 7);
-}
-
-function formatCurrency(amount: number): string {
-  return "$" + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
 
 function formatDate(dateISO: string): string {
   const d = new Date(dateISO + "T00:00:00");
@@ -80,6 +70,7 @@ function AddTransactionForm({ onClose }: { onClose: () => void }) {
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
   const [note, setNote] = useState("");
+  const [txDate, setTxDate] = useState(getTodayKey());
 
   const categories = type === "expense" ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
 
@@ -88,21 +79,30 @@ function AddTransactionForm({ onClose }: { onClose: () => void }) {
     setCategory(type === "expense" ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0]);
   }, [type]);
 
+  const handleAmountChange = useCallback((text: string) => {
+    // Reject multiple decimal points
+    if (text.includes(".") && text.indexOf(".") !== text.lastIndexOf(".")) return;
+    setAmount(text);
+  }, []);
+
   const handleSave = () => {
     const parsed = parseFloat(amount);
-    if (!parsed || parsed <= 0) return;
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 999999.99) return;
+    const roundedAmount = Math.round(parsed * 100) / 100;
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addTransaction({
-      dateISO: getTodayKey(),
+      dateISO: txDate,
       type,
-      amount: parsed,
+      amount: roundedAmount,
       category,
-      bucket: null,
       note: note.trim(),
     });
     onClose();
   };
+
+  const today = getTodayKey();
+  const yesterday = addDays(today, -1);
 
   return (
     <Panel style={styles.formPanel}>
@@ -152,9 +152,47 @@ function AddTransactionForm({ onClose }: { onClose: () => void }) {
           placeholderTextColor={colors.textMuted}
           keyboardType="decimal-pad"
           value={amount}
-          onChangeText={setAmount}
+          onChangeText={handleAmountChange}
           autoFocus
         />
+      </View>
+
+      {/* Date Selector */}
+      <Text style={styles.fieldLabel}>Date</Text>
+      <View style={styles.dateRow}>
+        <Pressable
+          style={[styles.dateBtn, txDate === today && styles.dateBtnActive]}
+          onPress={() => { setTxDate(today); Haptics.selectionAsync(); }}
+        >
+          <Text style={[styles.dateBtnText, txDate === today && styles.dateBtnTextActive]}>
+            Today
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.dateBtn, txDate === yesterday && styles.dateBtnActive]}
+          onPress={() => { setTxDate(yesterday); Haptics.selectionAsync(); }}
+        >
+          <Text style={[styles.dateBtnText, txDate === yesterday && styles.dateBtnTextActive]}>
+            Yesterday
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.dateBtn, txDate !== today && txDate !== yesterday && styles.dateBtnActive]}
+          onPress={() => {
+            const twoDaysAgo = addDays(today, -2);
+            setTxDate(twoDaysAgo);
+            Haptics.selectionAsync();
+          }}
+        >
+          <Text
+            style={[
+              styles.dateBtnText,
+              txDate !== today && txDate !== yesterday && styles.dateBtnTextActive,
+            ]}
+          >
+            2 days ago
+          </Text>
+        </Pressable>
       </View>
 
       {/* Category Chips */}
@@ -251,8 +289,17 @@ function TransactionRow({ tx }: { tx: MoneyTx }) {
   const deleteTransaction = useMoneyStore((s) => s.deleteTransaction);
 
   const handleDelete = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    deleteTransaction(tx.id);
+    Alert.alert("Delete Transaction", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          deleteTransaction(tx.id);
+        },
+      },
+    ]);
   };
 
   const icon = CATEGORY_ICONS[tx.category] ?? "ellipsis-horizontal-circle-outline";
@@ -293,21 +340,42 @@ function TransactionRow({ tx }: { tx: MoneyTx }) {
   );
 }
 
+// ─── Section Header for SectionList ──────────────────────────────────────────
+
+function DateSectionHeader({ title }: { title: string }) {
+  return <Text style={styles.dateLabel}>{formatDate(title)}</Text>;
+}
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function CashflowScreen() {
   const router = useRouter();
-  const { transactions, load } = useMoneyStore();
+  const transactions = useMoneyStore((s) => s.transactions);
+  const load = useMoneyStore((s) => s.load);
   const [showForm, setShowForm] = useState(false);
+
+  // Month navigation
+  const [monthOffset, setMonthOffset] = useState(0);
+  const currentMonth = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + monthOffset);
+    return getMonthKey(d);
+  }, [monthOffset]);
+  const monthLabel = useMemo(() => getMonthLabel(currentMonth), [currentMonth]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
-  const monthKey = getMonthKey();
+  // Filter transactions by selected month
+  const monthTransactions = useMemo(
+    () => transactions.filter((tx) => tx.dateISO.startsWith(currentMonth)),
+    [transactions, currentMonth]
+  );
+
   const monthTotals = useMemo(
-    () => computeMonthTotals(transactions, monthKey),
-    [transactions, monthKey]
+    () => computeMonthTotals(transactions, currentMonth),
+    [transactions, currentMonth]
   );
 
   // Sort categories by amount descending
@@ -318,32 +386,149 @@ export default function CashflowScreen() {
 
   const maxCategoryAmount = sortedCategories.length > 0 ? sortedCategories[0][1] : 0;
 
-  // Group transactions by date (most recent first)
-  const groupedByDate = useMemo(() => {
-    const sorted = [...transactions].sort(
+  // Group month transactions by date for SectionList
+  const sections = useMemo(() => {
+    const sorted = [...monthTransactions].sort(
       (a, b) => b.dateISO.localeCompare(a.dateISO) || b.id - a.id
     );
-    const groups: { date: string; txs: MoneyTx[] }[] = [];
+    const groups: { title: string; data: MoneyTx[] }[] = [];
     let currentDate = "";
     for (const tx of sorted) {
       if (tx.dateISO !== currentDate) {
         currentDate = tx.dateISO;
-        groups.push({ date: currentDate, txs: [] });
+        groups.push({ title: currentDate, data: [] });
       }
-      groups[groups.length - 1].txs.push(tx);
+      groups[groups.length - 1].data.push(tx);
     }
     return groups;
-  }, [transactions]);
-
-  const monthLabel = useMemo(() => {
-    const d = new Date();
-    return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  }, []);
+  }, [monthTransactions]);
 
   const handleOpenForm = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setShowForm(true);
   }, []);
+
+  const listHeader = useMemo(
+    () => (
+      <>
+        {/* Month Navigation */}
+        <View style={styles.monthNav}>
+          <Pressable onPress={() => setMonthOffset((o) => o - 1)}>
+            <Ionicons name="chevron-back" size={20} color={colors.text} />
+          </Pressable>
+          <Text style={styles.monthLabel}>{monthLabel}</Text>
+          <Pressable
+            onPress={() => {
+              if (monthOffset < 0) setMonthOffset((o) => o + 1);
+            }}
+            disabled={monthOffset >= 0}
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={monthOffset >= 0 ? colors.textMuted : colors.text}
+            />
+          </Pressable>
+        </View>
+
+        {/* Monthly Summary */}
+        <Panel style={styles.summaryPanel}>
+          <Text
+            style={[
+              styles.summaryNet,
+              {
+                color:
+                  monthTotals.net >= 0 ? colors.success : colors.danger,
+              },
+            ]}
+          >
+            {monthTotals.net >= 0 ? "+" : ""}
+            {formatCurrency(Math.abs(monthTotals.net))}
+          </Text>
+          <Text style={styles.summaryNetLabel}>Net</Text>
+
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryStat}>
+              <Text style={[styles.summaryValue, { color: colors.success }]}>
+                {formatCurrency(monthTotals.earned)}
+              </Text>
+              <Text style={styles.summaryLabel}>Earned</Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryStat}>
+              <Text style={[styles.summaryValue, { color: colors.danger }]}>
+                {formatCurrency(monthTotals.spent)}
+              </Text>
+              <Text style={styles.summaryLabel}>Spent</Text>
+            </View>
+          </View>
+        </Panel>
+
+        {/* Category Breakdown */}
+        {sortedCategories.length > 0 && (
+          <>
+            <SectionHeader
+              title="Spending by Category"
+              right={formatCurrency(monthTotals.spent)}
+            />
+            <Panel style={styles.catPanel}>
+              {sortedCategories.map(([cat, catAmount]) => (
+                <CategoryBar
+                  key={cat}
+                  category={cat}
+                  amount={catAmount}
+                  maxAmount={maxCategoryAmount}
+                />
+              ))}
+            </Panel>
+          </>
+        )}
+
+        {/* Add Transaction */}
+        {showForm ? (
+          <AddTransactionForm onClose={() => setShowForm(false)} />
+        ) : (
+          <Pressable style={styles.addBtn} onPress={handleOpenForm}>
+            <Ionicons name="add" size={20} color="#000" />
+            <Text style={styles.addBtnText}>Add Transaction</Text>
+          </Pressable>
+        )}
+
+        {/* Transaction List Header */}
+        <SectionHeader
+          title="Transactions"
+          right={`${monthTransactions.length} this month`}
+        />
+      </>
+    ),
+    [
+      monthLabel,
+      monthOffset,
+      monthTotals,
+      sortedCategories,
+      maxCategoryAmount,
+      showForm,
+      handleOpenForm,
+      monthTransactions.length,
+    ]
+  );
+
+  const listEmpty = useMemo(
+    () => (
+      <Panel style={styles.emptyPanel}>
+        <Ionicons
+          name="wallet-outline"
+          size={32}
+          color={colors.textMuted}
+        />
+        <Text style={styles.emptyText}>No transactions this month</Text>
+        <Text style={styles.emptySubtext}>
+          Tap "Add Transaction" to start tracking
+        </Text>
+      </Panel>
+    ),
+    []
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -360,110 +545,26 @@ export default function CashflowScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView
+        <SectionList
           style={styles.body}
           contentContainerStyle={styles.bodyContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-        >
-          {/* Monthly Summary */}
-          <Panel style={styles.summaryPanel}>
-            <Text style={styles.summaryMonth}>{monthLabel}</Text>
-            <Text
-              style={[
-                styles.summaryNet,
-                {
-                  color:
-                    monthTotals.net >= 0 ? colors.success : colors.danger,
-                },
-              ]}
-            >
-              {monthTotals.net >= 0 ? "+" : ""}
-              {formatCurrency(Math.abs(monthTotals.net))}
-            </Text>
-            <Text style={styles.summaryNetLabel}>Net</Text>
-
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryStat}>
-                <Text style={[styles.summaryValue, { color: colors.success }]}>
-                  {formatCurrency(monthTotals.earned)}
-                </Text>
-                <Text style={styles.summaryLabel}>Earned</Text>
-              </View>
-              <View style={styles.summaryDivider} />
-              <View style={styles.summaryStat}>
-                <Text style={[styles.summaryValue, { color: colors.danger }]}>
-                  {formatCurrency(monthTotals.spent)}
-                </Text>
-                <Text style={styles.summaryLabel}>Spent</Text>
-              </View>
+          sections={sections}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item, index }) => (
+            <View style={styles.txPanelItem}>
+              {index > 0 && <View style={styles.txDivider} />}
+              <TransactionRow tx={item} />
             </View>
-          </Panel>
-
-          {/* Category Breakdown */}
-          {sortedCategories.length > 0 && (
-            <>
-              <SectionHeader
-                title="Spending by Category"
-                right={formatCurrency(monthTotals.spent)}
-              />
-              <Panel style={styles.catPanel}>
-                {sortedCategories.map(([cat, amount]) => (
-                  <CategoryBar
-                    key={cat}
-                    category={cat}
-                    amount={amount}
-                    maxAmount={maxCategoryAmount}
-                  />
-                ))}
-              </Panel>
-            </>
           )}
-
-          {/* Add Transaction */}
-          {showForm ? (
-            <AddTransactionForm onClose={() => setShowForm(false)} />
-          ) : (
-            <Pressable style={styles.addBtn} onPress={handleOpenForm}>
-              <Ionicons name="add" size={20} color="#000" />
-              <Text style={styles.addBtnText}>Add Transaction</Text>
-            </Pressable>
+          renderSectionHeader={({ section }) => (
+            <DateSectionHeader title={section.title} />
           )}
-
-          {/* Transaction List */}
-          <SectionHeader
-            title="Transactions"
-            right={`${transactions.length} total`}
-          />
-
-          {groupedByDate.length === 0 ? (
-            <Panel style={styles.emptyPanel}>
-              <Ionicons
-                name="wallet-outline"
-                size={32}
-                color={colors.textMuted}
-              />
-              <Text style={styles.emptyText}>No transactions yet</Text>
-              <Text style={styles.emptySubtext}>
-                Tap "Add Transaction" to start tracking
-              </Text>
-            </Panel>
-          ) : (
-            groupedByDate.map((group) => (
-              <View key={group.date} style={styles.dateGroup}>
-                <Text style={styles.dateLabel}>{formatDate(group.date)}</Text>
-                <Panel style={styles.txPanel}>
-                  {group.txs.map((tx, i) => (
-                    <React.Fragment key={tx.id}>
-                      {i > 0 && <View style={styles.txDivider} />}
-                      <TransactionRow tx={tx} />
-                    </React.Fragment>
-                  ))}
-                </Panel>
-              </View>
-            ))
-          )}
-        </ScrollView>
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          stickySectionHeadersEnabled={false}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -494,16 +595,28 @@ const styles = StyleSheet.create({
   body: { flex: 1, paddingHorizontal: spacing.lg },
   bodyContent: { paddingBottom: spacing["5xl"] },
 
+  // ── Month Navigation ──
+  monthNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.lg,
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
+  },
+  monthLabel: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
+    minWidth: 160,
+    textAlign: "center",
+  },
+
   // ── Summary Panel ──
   summaryPanel: {
     alignItems: "center",
     paddingVertical: spacing["2xl"],
-    marginTop: spacing.md,
-  },
-  summaryMonth: {
-    ...fonts.kicker,
-    color: colors.textMuted,
-    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
   },
   summaryNet: {
     ...fonts.monoValue,
@@ -653,6 +766,31 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginBottom: -spacing.sm,
   },
+  dateRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  dateBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.inputBg,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+  },
+  dateBtnActive: {
+    backgroundColor: colors.money,
+    borderColor: colors.money,
+  },
+  dateBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  dateBtnTextActive: {
+    color: "#000",
+  },
   chipRow: {
     gap: spacing.sm,
     paddingVertical: spacing.xs,
@@ -707,9 +845,9 @@ const styles = StyleSheet.create({
     ...fonts.kicker,
     color: colors.textMuted,
     marginBottom: spacing.sm,
+    marginTop: spacing.md,
   },
-  txPanel: {
-    paddingVertical: spacing.xs,
+  txPanelItem: {
     paddingHorizontal: spacing.lg,
   },
   txRow: {

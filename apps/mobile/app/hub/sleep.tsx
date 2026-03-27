@@ -8,6 +8,8 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  AppState,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -46,11 +48,21 @@ function qualityLabel(q: number): string {
 
 export default function SleepScreen() {
   const router = useRouter();
-  const todayKey = getTodayKey();
+
+  // Bug 5: AppState listener to refresh todayKey past midnight
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setAppActive(c => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+  const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
   const entries = useSleepStore((s) => s.entries);
   const loadEntry = useSleepStore((s) => s.loadEntry);
   const addEntry = useSleepStore((s) => s.addEntry);
+  const deleteEntry = useSleepStore((s) => s.deleteEntry);
   const getRange = useSleepStore((s) => s.getRange);
 
   // Form state
@@ -60,12 +72,12 @@ export default function SleepScreen() {
   const [notes, setNotes] = useState("");
   const [showForm, setShowForm] = useState(false);
 
-  // Load today + past 7 days
+  // Bug 6: include todayKey and loadEntry in deps
   useEffect(() => {
     for (let i = 0; i <= 7; i++) {
       loadEntry(addDays(todayKey, -i));
     }
-  }, []);
+  }, [todayKey, loadEntry]);
 
   const todayEntry = entries[todayKey] ?? null;
 
@@ -101,6 +113,9 @@ export default function SleepScreen() {
 
     const durationMinutes = computeDurationMinutes(bedtime, wakeTime);
 
+    // Bug 8: reject if duration is 0
+    if (durationMinutes === 0) return;
+
     addEntry({
       dateKey: todayKey,
       bedtime,
@@ -117,6 +132,24 @@ export default function SleepScreen() {
     setQuality(3);
     setNotes("");
   }, [bedtime, wakeTime, quality, notes, todayKey, addEntry]);
+
+  // Bug 7: delete handler for history entries
+  const handleDelete = useCallback(
+    (dateKey: string) => {
+      Alert.alert("Delete Entry", "Remove this sleep entry?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            deleteEntry(dateKey);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          },
+        },
+      ]);
+    },
+    [deleteEntry],
+  );
 
   const previewDuration = useMemo(() => {
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -242,7 +275,9 @@ export default function SleepScreen() {
                 {/* Duration preview */}
                 {previewDuration !== null && (
                   <Text style={styles.durationPreview}>
-                    {formatDuration(previewDuration)}
+                    {previewDuration === 0
+                      ? "Bedtime and wake time cannot be the same"
+                      : formatDuration(previewDuration)}
                   </Text>
                 )}
 
@@ -380,6 +415,15 @@ export default function SleepScreen() {
                       ]}
                     />
                   </View>
+                  {/* Bug 7: Delete button */}
+                  <Pressable
+                    onPress={() => handleDelete(entry.dateKey)}
+                    style={styles.historyDeleteBtn}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                    <Text style={styles.historyDeleteText}>Delete</Text>
+                  </Pressable>
                 </Panel>
               );
             })
@@ -567,6 +611,18 @@ const styles = StyleSheet.create({
   barFill: {
     height: 6,
     borderRadius: radius.full,
+  },
+  historyDeleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 4,
+    marginTop: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  historyDeleteText: {
+    fontSize: 12,
+    color: colors.danger,
   },
 
   // Stats

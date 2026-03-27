@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getJSON, setJSON, nextId } from "../db/storage";
+import { toLocalDateKey, addDays, getTodayKey } from "../lib/date";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -99,11 +100,8 @@ export const useDeepWorkStore = create<DeepWorkState>()((set, get) => ({
   },
 
   getWeeklyEarnings: (endDate) => {
-    // Calculate the date 7 days before endDate
-    const end = new Date(endDate);
-    const start = new Date(end);
-    start.setDate(start.getDate() - 6); // 7-day window including endDate
-    const startKey = start.toISOString().slice(0, 10);
+    // Calculate the date 7 days before endDate using local-timezone-safe addDays
+    const startKey = addDays(endDate, -6); // 7-day window including endDate
 
     return get()
       .logs.filter((l) => l.dateKey >= startKey && l.dateKey <= endDate)

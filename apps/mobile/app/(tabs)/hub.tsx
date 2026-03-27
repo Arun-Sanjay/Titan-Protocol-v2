@@ -27,7 +27,7 @@ const HUB_ITEMS: HubItem[] = [
   { icon: "🍎", ionicon: "nutrition", label: "Nutrition", route: "/hub/nutrition", color: colors.body, ready: true },
   { icon: "📋", ionicon: "clipboard", label: "Budgets", route: "/hub/budgets", color: colors.money, ready: true },
   { icon: "🔥", ionicon: "flame", label: "Deep Work", route: "/hub/deep-work", color: colors.warning, ready: true },
-  { icon: "⚙️", ionicon: "settings", label: "Settings", route: "/settings", color: colors.textSecondary, ready: true },
+  { icon: "⚙️", ionicon: "settings", label: "Settings", route: "/hub/settings", color: colors.textSecondary, ready: true },
 ];
 
 export default function HubScreen() {

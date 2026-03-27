@@ -27,6 +27,7 @@ export type GymSession = {
   id: number;
   dateKey: string;
   templateId: number;
+  templateName: string;
   startedAt: number;
   endedAt: number | null;
 };
@@ -39,6 +40,16 @@ export type GymSet = {
   weight: number;
   reps: number;
 };
+
+// ─── Clamping helpers ────────────────────────────────────────────────────────
+
+function clampWeight(w: number): number {
+  return Math.max(0, Math.min(w, 2000));
+}
+
+function clampReps(r: number): number {
+  return Math.max(0, Math.min(r, 1000));
+}
 
 // ─── MMKV keys ──────────────────────────────────────────────────────────────
 
@@ -83,7 +94,9 @@ type GymState = {
   createTemplate: (name: string, exerciseIds: number[]) => number;
   startSession: (templateId: number, dateKey: string) => number;
   addSet: (sessionId: number, exerciseId: number, weight: number, reps: number) => void;
+  updateSet: (setId: number, weight: number, reps: number) => void;
   endSession: (sessionId: number) => void;
+  cancelSession: () => void;
   getSessionSets: (sessionId: number) => GymSet[];
   getTemplateExercises: (templateId: number) => Exercise[];
   deleteTemplate: (id: number) => void;
@@ -111,8 +124,8 @@ export const useGymStore = create<GymState>()((set, get) => ({
     const sessions = getJSON<GymSession[]>(SESSIONS_KEY, []);
     const sets = getJSON<GymSet[]>(SETS_KEY, []);
 
-    // Restore active session (one that hasn't ended)
-    const active = sessions.find((s) => s.endedAt === null);
+    // Restore active session — use findLast to get the LAST unclosed session
+    const active = [...sessions].reverse().find((s) => s.endedAt === null);
 
     set({
       exercises,
@@ -153,11 +166,27 @@ export const useGymStore = create<GymState>()((set, get) => ({
   },
 
   startSession: (templateId, dateKey) => {
+    const state = get();
+
+    // Guard against orphaned sessions — auto-end any active session first
+    if (state.activeSessionId !== null) {
+      const sessions = state.sessions.map((s) =>
+        s.id === state.activeSessionId ? { ...s, endedAt: Date.now() } : s
+      );
+      setJSON(SESSIONS_KEY, sessions);
+      set({ sessions });
+    }
+
+    // Look up template name for persistence
+    const template = get().templates.find((t) => t.id === templateId);
+    const templateName = template?.name ?? "Workout";
+
     const id = nextId();
     const session: GymSession = {
       id,
       dateKey,
       templateId,
+      templateName,
       startedAt: Date.now(),
       endedAt: null,
     };
@@ -178,10 +207,20 @@ export const useGymStore = create<GymState>()((set, get) => ({
       sessionId,
       exerciseId,
       setIndex,
-      weight,
-      reps,
+      weight: clampWeight(weight),
+      reps: clampReps(reps),
     };
     const sets = [...get().sets, newSet];
+    setJSON(SETS_KEY, sets);
+    set({ sets });
+  },
+
+  updateSet: (setId, weight, reps) => {
+    const clamped_weight = clampWeight(weight);
+    const clamped_reps = clampReps(reps);
+    const sets = get().sets.map((s) =>
+      s.id === setId ? { ...s, weight: clamped_weight, reps: clamped_reps } : s
+    );
     setJSON(SETS_KEY, sets);
     set({ sets });
   },
@@ -192,6 +231,20 @@ export const useGymStore = create<GymState>()((set, get) => ({
     );
     setJSON(SESSIONS_KEY, sessions);
     set({ sessions, activeSessionId: null });
+  },
+
+  cancelSession: () => {
+    const state = get();
+    const sessionId = state.activeSessionId;
+    if (sessionId === null) return;
+
+    // Remove the session and its sets
+    const sessions = state.sessions.filter((s) => s.id !== sessionId);
+    const sets = state.sets.filter((s) => s.sessionId !== sessionId);
+
+    setJSON(SESSIONS_KEY, sessions);
+    setJSON(SETS_KEY, sets);
+    set({ sessions, sets, activeSessionId: null });
   },
 
   getSessionSets: (sessionId) => {

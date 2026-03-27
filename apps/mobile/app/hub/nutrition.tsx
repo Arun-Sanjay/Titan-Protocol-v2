@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated as RNAnimated,
+  AppState,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -50,17 +51,20 @@ const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 // ─── Setup Form Component ───────────────────────────────────────────────────
 
+// Bug 18: Accept optional initialProfile prop to pre-populate form
 function ProfileSetup({
   onSave,
+  initialProfile,
 }: {
   onSave: (profile: NutritionProfile) => void;
+  initialProfile?: NutritionProfile | null;
 }) {
-  const [height, setHeight] = useState("");
-  const [weight, setWeight] = useState("");
-  const [age, setAge] = useState("");
-  const [sex, setSex] = useState<"male" | "female">("male");
-  const [activity, setActivity] = useState(1.55);
-  const [goal, setGoal] = useState<"cut" | "bulk" | "maintain">("maintain");
+  const [height, setHeight] = useState(initialProfile ? String(initialProfile.height_cm) : "");
+  const [weight, setWeight] = useState(initialProfile ? String(initialProfile.weight_kg) : "");
+  const [age, setAge] = useState(initialProfile ? String(initialProfile.age) : "");
+  const [sex, setSex] = useState<"male" | "female">(initialProfile?.sex ?? "male");
+  const [activity, setActivity] = useState(initialProfile?.activity_multiplier ?? 1.55);
+  const [goal, setGoal] = useState<"cut" | "bulk" | "maintain">(initialProfile?.goal ?? "maintain");
 
   const previewProfile = useMemo((): NutritionProfile | null => {
     const h = parseFloat(height);
@@ -81,7 +85,9 @@ function ProfileSetup({
     });
 
     const goalOffset = goal === "cut" ? -500 : goal === "bulk" ? 300 : 0;
-    const calorie_target = tdee + goalOffset;
+    let calorie_target = tdee + goalOffset;
+    // Bug 15: enforce calorie floor in preview too
+    calorie_target = Math.max(calorie_target, sex === "female" ? 1200 : 1500);
     const protein_g = Math.round(w * 2.0); // 2g per kg
 
     return {
@@ -268,7 +274,16 @@ function ProfileSetup({
 
 export default function NutritionScreen() {
   const router = useRouter();
-  const todayKey = getTodayKey();
+
+  // Bug 20: AppState listener for stale todayKey
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setAppActive(c => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+  const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
   const profile = useNutritionStore((s) => s.profile);
   const meals = useNutritionStore((s) => s.meals);
@@ -286,27 +301,28 @@ export default function NutritionScreen() {
   const [mealCarbs, setMealCarbs] = useState("");
   const [mealFat, setMealFat] = useState("");
 
+  // Bug 21: include todayKey and load functions in deps
   useEffect(() => {
     loadProfile();
     loadMeals(todayKey);
-  }, []);
+  }, [todayKey, loadProfile, loadMeals]);
 
   const todayMeals = meals[todayKey] ?? [];
   const dayMacros = useMemo(() => computeDayMacros(todayMeals), [todayMeals]);
 
-  // Calorie ring progress
-  const calPct = profile
+  // Bug 19: Guard against NaN ring offset when calorie_target is 0
+  const calPct = profile && profile.calorie_target > 0
     ? Math.min(dayMacros.calories / profile.calorie_target, 1)
     : 0;
   const caloriesRemaining = profile
     ? profile.calorie_target - dayMacros.calories
     : 0;
 
-  // Macro targets (rough split: 30% protein, 40% carbs, 30% fat from remaining cals)
+  // Bug 16: Clamp remainingCals to prevent negative macro targets
   const macroTargets = useMemo(() => {
     if (!profile) return { protein: 150, carbs: 250, fat: 65 };
     const proteinCals = profile.protein_g * 4;
-    const remainingCals = profile.calorie_target - proteinCals;
+    const remainingCals = Math.max(0, profile.calorie_target - proteinCals);
     // Roughly 55% carbs, 45% fat of remaining
     const carbsCals = remainingCals * 0.55;
     const fatCals = remainingCals * 0.45;
@@ -317,16 +333,18 @@ export default function NutritionScreen() {
     };
   }, [profile]);
 
+  // Bug 17: Validate negative calories and clamp macros
   const handleAddMeal = useCallback(() => {
     const cal = parseInt(mealCalories, 10);
     if (!mealName.trim() || isNaN(cal)) return;
+    if (cal < 0) return;
 
     addMeal(todayKey, {
       name: mealName.trim(),
       calories: cal,
-      protein_g: parseInt(mealProtein, 10) || 0,
-      carbs_g: parseInt(mealCarbs, 10) || 0,
-      fat_g: parseInt(mealFat, 10) || 0,
+      protein_g: Math.max(0, parseInt(mealProtein, 10) || 0),
+      carbs_g: Math.max(0, parseInt(mealCarbs, 10) || 0),
+      fat_g: Math.max(0, parseInt(mealFat, 10) || 0),
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -380,6 +398,8 @@ export default function NutritionScreen() {
           {/* ── No Profile: Setup ── */}
           {(!profile || showEditProfile) && (
             <ProfileSetup
+              // Bug 18: pass existing profile as initialProfile
+              initialProfile={showEditProfile ? profile : null}
               onSave={(p) => {
                 updateProfile(p);
                 setShowEditProfile(false);

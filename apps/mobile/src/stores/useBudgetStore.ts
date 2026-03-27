@@ -33,6 +33,7 @@ export const useBudgetStore = create<BudgetState>()((set, get) => ({
   },
 
   addBudget: (category, monthlyLimit) => {
+    if (get().budgets.some((b) => b.category === category)) return;
     const id = nextId();
     const entry: Budget = { id, category, monthlyLimit };
     const budgets = [...get().budgets, entry];

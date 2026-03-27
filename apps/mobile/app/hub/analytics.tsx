@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Rect } from "react-native-svg";
@@ -10,6 +10,7 @@ import { Panel } from "../../src/components/ui/Panel";
 import { HeatmapGrid } from "../../src/components/ui/HeatmapGrid";
 import { useEngineStore } from "../../src/stores/useEngineStore";
 import type { EngineKey } from "../../src/db/schema";
+import { getTodayKey } from "../../src/lib/date";
 
 const ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
 const ENGINE_COLORS: Record<EngineKey, string> = {
@@ -32,11 +33,6 @@ function getDateKeys(range: Range): string[] {
   return keys;
 }
 
-function getTodayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 export default function AnalyticsScreen() {
   const router = useRouter();
   const [range, setRange] = useState<Range>(30);
@@ -46,20 +42,23 @@ export default function AnalyticsScreen() {
 
   const dateKeys = useMemo(() => getDateKeys(range), [range]);
 
+  // Bug 9: Always load 90 days so heatmap has data regardless of selected range
+  const allDateKeys = useMemo(() => getDateKeys(90), []);
+
   useEffect(() => {
     const today = getTodayKey();
     loadAllEngines(today);
-    // Load range data
-    if (dateKeys.length > 0) {
-      loadDateRange(dateKeys[0], dateKeys[dateKeys.length - 1]);
+    // Always load 90 days worth of data for the heatmap
+    if (allDateKeys.length > 0) {
+      loadDateRange(allDateKeys[0], allDateKeys[allDateKeys.length - 1]);
     }
-  }, [dateKeys]);
+  }, [loadAllEngines, loadDateRange, allDateKeys]);
 
   const dailyScores = useMemo(() => {
     return dateKeys.map((dk) => {
       const vals = ENGINES.map((e) => scores[`${e}:${dk}`] ?? 0);
       const active = vals.filter((v) => v > 0);
-      const avg = active.length === 0 ? 0 : Math.round(vals.reduce((a, b) => a + b, 0) / 4);
+      const avg = active.length === 0 ? 0 : Math.round(active.reduce((a, b) => a + b, 0) / active.length);
       return { dateKey: dk, score: avg };
     });
   }, [dateKeys, scores]);
@@ -101,17 +100,17 @@ export default function AnalyticsScreen() {
 
   // Heatmap data (90 days for grid — needs { dateKey, score } shape)
   const heatmapData = useMemo(() => {
-    const keys = getDateKeys(90);
-    return keys.map((dk) => {
+    return allDateKeys.map((dk) => {
       const vals = ENGINES.map((e) => scores[`${e}:${dk}`] ?? 0);
       const active = vals.filter((v) => v > 0);
-      const score = active.length === 0 ? 0 : Math.round(vals.reduce((a, b) => a + b, 0) / 4);
+      const score = active.length === 0 ? 0 : Math.round(active.reduce((a, b) => a + b, 0) / active.length);
       return { dateKey: dk, score };
     });
-  }, [scores]);
+  }, [allDateKeys, scores]);
 
-  // Bar chart config
-  const barWidth = range <= 7 ? 28 : range <= 30 ? 8 : 3;
+  // Bar chart config — dynamically size bars to fit container
+  const CHART_WIDTH = Dimensions.get("window").width - 2 * spacing.lg - 2 * spacing.lg;
+  const barWidth = Math.max(2, Math.floor((CHART_WIDTH - 2) / dailyScores.length) - 2);
   const chartHeight = 160;
 
   const engineBreakdown = useMemo(() => {

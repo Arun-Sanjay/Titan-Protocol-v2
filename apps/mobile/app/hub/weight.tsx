@@ -8,7 +8,9 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
+  AppState,
+  Alert,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -21,31 +23,64 @@ import { SparklineChart } from "../../src/components/ui/SparklineChart";
 import { getTodayKey, formatDateShort } from "../../src/lib/date";
 import { useWeightStore, type WeightEntry } from "../../src/stores/useWeightStore";
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
-const CHART_PADDING = spacing.lg * 2 + 40; // screen padding + panel padding
-
 export default function WeightScreen() {
   const router = useRouter();
-  const todayKey = getTodayKey();
+
+  // Bug 12: use useWindowDimensions instead of static Dimensions.get
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
+  const CHART_PADDING = spacing.lg * 2 + 40; // screen padding + panel padding
+
+  // Bug 13: AppState listener for stale todayKey
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setAppActive(c => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+  const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
   const entries = useWeightStore((s) => s.entries);
   const goalWeight = useWeightStore((s) => s.goalWeight);
   const load = useWeightStore((s) => s.load);
   const addEntry = useWeightStore((s) => s.addEntry);
+  const deleteEntry = useWeightStore((s) => s.deleteEntry);
   const setGoalWeight = useWeightStore((s) => s.setGoalWeight);
   const getLatest = useWeightStore((s) => s.getLatest);
   const getChangeFromFirst = useWeightStore((s) => s.getChangeFromFirst);
+  const getGoalProgress = useWeightStore((s) => s.getGoalProgress);
 
   const [weightInput, setWeightInput] = useState("");
   const [goalInput, setGoalInput] = useState("");
   const [showGoalForm, setShowGoalForm] = useState(false);
 
+  // Bug 14: include todayKey and load in deps
   useEffect(() => {
     load();
-  }, []);
+  }, [todayKey, load]);
 
   const latest = getLatest();
   const changeInfo = getChangeFromFirst();
+  // Bug 11: use direction-aware goal progress
+  const goalProgress = getGoalProgress();
+
+  // Bug 11: determine change color based on goal direction
+  const changeColor = useMemo(() => {
+    if (!changeInfo) return colors.textSecondary;
+    if (!goalProgress) {
+      // No goal: weight loss = green, gain = red (default)
+      return changeInfo.change > 0 ? colors.danger : colors.success;
+    }
+    // Goal-aware coloring
+    if (goalProgress.direction === "lose") {
+      return changeInfo.change <= 0 ? colors.success : colors.danger;
+    }
+    if (goalProgress.direction === "gain") {
+      return changeInfo.change >= 0 ? colors.success : colors.danger;
+    }
+    // maintain
+    return Math.abs(changeInfo.change) < 1 ? colors.success : colors.warning;
+  }, [changeInfo, goalProgress]);
 
   // Sparkline data — last 30 entries normalized 0-100
   const sparkData = useMemo(() => {
@@ -57,19 +92,6 @@ export default function WeightScreen() {
     const range = max - min || 1;
     return weights.map((w) => ((w - min) / range) * 80 + 10); // 10-90 range for padding
   }, [entries]);
-
-  // Goal progress
-  const goalProgress = useMemo(() => {
-    if (!goalWeight || !latest || entries.length < 1) return null;
-    const start = entries[0].weightKg;
-    const current = latest.weightKg;
-    const totalDistance = Math.abs(goalWeight - start);
-    if (totalDistance === 0) return { pct: 100, remaining: 0 };
-    const progress = Math.abs(current - start);
-    const pct = Math.min(Math.round((progress / totalDistance) * 100), 100);
-    const remaining = +(goalWeight - current).toFixed(1);
-    return { pct, remaining };
-  }, [goalWeight, latest, entries]);
 
   const handleSaveWeight = useCallback(() => {
     const val = parseFloat(weightInput);
@@ -87,6 +109,23 @@ export default function WeightScreen() {
     setGoalInput("");
     setShowGoalForm(false);
   }, [goalInput, setGoalWeight]);
+
+  const handleDeleteEntry = useCallback(
+    (dateKey: string) => {
+      Alert.alert("Delete Entry", "Remove this weight entry?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            deleteEntry(dateKey);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          },
+        },
+      ]);
+    },
+    [deleteEntry],
+  );
 
   // Last 10 entries in reverse
   const recentEntries = useMemo(() => {
@@ -126,15 +165,12 @@ export default function WeightScreen() {
                 <Ionicons
                   name={changeInfo.change > 0 ? "trending-up" : "trending-down"}
                   size={16}
-                  color={changeInfo.change > 0 ? colors.danger : colors.success}
+                  color={changeColor}
                 />
                 <Text
                   style={[
                     styles.changeText,
-                    {
-                      color:
-                        changeInfo.change > 0 ? colors.danger : colors.success,
-                    },
+                    { color: changeColor },
                   ]}
                 >
                   {changeInfo.change > 0 ? "+" : ""}
@@ -217,8 +253,11 @@ export default function WeightScreen() {
                   <View style={styles.goalRight}>
                     <Text style={styles.goalPct}>{goalProgress.pct}%</Text>
                     <Text style={styles.goalRemaining}>
-                      {goalProgress.remaining > 0 ? "-" : "+"}
-                      {Math.abs(goalProgress.remaining)} kg to go
+                      {goalProgress.remaining > 0
+                        ? `${goalProgress.remaining.toFixed(1)} kg to go`
+                        : goalProgress.overshot
+                          ? `${Math.abs(goalProgress.remaining).toFixed(1)} kg past goal`
+                          : "Goal reached!"}
                     </Text>
                   </View>
                 )}
@@ -303,6 +342,22 @@ export default function WeightScreen() {
                 ? +(entry.weightKg - prevEntry.weightKg).toFixed(1)
                 : null;
 
+              // Bug 11: goal-aware delta coloring
+              let deltaColor: string = colors.textSecondary;
+              if (delta !== null && delta !== 0) {
+                if (goalProgress) {
+                  if (goalProgress.direction === "lose") {
+                    deltaColor = delta < 0 ? colors.success : colors.danger;
+                  } else if (goalProgress.direction === "gain") {
+                    deltaColor = delta > 0 ? colors.success : colors.danger;
+                  } else {
+                    deltaColor = Math.abs(delta) < 0.5 ? colors.success : colors.warning;
+                  }
+                } else {
+                  deltaColor = delta > 0 ? colors.danger : colors.success;
+                }
+              }
+
               return (
                 <Panel key={entry.dateKey} style={styles.entryCard}>
                   <View style={styles.entryRow}>
@@ -319,13 +374,20 @@ export default function WeightScreen() {
                         <Text
                           style={[
                             styles.entryDelta,
-                            { color: delta > 0 ? colors.danger : colors.success },
+                            { color: deltaColor },
                           ]}
                         >
                           {delta > 0 ? "+" : ""}
                           {delta}
                         </Text>
                       )}
+                      <Pressable
+                        onPress={() => handleDeleteEntry(entry.dateKey)}
+                        style={styles.entryDeleteBtn}
+                        hitSlop={8}
+                      >
+                        <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                      </Pressable>
                     </View>
                   </View>
                 </Panel>
@@ -481,6 +543,14 @@ const styles = StyleSheet.create({
   entryRight: { flexDirection: "row", alignItems: "baseline", gap: spacing.sm },
   entryWeight: { ...fonts.mono, fontSize: 16 },
   entryDelta: { fontSize: 12, fontWeight: "600" },
+  entryDeleteBtn: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    marginLeft: spacing.xs,
+  },
 
   // Empty
   emptyText: {

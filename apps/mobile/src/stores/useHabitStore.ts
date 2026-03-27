@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getJSON, setJSON, nextId } from "../db/storage";
+import { updateStreak, awardXP } from "../db/gamification";
 import type { Habit } from "../db/schema";
 
 const HABITS_KEY = "habits";
@@ -39,7 +40,19 @@ export const useHabitStore = create<HabitState>()((set, get) => ({
   deleteHabit: (id) => {
     const habits = get().habits.filter((h) => h.id !== id);
     setJSON(HABITS_KEY, habits);
-    set({ habits });
+
+    // Bug 11: Clean up orphaned completion IDs for the deleted habit
+    const updatedCompletedIds = { ...get().completedIds };
+    for (const dateKey of Object.keys(updatedCompletedIds)) {
+      const ids = updatedCompletedIds[dateKey];
+      if (ids && ids.includes(id)) {
+        const filtered = ids.filter((hid) => hid !== id);
+        updatedCompletedIds[dateKey] = filtered;
+        setJSON(logsKey(dateKey), filtered);
+      }
+    }
+
+    set({ habits, completedIds: updatedCompletedIds });
   },
 
   toggleHabit: (habitId, dateKey) => {
@@ -59,6 +72,13 @@ export const useHabitStore = create<HabitState>()((set, get) => ({
     set((s) => ({
       completedIds: { ...s.completedIds, [dateKey]: ids },
     }));
+
+    // Bug 12: Wire up XP/streak on habit completion
+    if (completed) {
+      updateStreak(dateKey);
+      awardXP(dateKey, "habit_complete", 10);
+    }
+
     return completed;
   },
 

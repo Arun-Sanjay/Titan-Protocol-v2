@@ -9,7 +9,6 @@ export type MoneyTx = {
   type: "expense" | "income";
   amount: number;
   category: string;
-  bucket: "need" | "want" | null;
   note: string;
 };
 
@@ -62,7 +61,11 @@ export function computeDayTotals(
     if (tx.type === "expense") spent += tx.amount;
     else earned += tx.amount;
   }
-  return { spent, earned, net: earned - spent };
+  return {
+    spent: Math.round(spent * 100) / 100,
+    earned: Math.round(earned * 100) / 100,
+    net: Math.round((earned - spent) * 100) / 100,
+  };
 }
 
 export function computeMonthTotals(
@@ -88,7 +91,17 @@ export function computeMonthTotals(
     }
   }
 
-  return { spent, earned, net: earned - spent, byCategory };
+  // Round all values to avoid floating-point accumulation
+  for (const key of Object.keys(byCategory)) {
+    byCategory[key] = Math.round(byCategory[key] * 100) / 100;
+  }
+
+  return {
+    spent: Math.round(spent * 100) / 100,
+    earned: Math.round(earned * 100) / 100,
+    net: Math.round((earned - spent) * 100) / 100,
+    byCategory,
+  };
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -117,7 +130,11 @@ export const useMoneyStore = create<MoneyState>()((set, get) => ({
 
   addTransaction: (tx) => {
     const id = nextId();
-    const entry: MoneyTx = { id, ...tx };
+    const entry: MoneyTx = {
+      id,
+      ...tx,
+      amount: Math.round(tx.amount * 100) / 100,
+    };
     const transactions = [entry, ...get().transactions];
     setJSON(TXS_KEY, transactions);
     set({ transactions });

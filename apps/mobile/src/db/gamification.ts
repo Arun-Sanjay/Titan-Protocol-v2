@@ -3,13 +3,15 @@ import type { UserProfile } from "./schema";
 
 const XP_PER_LEVEL = 500;
 
+// Rank names and XP thresholds aligned with web version (CLAUDE.md)
+// Initiate (0), Operator (500 XP), Specialist (1500 XP), Vanguard (3500 XP), Sentinel (7000 XP), Titan (15000 XP)
 export const RANKS = [
-  { name: "Recruit", minLevel: 1, color: "#6B7280" },
-  { name: "Soldier", minLevel: 5, color: "#A78BFA" },
-  { name: "Captain", minLevel: 10, color: "#60A5FA" },
-  { name: "Commander", minLevel: 20, color: "#34D399" },
-  { name: "Titan", minLevel: 35, color: "#FBBF24" },
-  { name: "Legend", minLevel: 50, color: "#F97316" },
+  { name: "Initiate", minLevel: 1, color: "#6B7280" },    // 0 XP
+  { name: "Operator", minLevel: 2, color: "#A78BFA" },    // 500 XP
+  { name: "Specialist", minLevel: 4, color: "#60A5FA" },  // 1500 XP
+  { name: "Vanguard", minLevel: 8, color: "#34D399" },    // 3500 XP
+  { name: "Sentinel", minLevel: 15, color: "#FBBF24" },   // 7000 XP
+  { name: "Titan", minLevel: 31, color: "#F97316" },      // 15000 XP
 ] as const;
 
 export const DAILY_RANKS = [

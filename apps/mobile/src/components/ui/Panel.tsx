@@ -41,7 +41,7 @@ export const Panel = React.memo(function Panel({ children, onPress, style, glowC
       {/* Top edge highlight — matches desktop inset 0 1px rgba(255,255,255,0.1) */}
       <View style={styles.topEdge} />
       {/* Inner border overlay — matches desktop ::after */}
-      <View style={styles.innerBorder} />
+      <View style={styles.innerBorder} pointerEvents="none" />
       {children}
     </>
   );

@@ -87,8 +87,12 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   },
 
   updateProfile: (p) => {
-    setJSON(PROFILE_KEY, p);
-    set({ profile: p });
+    // Bug 15: enforce calorie floor
+    let calorie_target = p.calorie_target;
+    calorie_target = Math.max(calorie_target, p.sex === "female" ? 1200 : 1500);
+    const updated = { ...p, calorie_target };
+    setJSON(PROFILE_KEY, updated);
+    set({ profile: updated });
   },
 
   loadMeals: (dateKey) => {

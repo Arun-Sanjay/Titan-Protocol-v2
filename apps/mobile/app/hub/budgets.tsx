@@ -8,6 +8,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,17 +23,10 @@ import {
   computeMonthTotals,
   EXPENSE_CATEGORIES,
 } from "../../src/stores/useMoneyStore";
+import { getMonthKey, getMonthLabel } from "../../src/lib/date";
+import { formatCurrency } from "../../src/lib/format";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getMonthKey(): string {
-  const today = new Date();
-  return today.toISOString().slice(0, 7);
-}
-
-function formatCurrency(amount: number): string {
-  return "$" + amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
 
 function getBarColor(pct: number): string {
   if (pct > 1) return colors.danger;
@@ -140,12 +134,18 @@ function AddBudgetForm({
   const [category, setCategory] = useState(availableCategories[0] ?? "");
   const [limitStr, setLimitStr] = useState("");
 
+  const handleLimitChange = useCallback((text: string) => {
+    // Reject multiple decimal points
+    if (text.includes(".") && text.indexOf(".") !== text.lastIndexOf(".")) return;
+    setLimitStr(text);
+  }, []);
+
   const handleSave = () => {
     const parsed = parseFloat(limitStr);
-    if (!category || !parsed || parsed <= 0) return;
+    if (!category || !Number.isFinite(parsed) || parsed <= 0 || parsed > 999999.99) return;
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addBudget(category, parsed);
+    addBudget(category, Math.round(parsed * 100) / 100);
     onClose();
   };
 
@@ -215,7 +215,7 @@ function AddBudgetForm({
           placeholderTextColor={colors.textMuted}
           keyboardType="decimal-pad"
           value={limitStr}
-          onChangeText={setLimitStr}
+          onChangeText={handleLimitChange}
           autoFocus
         />
       </View>
@@ -232,19 +232,30 @@ function AddBudgetForm({
 
 export default function BudgetsScreen() {
   const router = useRouter();
-  const { budgets, load: loadBudgets, deleteBudget } = useBudgetStore();
-  const { transactions, load: loadTxs } = useMoneyStore();
+  const budgets = useBudgetStore((s) => s.budgets);
+  const loadBudgets = useBudgetStore((s) => s.load);
+  const deleteBudget = useBudgetStore((s) => s.deleteBudget);
+  const transactions = useMoneyStore((s) => s.transactions);
+  const loadTxs = useMoneyStore((s) => s.load);
   const [showForm, setShowForm] = useState(false);
+
+  // Month navigation
+  const [monthOffset, setMonthOffset] = useState(0);
+  const currentMonth = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + monthOffset);
+    return getMonthKey(d);
+  }, [monthOffset]);
+  const monthLabel = useMemo(() => getMonthLabel(currentMonth), [currentMonth]);
 
   useEffect(() => {
     loadBudgets();
     loadTxs();
-  }, []);
+  }, [loadBudgets, loadTxs]);
 
-  const monthKey = getMonthKey();
   const monthTotals = useMemo(
-    () => computeMonthTotals(transactions, monthKey),
-    [transactions, monthKey]
+    () => computeMonthTotals(transactions, currentMonth),
+    [transactions, currentMonth]
   );
 
   const existingCategories = useMemo(
@@ -268,15 +279,19 @@ export default function BudgetsScreen() {
 
   const totalPct = totalBudget > 0 ? totalBudgeted / totalBudget : 0;
 
-  const monthLabel = useMemo(() => {
-    const d = new Date();
-    return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  }, []);
-
   const handleDelete = useCallback(
     (id: number) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      deleteBudget(id);
+      Alert.alert("Delete Budget", "Are you sure you want to delete this budget?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            deleteBudget(id);
+          },
+        },
+      ]);
     },
     [deleteBudget]
   );
@@ -307,10 +322,29 @@ export default function BudgetsScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Month Navigation */}
+          <View style={styles.monthNav}>
+            <Pressable onPress={() => setMonthOffset((o) => o - 1)}>
+              <Ionicons name="chevron-back" size={20} color={colors.text} />
+            </Pressable>
+            <Text style={styles.monthLabelText}>{monthLabel}</Text>
+            <Pressable
+              onPress={() => {
+                if (monthOffset < 0) setMonthOffset((o) => o + 1);
+              }}
+              disabled={monthOffset >= 0}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={monthOffset >= 0 ? colors.textMuted : colors.text}
+              />
+            </Pressable>
+          </View>
+
           {/* Total Summary */}
           {budgets.length > 0 && (
             <Panel style={styles.totalPanel}>
-              <Text style={styles.totalMonth}>{monthLabel}</Text>
               <View style={styles.totalRow}>
                 <View style={styles.totalStat}>
                   <Text style={[styles.totalValue, { color: colors.danger }]}>
@@ -420,16 +454,28 @@ const styles = StyleSheet.create({
   body: { flex: 1, paddingHorizontal: spacing.lg },
   bodyContent: { paddingBottom: spacing["5xl"] },
 
+  // ── Month Navigation ──
+  monthNav: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.lg,
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
+  },
+  monthLabelText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
+    minWidth: 160,
+    textAlign: "center",
+  },
+
   // ── Total Summary ──
   totalPanel: {
     alignItems: "center",
     paddingVertical: spacing["2xl"],
-    marginTop: spacing.md,
-  },
-  totalMonth: {
-    ...fonts.kicker,
-    color: colors.textMuted,
-    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
   },
   totalRow: {
     flexDirection: "row",
