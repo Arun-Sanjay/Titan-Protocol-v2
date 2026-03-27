@@ -29,6 +29,20 @@ export type SleepConsistency = {
   trend: "improving" | "declining" | "stable";
 };
 
+export type SleepScore = {
+  overall: number; // 0-100
+  durationScore: number; // 0-40 (weight: 40%)
+  qualityScore: number; // 0-30 (weight: 30%)
+  consistencyScore: number; // 0-30 (weight: 30%)
+  grade: "S" | "A" | "B" | "C" | "D" | "F";
+};
+
+export type SleepDebt = {
+  totalDebtMinutes: number; // cumulative debt (target - actual)
+  weekDebtMinutes: number; // debt in last 7 days
+  targetMinutes: number; // 480 (8 hours)
+};
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function storageKey(dateKey: string) {
@@ -212,6 +226,88 @@ export function getDurationColor(minutes: number): "good" | "ok" | "bad" {
   return "bad";
 }
 
+/**
+ * Compute a sleep score (0-100) for a single night.
+ * Components: duration (40%), quality (30%), timing (30%)
+ */
+export function computeSleepScore(entry: SleepEntry, consistency?: SleepConsistency | null): SleepScore {
+  // Duration score: 8h = perfect, deductions for deviation
+  const hours = entry.durationMinutes / 60;
+  let durationRaw: number;
+  if (hours >= 7 && hours <= 9) {
+    durationRaw = 100; // ideal range
+  } else if (hours >= 6 && hours <= 10) {
+    // Linear falloff outside ideal
+    const dist = hours < 7 ? 7 - hours : hours - 9;
+    durationRaw = 100 - dist * 50; // lose 50 per hour off
+  } else {
+    const dist = hours < 6 ? 6 - hours : hours - 10;
+    durationRaw = Math.max(0, 50 - dist * 30);
+  }
+  const durationScore = Math.round((durationRaw / 100) * 40);
+
+  // Quality score: map 1-5 to 0-30
+  const qualityScore = Math.round(((entry.quality - 1) / 4) * 30);
+
+  // Consistency score: use the consistency object or default to timing-based
+  let consistencyScore: number;
+  if (consistency) {
+    consistencyScore = Math.round((consistency.score / 100) * 30);
+  } else {
+    // Fallback: score based on ideal bedtime (22:00-23:00)
+    const bedMin = timeToMinutes(entry.bedtime);
+    // Normalize: ideal is 22:00-23:00 (1320-1380 min)
+    let bedDiff: number;
+    if (bedMin >= 1320 && bedMin <= 1380) {
+      bedDiff = 0;
+    } else if (bedMin > 1380 || bedMin < 360) {
+      // After 23:00 or before 6:00
+      const adjustedBed = bedMin > 720 ? bedMin : bedMin + 1440;
+      bedDiff = Math.abs(adjustedBed - 1350);
+    } else {
+      bedDiff = Math.abs(bedMin - 1350);
+    }
+    const timingRaw = Math.max(0, 100 - (bedDiff / 180) * 100);
+    consistencyScore = Math.round((timingRaw / 100) * 30);
+  }
+
+  const overall = Math.max(0, Math.min(100, durationScore + qualityScore + consistencyScore));
+
+  let grade: SleepScore["grade"];
+  if (overall >= 90) grade = "S";
+  else if (overall >= 75) grade = "A";
+  else if (overall >= 60) grade = "B";
+  else if (overall >= 45) grade = "C";
+  else if (overall >= 30) grade = "D";
+  else grade = "F";
+
+  return { overall, durationScore, qualityScore, consistencyScore, grade };
+}
+
+/**
+ * Compute sleep debt over a set of entries.
+ * Target: 480 min (8 hours).
+ */
+export function computeSleepDebt(entries: SleepEntry[], targetMinutes: number = 480): SleepDebt {
+  let totalDebt = 0;
+  let weekDebt = 0;
+  const weekEntries = entries.slice(-7);
+
+  for (const e of entries) {
+    totalDebt += targetMinutes - e.durationMinutes;
+  }
+
+  for (const e of weekEntries) {
+    weekDebt += targetMinutes - e.durationMinutes;
+  }
+
+  return {
+    totalDebtMinutes: Math.max(0, totalDebt),
+    weekDebtMinutes: Math.max(0, weekDebt),
+    targetMinutes,
+  };
+}
+
 // ─── Store ──────────────────────────────────────────────────────────────────
 
 type SleepState = {
@@ -246,7 +342,7 @@ export const useSleepStore = create<SleepState>()((set, get) => ({
   },
 
   deleteEntry: (dateKey) => {
-    storage.set(storageKey(dateKey), "");
+    setJSON(storageKey(dateKey), null);
     set((s) => {
       const updated = { ...s.entries };
       delete updated[dateKey];

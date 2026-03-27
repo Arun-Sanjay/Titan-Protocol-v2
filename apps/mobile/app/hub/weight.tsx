@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -14,27 +14,269 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Polyline, Polygon, Circle, Line, Defs, LinearGradient as SvgGradient, Stop } from "react-native-svg";
+import Animated, { FadeInDown, FadeInRight, ZoomIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, fonts } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
-import { SparklineChart } from "../../src/components/ui/SparklineChart";
+import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey, formatDateShort } from "../../src/lib/date";
-import { useWeightStore, type WeightEntry } from "../../src/stores/useWeightStore";
+import {
+  useWeightStore,
+  getMovingAverage,
+  getWeeklyRate,
+  getGoalETA,
+  getTrend,
+  type WeightEntry,
+  type GoalProgress,
+  type WeightTrend,
+} from "../../src/stores/useWeightStore";
+import {
+  useNutritionStore,
+  computeBMI,
+  getBMICategory,
+} from "../../src/stores/useNutritionStore";
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
+const CHART_HEIGHT = 140;
+const CHART_PADDING_TOP = 20;
+const CHART_PADDING_BOTTOM = 24;
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function trendIcon(trend: WeightTrend): keyof typeof Ionicons.glyphMap {
+  switch (trend) {
+    case "gaining": return "trending-up";
+    case "losing": return "trending-down";
+    case "stable": return "remove-outline";
+  }
+}
+
+function trendLabel(trend: WeightTrend): string {
+  switch (trend) {
+    case "gaining": return "Gaining";
+    case "losing": return "Losing";
+    case "stable": return "Stable";
+  }
+}
+
+// ─── Weight Chart Component ──────────────────────────────────────────────────
+
+const WeightChart = React.memo(function WeightChart({
+  entries,
+  movingAvg,
+  goalWeight,
+  width,
+}: {
+  entries: WeightEntry[];
+  movingAvg: { dateKey: string; value: number }[];
+  goalWeight: number | null;
+  width: number;
+}) {
+  const gradId = useRef(`wtGrad-${Math.random().toString(36).slice(2)}`).current;
+  const maGradId = useRef(`wtMaGrad-${Math.random().toString(36).slice(2)}`).current;
+
+  if (entries.length < 2) return null;
+
+  const recent = entries.slice(-30);
+  const recentMA = movingAvg.slice(-30);
+  const weights = recent.map((e) => e.weightKg);
+  const allValues = [...weights, ...(goalWeight ? [goalWeight] : [])];
+  const min = Math.min(...allValues) - 1;
+  const max = Math.max(...allValues) + 1;
+  const range = max - min || 1;
+
+  const padX = 4;
+  const chartW = width - padX * 2;
+  const chartH = CHART_HEIGHT - CHART_PADDING_TOP - CHART_PADDING_BOTTOM;
+
+  const toX = (i: number) => padX + (i / (recent.length - 1)) * chartW;
+  const toY = (val: number) =>
+    CHART_PADDING_TOP + chartH - ((val - min) / range) * chartH;
+
+  // Raw data points
+  const rawPoints = recent.map((e, i) => `${toX(i)},${toY(e.weightKg)}`);
+  const rawLine = rawPoints.join(" ");
+
+  // Area under raw line
+  const rawArea = [
+    ...rawPoints,
+    `${toX(recent.length - 1)},${CHART_HEIGHT - CHART_PADDING_BOTTOM}`,
+    `${toX(0)},${CHART_HEIGHT - CHART_PADDING_BOTTOM}`,
+  ].join(" ");
+
+  // Moving average line
+  let maLine = "";
+  if (recentMA.length >= 2) {
+    // Align MA entries with recent entries by dateKey
+    const maMap = new Map(recentMA.map((m) => [m.dateKey, m.value]));
+    const maPoints: string[] = [];
+    recent.forEach((e, i) => {
+      const val = maMap.get(e.dateKey);
+      if (val !== undefined) {
+        maPoints.push(`${toX(i)},${toY(val)}`);
+      }
+    });
+    if (maPoints.length >= 2) {
+      maLine = maPoints.join(" ");
+    }
+  }
+
+  // Goal line Y
+  const goalY = goalWeight ? toY(goalWeight) : null;
+
+  // Y-axis labels
+  const yLabels = [min, min + range / 2, max].map((v) => ({
+    value: v.toFixed(1),
+    y: toY(v),
+  }));
+
+  return (
+    <View>
+      <Svg width={width} height={CHART_HEIGHT}>
+        <Defs>
+          <SvgGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={colors.body} stopOpacity="0.15" />
+            <Stop offset="100%" stopColor={colors.body} stopOpacity="0" />
+          </SvgGradient>
+        </Defs>
+
+        {/* Grid lines */}
+        {yLabels.map((l, i) => (
+          <Line
+            key={i}
+            x1={padX}
+            y1={l.y}
+            x2={width - padX}
+            y2={l.y}
+            stroke={colors.surfaceBorder}
+            strokeWidth={1}
+            strokeDasharray="4,4"
+          />
+        ))}
+
+        {/* Goal line */}
+        {goalY !== null && (
+          <Line
+            x1={padX}
+            y1={goalY}
+            x2={width - padX}
+            y2={goalY}
+            stroke={colors.warning}
+            strokeWidth={1.5}
+            strokeDasharray="6,4"
+            opacity={0.6}
+          />
+        )}
+
+        {/* Area fill */}
+        <Polygon points={rawArea} fill={`url(#${gradId})`} />
+
+        {/* Raw data line */}
+        <Polyline
+          points={rawLine}
+          fill="none"
+          stroke={colors.body}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity={0.5}
+        />
+
+        {/* Moving average line */}
+        {maLine && (
+          <Polyline
+            points={maLine}
+            fill="none"
+            stroke={colors.body}
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+
+        {/* Latest point dot */}
+        <Circle
+          cx={toX(recent.length - 1)}
+          cy={toY(recent[recent.length - 1].weightKg)}
+          r={4}
+          fill={colors.body}
+        />
+      </Svg>
+
+      {/* Date labels */}
+      <View style={chartStyles.dateLabels}>
+        <Text style={chartStyles.dateLabel}>
+          {formatDateShort(recent[0].dateKey)}
+        </Text>
+        <Text style={chartStyles.dateLabel}>
+          {formatDateShort(recent[recent.length - 1].dateKey)}
+        </Text>
+      </View>
+
+      {/* Legend */}
+      <View style={chartStyles.legend}>
+        <View style={chartStyles.legendItem}>
+          <View style={[chartStyles.legendLine, { backgroundColor: colors.body, opacity: 0.5 }]} />
+          <Text style={chartStyles.legendText}>Raw</Text>
+        </View>
+        <View style={chartStyles.legendItem}>
+          <View style={[chartStyles.legendLine, { backgroundColor: colors.body }]} />
+          <Text style={chartStyles.legendText}>7-day avg</Text>
+        </View>
+        {goalWeight !== null && (
+          <View style={chartStyles.legendItem}>
+            <View style={[chartStyles.legendLine, { backgroundColor: colors.warning }]} />
+            <Text style={chartStyles.legendText}>Goal</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+});
+
+const chartStyles = StyleSheet.create({
+  dateLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.xs,
+  },
+  dateLabel: { fontSize: 10, color: colors.textMuted },
+  legend: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  legendLine: {
+    width: 16,
+    height: 2.5,
+    borderRadius: 2,
+  },
+  legendText: { fontSize: 10, color: colors.textMuted },
+});
+
+// ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function WeightScreen() {
   const router = useRouter();
-
-  // Bug 12: use useWindowDimensions instead of static Dimensions.get
   const { width: SCREEN_WIDTH } = useWindowDimensions();
-  const CHART_PADDING = spacing.lg * 2 + 40; // screen padding + panel padding
+  const CHART_WIDTH = SCREEN_WIDTH - spacing.lg * 2 - 40;
 
-  // Bug 13: AppState listener for stale todayKey
+  // AppState listener for stale todayKey
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") setAppActive(c => c + 1);
+      if (state === "active") setAppActive((c) => c + 1);
     });
     return () => sub.remove();
   }, []);
@@ -50,52 +292,75 @@ export default function WeightScreen() {
   const getChangeFromFirst = useWeightStore((s) => s.getChangeFromFirst);
   const getGoalProgress = useWeightStore((s) => s.getGoalProgress);
 
+  // Nutrition profile for BMI
+  const nutritionProfile = useNutritionStore((s) => s.profile);
+  const loadNutritionProfile = useNutritionStore((s) => s.loadProfile);
+
   const [weightInput, setWeightInput] = useState("");
   const [goalInput, setGoalInput] = useState("");
   const [showGoalForm, setShowGoalForm] = useState(false);
 
-  // Bug 14: include todayKey and load in deps
   useEffect(() => {
     load();
-  }, [todayKey, load]);
+    loadNutritionProfile();
+  }, [todayKey, load, loadNutritionProfile]);
 
   const latest = getLatest();
   const changeInfo = getChangeFromFirst();
-  // Bug 11: use direction-aware goal progress
   const goalProgress = getGoalProgress();
+  const trend = useMemo(() => getTrend(entries), [entries]);
+  const weeklyRate = useMemo(() => getWeeklyRate(entries), [entries]);
+  const movingAvg = useMemo(() => getMovingAverage(entries), [entries]);
+  const goalETA = useMemo(() => getGoalETA(entries, goalWeight), [entries, goalWeight]);
 
-  // Bug 11: determine change color based on goal direction
+  // BMI calculation
+  const bmi = useMemo(() => {
+    if (!latest || !nutritionProfile) return null;
+    if (nutritionProfile.height_cm < 50 || nutritionProfile.height_cm > 300) return null;
+    const value = computeBMI(nutritionProfile.height_cm, latest.weightKg);
+    if (value <= 0 || value > 100) return null;
+    return { value, ...getBMICategory(value) };
+  }, [latest, nutritionProfile]);
+
+  // Goal-aware change color
   const changeColor = useMemo(() => {
     if (!changeInfo) return colors.textSecondary;
     if (!goalProgress) {
-      // No goal: weight loss = green, gain = red (default)
       return changeInfo.change > 0 ? colors.danger : colors.success;
     }
-    // Goal-aware coloring
     if (goalProgress.direction === "lose") {
       return changeInfo.change <= 0 ? colors.success : colors.danger;
     }
     if (goalProgress.direction === "gain") {
       return changeInfo.change >= 0 ? colors.success : colors.danger;
     }
-    // maintain
     return Math.abs(changeInfo.change) < 1 ? colors.success : colors.warning;
   }, [changeInfo, goalProgress]);
 
-  // Sparkline data — last 30 entries normalized 0-100
-  const sparkData = useMemo(() => {
-    if (entries.length < 2) return [];
-    const recent = entries.slice(-30);
-    const weights = recent.map((e) => e.weightKg);
-    const min = Math.min(...weights);
-    const max = Math.max(...weights);
-    const range = max - min || 1;
-    return weights.map((w) => ((w - min) / range) * 80 + 10); // 10-90 range for padding
-  }, [entries]);
+  // Trend color
+  const trendColor = useMemo(() => {
+    if (!goalProgress) {
+      if (trend === "losing") return colors.success;
+      if (trend === "gaining") return colors.danger;
+      return colors.textSecondary;
+    }
+    if (goalProgress.direction === "lose") {
+      return trend === "losing" ? colors.success : trend === "gaining" ? colors.danger : colors.textSecondary;
+    }
+    if (goalProgress.direction === "gain") {
+      return trend === "gaining" ? colors.success : trend === "losing" ? colors.danger : colors.textSecondary;
+    }
+    return colors.textSecondary;
+  }, [trend, goalProgress]);
 
   const handleSaveWeight = useCallback(() => {
     const val = parseFloat(weightInput);
-    if (isNaN(val) || val <= 0 || val > 500) return;
+    if (isNaN(val) || val < 20 || val > 500) {
+      if (!isNaN(val) && val > 0 && val < 20) {
+        Alert.alert("Invalid Weight", "Weight must be at least 20 kg");
+      }
+      return;
+    }
     addEntry(todayKey, +val.toFixed(1));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setWeightInput("");
@@ -127,6 +392,13 @@ export default function WeightScreen() {
     [deleteEntry],
   );
 
+  // Quick adjust: pre-fill with last weight
+  const handleQuickFill = useCallback(() => {
+    if (latest) {
+      setWeightInput(latest.weightKg.toFixed(1));
+    }
+  }, [latest]);
+
   // Last 10 entries in reverse
   const recentEntries = useMemo(() => {
     return [...entries].reverse().slice(0, 10);
@@ -155,29 +427,60 @@ export default function WeightScreen() {
         >
           {/* ── Current Weight Hero ── */}
           <SectionHeader title="Current" />
-          <Panel style={styles.heroCard}>
-            <Text style={styles.heroValue}>
-              {latest ? latest.weightKg.toFixed(1) : "--.-"}
-            </Text>
-            <Text style={styles.heroUnit}>kg</Text>
-            {changeInfo && (
-              <View style={styles.changeRow}>
-                <Ionicons
-                  name={changeInfo.change > 0 ? "trending-up" : "trending-down"}
-                  size={16}
-                  color={changeColor}
-                />
-                <Text
-                  style={[
-                    styles.changeText,
-                    { color: changeColor },
-                  ]}
+          <Panel tone="hero" delay={0}>
+            <View style={styles.heroRow}>
+              <View style={styles.heroLeft}>
+                <Text style={styles.heroValue}>
+                  {latest ? latest.weightKg.toFixed(1) : "--.-"}
+                </Text>
+                <Text style={styles.heroUnit}>kg</Text>
+              </View>
+              <View style={styles.heroRight}>
+                {/* Trend badge */}
+                <Animated.View
+                  entering={FadeInRight.delay(200).duration(400)}
+                  style={[styles.trendBadge, { backgroundColor: trendColor + "18" }]}
                 >
-                  {changeInfo.change > 0 ? "+" : ""}
-                  {changeInfo.change} kg from start
+                  <Ionicons name={trendIcon(trend)} size={14} color={trendColor} />
+                  <Text style={[styles.trendBadgeText, { color: trendColor }]}>
+                    {trendLabel(trend)}
+                  </Text>
+                </Animated.View>
+
+                {/* Change from start */}
+                {changeInfo && (
+                  <View style={styles.changeRow}>
+                    <Text style={[styles.changeText, { color: changeColor }]}>
+                      {changeInfo.change > 0 ? "+" : ""}
+                      {changeInfo.change} kg
+                    </Text>
+                    <Text style={styles.changeLabel}>from start</Text>
+                  </View>
+                )}
+
+                {/* Weekly rate — only show when we have at least 7 days of data */}
+                {weeklyRate !== null && entries.length >= 7 && (
+                  <Text style={styles.weeklyRateText}>
+                    {weeklyRate > 0 ? "+" : ""}
+                    {weeklyRate} kg/week
+                  </Text>
+                )}
+              </View>
+            </View>
+
+            {/* BMI row */}
+            {bmi && (
+              <View style={styles.bmiRow}>
+                <Text style={styles.bmiLabel}>BMI</Text>
+                <Text style={[styles.bmiValue, { color: colors[bmi.color] }]}>
+                  {bmi.value}
+                </Text>
+                <Text style={[styles.bmiCategory, { color: colors[bmi.color] }]}>
+                  {bmi.label}
                 </Text>
               </View>
             )}
+
             {!latest && (
               <Text style={styles.heroHint}>No weight logged yet</Text>
             )}
@@ -185,11 +488,14 @@ export default function WeightScreen() {
 
           {/* ── Weight Input ── */}
           <SectionHeader title="Log Weight" />
-          <Panel>
+          <Panel delay={100}>
             <View style={styles.inputRow}>
+              <Pressable onPress={handleQuickFill} style={styles.quickFillBtn}>
+                <Ionicons name="arrow-undo-outline" size={16} color={colors.textSecondary} />
+              </Pressable>
               <TextInput
                 style={styles.weightInput}
-                placeholder="72.5"
+                placeholder={latest ? latest.weightKg.toFixed(1) : "72.5"}
                 placeholderTextColor={colors.textMuted}
                 value={weightInput}
                 onChangeText={setWeightInput}
@@ -208,34 +514,42 @@ export default function WeightScreen() {
                 <Text style={styles.saveBtnText}>Save</Text>
               </Pressable>
             </View>
+            {/* Quick adjust buttons */}
+            {latest && (
+              <View style={styles.quickAdjustRow}>
+                {[-0.5, -0.1, +0.1, +0.5].map((delta) => (
+                  <Pressable
+                    key={delta}
+                    style={styles.quickAdjustBtn}
+                    onPress={() => {
+                      const newVal = Math.max(20, Math.min(500, +(latest.weightKg + delta).toFixed(1)));
+                      setWeightInput(String(newVal));
+                      Haptics.selectionAsync();
+                    }}
+                  >
+                    <Text style={styles.quickAdjustText}>
+                      {delta > 0 ? "+" : ""}{delta}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </Panel>
 
-          {/* ── 30-Day Trend ── */}
-          {sparkData.length >= 2 && (
+          {/* ── 30-Day Chart ── */}
+          {entries.length >= 2 && (
             <>
               <SectionHeader
                 title="30-Day Trend"
                 right={`${entries.length} entries`}
               />
-              <Panel style={styles.chartPanel}>
-                <SparklineChart
-                  data={sparkData}
-                  width={SCREEN_WIDTH - CHART_PADDING}
-                  height={80}
-                  color={colors.body}
+              <Panel delay={200} style={styles.chartPanel}>
+                <WeightChart
+                  entries={entries}
+                  movingAvg={movingAvg}
+                  goalWeight={goalWeight}
+                  width={CHART_WIDTH}
                 />
-                <View style={styles.chartLabels}>
-                  <Text style={styles.chartLabel}>
-                    {entries.length >= 2
-                      ? formatDateShort(entries[Math.max(entries.length - 30, 0)].dateKey)
-                      : ""}
-                  </Text>
-                  <Text style={styles.chartLabel}>
-                    {entries.length >= 1
-                      ? formatDateShort(entries[entries.length - 1].dateKey)
-                      : ""}
-                  </Text>
-                </View>
               </Panel>
             </>
           )}
@@ -243,7 +557,7 @@ export default function WeightScreen() {
           {/* ── Goal Weight ── */}
           <SectionHeader title="Goal" />
           {goalWeight !== null && !showGoalForm ? (
-            <Panel>
+            <Panel delay={300}>
               <View style={styles.goalRow}>
                 <View>
                   <Text style={styles.goalValue}>{goalWeight.toFixed(1)} kg</Text>
@@ -262,16 +576,32 @@ export default function WeightScreen() {
                   </View>
                 )}
               </View>
+
+              {/* Progress bar */}
               {goalProgress && (
                 <View style={styles.progressTrack}>
-                  <View
+                  <Animated.View
+                    entering={FadeInRight.duration(600)}
                     style={[
                       styles.progressFill,
-                      { width: `${goalProgress.pct}%` },
+                      { width: `${Math.min(goalProgress.pct, 100)}%` },
                     ]}
                   />
                 </View>
               )}
+
+              {/* ETA */}
+              {goalETA !== null && entries.length >= 7 && (
+                <View style={styles.etaRow}>
+                  <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
+                  <Text style={styles.etaText}>
+                    {goalETA > 104
+                      ? "2+ years to goal at current rate"
+                      : `~${goalETA} ${goalETA === 1 ? "week" : "weeks"} to goal at current rate`}
+                  </Text>
+                </View>
+              )}
+
               <Pressable
                 onPress={() => {
                   setGoalInput(goalWeight.toString());
@@ -284,7 +614,7 @@ export default function WeightScreen() {
               </Pressable>
             </Panel>
           ) : (
-            <Panel>
+            <Panel delay={300}>
               {showGoalForm || goalWeight === null ? (
                 <>
                   <Text style={styles.fieldLabel}>Goal Weight (kg)</Text>
@@ -322,13 +652,39 @@ export default function WeightScreen() {
             </Panel>
           )}
 
+          {/* ── Stats Row ── */}
+          {entries.length >= 2 && (
+            <View style={styles.statsGrid}>
+              <Panel style={styles.statCard} delay={400}>
+                <Ionicons name="speedometer-outline" size={18} color={colors.body} />
+                <MetricValue
+                  label="Weekly Rate"
+                  value={weeklyRate !== null ? `${weeklyRate > 0 ? "+" : ""}${weeklyRate}` : "--"}
+                  size="sm"
+                  color={colors.body}
+                  suffix=" kg"
+                />
+              </Panel>
+              <Panel style={styles.statCard} delay={450}>
+                <Ionicons name="analytics-outline" size={18} color={colors.general} />
+                <MetricValue
+                  label="Entries"
+                  value={entries.length}
+                  size="sm"
+                  color={colors.general}
+                  animated
+                />
+              </Panel>
+            </View>
+          )}
+
           {/* ── Recent Entries ── */}
           <SectionHeader
             title="Recent Entries"
             right={`${entries.length} total`}
           />
           {recentEntries.length === 0 ? (
-            <Panel>
+            <Panel delay={500}>
               <Text style={styles.emptyText}>No entries yet</Text>
               <Text style={styles.emptySub}>
                 Log your first weight to start tracking
@@ -336,13 +692,11 @@ export default function WeightScreen() {
             </Panel>
           ) : (
             recentEntries.map((entry, idx) => {
-              // Show delta from previous entry
-              const prevEntry = recentEntries[idx + 1]; // reverse order, so next in array is earlier
+              const prevEntry = recentEntries[idx + 1];
               const delta = prevEntry
                 ? +(entry.weightKg - prevEntry.weightKg).toFixed(1)
                 : null;
 
-              // Bug 11: goal-aware delta coloring
               let deltaColor: string = colors.textSecondary;
               if (delta !== null && delta !== 0) {
                 if (goalProgress) {
@@ -351,7 +705,8 @@ export default function WeightScreen() {
                   } else if (goalProgress.direction === "gain") {
                     deltaColor = delta > 0 ? colors.success : colors.danger;
                   } else {
-                    deltaColor = Math.abs(delta) < 0.5 ? colors.success : colors.warning;
+                    deltaColor =
+                      Math.abs(delta) < 0.5 ? colors.success : colors.warning;
                   }
                 } else {
                   deltaColor = delta > 0 ? colors.danger : colors.success;
@@ -359,7 +714,7 @@ export default function WeightScreen() {
               }
 
               return (
-                <Panel key={entry.dateKey} style={styles.entryCard}>
+                <Panel key={entry.dateKey} style={styles.entryCard} delay={500 + idx * 40}>
                   <View style={styles.entryRow}>
                     <View>
                       <Text style={styles.entryDate}>
@@ -371,12 +726,7 @@ export default function WeightScreen() {
                         {entry.weightKg.toFixed(1)} kg
                       </Text>
                       {delta !== null && delta !== 0 && (
-                        <Text
-                          style={[
-                            styles.entryDelta,
-                            { color: deltaColor },
-                          ]}
-                        >
+                        <Text style={[styles.entryDelta, { color: deltaColor }]}>
                           {delta > 0 ? "+" : ""}
                           {delta}
                         </Text>
@@ -386,7 +736,11 @@ export default function WeightScreen() {
                         style={styles.entryDeleteBtn}
                         hitSlop={8}
                       >
-                        <Ionicons name="trash-outline" size={14} color={colors.danger} />
+                        <Ionicons
+                          name="trash-outline"
+                          size={14}
+                          color={colors.danger}
+                        />
                       </Pressable>
                     </View>
                   </View>
@@ -394,6 +748,8 @@ export default function WeightScreen() {
               );
             })
           )}
+
+          <View style={{ height: 60 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -422,32 +778,87 @@ const styles = StyleSheet.create({
   bodyContent: { paddingBottom: spacing["5xl"] },
 
   // Hero
-  heroCard: { alignItems: "center", paddingVertical: spacing["3xl"] },
+  heroRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  heroLeft: { alignItems: "flex-start" },
   heroValue: {
-    fontSize: 56,
+    fontSize: 52,
     fontWeight: "200",
     color: colors.text,
     fontVariant: ["tabular-nums"],
-    fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+    fontFamily: MONO_FONT,
   },
   heroUnit: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
     color: colors.textSecondary,
     marginTop: spacing.xs,
+    textTransform: "uppercase",
+    letterSpacing: 2,
   },
   heroHint: {
     fontSize: 13,
     color: colors.textMuted,
     marginTop: spacing.md,
+    textAlign: "center",
   },
-  changeRow: {
+  heroRight: { alignItems: "flex-end", gap: spacing.sm, paddingTop: spacing.sm },
+
+  // Trend badge
+  trendBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    marginTop: spacing.md,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
   },
-  changeText: { fontSize: 14, fontWeight: "600" },
+  trendBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+
+  // Change
+  changeRow: { alignItems: "flex-end" },
+  changeText: { fontSize: 16, fontWeight: "700", fontFamily: MONO_FONT },
+  changeLabel: { fontSize: 10, color: colors.textMuted, marginTop: 1 },
+  weeklyRateText: {
+    fontFamily: MONO_FONT,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+
+  // BMI
+  bmiRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingTop: spacing.lg,
+    marginTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.panelBorder,
+  },
+  bmiLabel: {
+    ...fonts.kicker,
+    color: colors.textMuted,
+  },
+  bmiValue: {
+    fontFamily: MONO_FONT,
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  bmiCategory: {
+    fontSize: 12,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
 
   // Input
   fieldLabel: {
@@ -460,6 +871,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
   },
+  quickFillBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.inputBg,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   weightInput: {
     flex: 1,
     backgroundColor: colors.inputBg,
@@ -471,7 +892,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "600",
     color: colors.text,
-    fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+    fontFamily: MONO_FONT,
   },
   inputUnit: {
     fontSize: 16,
@@ -487,15 +908,33 @@ const styles = StyleSheet.create({
   saveBtnDisabled: { opacity: 0.4 },
   saveBtnText: { fontSize: 16, fontWeight: "700", color: "#000" },
 
-  // Chart
-  chartPanel: { alignItems: "center", paddingVertical: spacing.lg },
-  chartLabels: {
+  // Quick adjust
+  quickAdjustRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-    marginTop: spacing.sm,
+    justifyContent: "center",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.panelBorder,
   },
-  chartLabel: { fontSize: 11, color: colors.textMuted },
+  quickAdjustBtn: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    backgroundColor: colors.inputBg,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+  },
+  quickAdjustText: {
+    fontFamily: MONO_FONT,
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+
+  // Chart
+  chartPanel: { paddingVertical: spacing.lg },
 
   // Goal
   goalRow: {
@@ -520,6 +959,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.body,
   },
+  etaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.panelBorder,
+  },
+  etaText: { fontSize: 12, color: colors.textSecondary },
   goalEditBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -531,6 +981,10 @@ const styles = StyleSheet.create({
   goalEditText: { fontSize: 13, color: colors.textSecondary },
   cancelBtn: { alignItems: "center", marginTop: spacing.md },
   cancelText: { fontSize: 14, color: colors.textMuted },
+
+  // Stats
+  statsGrid: { flexDirection: "row", gap: spacing.md },
+  statCard: { flex: 1, alignItems: "center", gap: spacing.xs },
 
   // Entries
   entryCard: { marginBottom: spacing.sm },

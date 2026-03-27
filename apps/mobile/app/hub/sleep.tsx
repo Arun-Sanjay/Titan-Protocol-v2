@@ -10,20 +10,45 @@ import {
   Platform,
   AppState,
   Alert,
+  useWindowDimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Circle, Line, Rect } from "react-native-svg";
+import Animated, { FadeInDown, FadeInRight, ZoomIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, fonts } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
+import { MetricValue } from "../../src/components/ui/MetricValue";
+import { SparklineChart } from "../../src/components/ui/SparklineChart";
 import { getTodayKey, addDays, formatDateShort, getDayOfWeek } from "../../src/lib/date";
 import {
   useSleepStore,
   computeDurationMinutes,
+  computeSleepScore,
+  computeSleepDebt,
+  getSleepStats,
+  getSleepConsistency,
+  minutesToTime,
+  getDurationColor,
   type SleepEntry,
+  type SleepScore,
 } from "../../src/stores/useSleepStore";
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
+const SCORE_RING_SIZE = 140;
+const SCORE_STROKE = 10;
+const SCORE_RADIUS = (SCORE_RING_SIZE - SCORE_STROKE) / 2;
+const SCORE_CIRCUMFERENCE = 2 * Math.PI * SCORE_RADIUS;
+
+// Timeline constants — 8pm to 12pm (16 hour window)
+const TIMELINE_START = 20 * 60; // 20:00 = 1200 min
+const TIMELINE_END = 12 * 60; // 12:00 next day = 720 + 1440 = "32 hours"
+const TIMELINE_SPAN = 16 * 60; // 16 hours window
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -44,16 +69,303 @@ function qualityLabel(q: number): string {
   }
 }
 
+function scoreGradeColor(grade: SleepScore["grade"]): string {
+  switch (grade) {
+    case "S": return colors.body;
+    case "A": return colors.success;
+    case "B": return colors.general;
+    case "C": return colors.warning;
+    case "D": return "#F97316";
+    case "F": return colors.danger;
+  }
+}
+
+function durationBarColor(minutes: number): string {
+  const cat = getDurationColor(minutes);
+  if (cat === "good") return colors.body;
+  if (cat === "ok") return colors.warning;
+  return colors.danger;
+}
+
+function timeToTimelinePosition(timeStr: string): number {
+  const [h, m] = timeStr.split(":").map(Number);
+  let totalMin = h * 60 + m;
+  // Normalize to timeline window (20:00 start)
+  // Bedtimes 12:00-19:59 clamp to timeline start; wake times past 12:00 clamp to end
+  if (totalMin >= 720 && totalMin < TIMELINE_START) {
+    // Between noon and 8pm — clamp to start (0) for bedtime, end (1) for wake
+    return 0;
+  }
+  if (totalMin < TIMELINE_START) totalMin += 1440; // next day (0:00-11:59 → add 24h)
+  const offset = totalMin - TIMELINE_START;
+  return Math.max(0, Math.min(1, offset / TIMELINE_SPAN));
+}
+
+// ─── Score Ring Component ────────────────────────────────────────────────────
+
+const ScoreRing = React.memo(function ScoreRing({
+  score,
+  grade,
+}: {
+  score: number;
+  grade: SleepScore["grade"];
+}) {
+  const pct = Math.min(score / 100, 1);
+  const offset = SCORE_CIRCUMFERENCE * (1 - pct);
+  const gradeColor = scoreGradeColor(grade);
+
+  return (
+    <View style={styles.ringWrap}>
+      <Svg width={SCORE_RING_SIZE} height={SCORE_RING_SIZE}>
+        {/* Background ring */}
+        <Circle
+          cx={SCORE_RING_SIZE / 2}
+          cy={SCORE_RING_SIZE / 2}
+          r={SCORE_RADIUS}
+          stroke={colors.surfaceBorder}
+          strokeWidth={SCORE_STROKE}
+          fill="none"
+        />
+        {/* Score ring */}
+        <Circle
+          cx={SCORE_RING_SIZE / 2}
+          cy={SCORE_RING_SIZE / 2}
+          r={SCORE_RADIUS}
+          stroke={gradeColor}
+          strokeWidth={SCORE_STROKE}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={SCORE_CIRCUMFERENCE}
+          strokeDashoffset={offset}
+          transform={`rotate(-90 ${SCORE_RING_SIZE / 2} ${SCORE_RING_SIZE / 2})`}
+        />
+      </Svg>
+      <View style={styles.ringCenter}>
+        <Text style={[styles.ringScore, { color: gradeColor }]}>{score}</Text>
+        <Text style={styles.ringGrade}>{grade}</Text>
+      </View>
+    </View>
+  );
+});
+
+// ─── Sleep Timeline Bar ──────────────────────────────────────────────────────
+
+const SleepTimeline = React.memo(function SleepTimeline({
+  bedtime,
+  wakeTime,
+  width,
+}: {
+  bedtime: string;
+  wakeTime: string;
+  width: number;
+}) {
+  const barWidth = width - 40; // padding
+  const bedPos = timeToTimelinePosition(bedtime);
+  const wakePos = timeToTimelinePosition(wakeTime);
+  const barLeft = bedPos * barWidth;
+  const barRight = wakePos * barWidth;
+  const sleepWidth = Math.max(2, barRight - barLeft);
+
+  // Time markers: 8pm, 12am, 4am, 8am, 12pm
+  const markers = [
+    { label: "8pm", pos: 0 },
+    { label: "12am", pos: 4 / 16 },
+    { label: "4am", pos: 8 / 16 },
+    { label: "8am", pos: 12 / 16 },
+    { label: "12pm", pos: 1 },
+  ];
+
+  // Ideal zone: 10pm-6am
+  const idealStart = (2 / 16); // 10pm = 2h from 8pm
+  const idealEnd = (10 / 16); // 6am = 10h from 8pm
+
+  return (
+    <View style={styles.timelineContainer}>
+      <View style={[styles.timelineTrack, { width: barWidth }]}>
+        {/* Ideal zone */}
+        <View
+          style={[
+            styles.timelineIdeal,
+            {
+              left: idealStart * barWidth,
+              width: (idealEnd - idealStart) * barWidth,
+            },
+          ]}
+        />
+        {/* Sleep bar */}
+        <Animated.View
+          entering={FadeInRight.duration(600)}
+          style={[
+            styles.timelineSleep,
+            {
+              left: barLeft,
+              width: sleepWidth,
+            },
+          ]}
+        />
+        {/* Bed/wake markers */}
+        <View style={[styles.timelineMarker, { left: barLeft - 1 }]}>
+          <View style={[styles.markerDot, { backgroundColor: colors.mind }]} />
+        </View>
+        <View style={[styles.timelineMarker, { left: barLeft + sleepWidth - 1 }]}>
+          <View style={[styles.markerDot, { backgroundColor: colors.warning }]} />
+        </View>
+      </View>
+      {/* Time labels */}
+      <View style={[styles.timelineLabels, { width: barWidth }]}>
+        {markers.map((m) => (
+          <Text
+            key={m.label}
+            style={[styles.timelineLabel, { left: m.pos * barWidth - 14 }]}
+          >
+            {m.label}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+});
+
+// ─── Score Breakdown Component ───────────────────────────────────────────────
+
+const ScoreBreakdown = React.memo(function ScoreBreakdown({
+  sleepScore,
+}: {
+  sleepScore: SleepScore;
+}) {
+  const items = [
+    { label: "Duration", score: sleepScore.durationScore, max: 40, color: colors.body },
+    { label: "Quality", score: sleepScore.qualityScore, max: 30, color: colors.mind },
+    { label: "Consistency", score: sleepScore.consistencyScore, max: 30, color: colors.general },
+  ];
+
+  return (
+    <View style={styles.breakdownContainer}>
+      {items.map((item) => {
+        const pct = item.max > 0 ? item.score / item.max : 0;
+        return (
+          <View key={item.label} style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>{item.label}</Text>
+            <View style={styles.breakdownBarTrack}>
+              <View
+                style={[
+                  styles.breakdownBarFill,
+                  { width: `${pct * 100}%`, backgroundColor: item.color },
+                ]}
+              />
+            </View>
+            <Text style={[styles.breakdownValue, { color: item.color }]}>
+              {item.score}/{item.max}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+});
+
+// ─── Week Bar Chart ──────────────────────────────────────────────────────────
+
+const WeekBarChart = React.memo(function WeekBarChart({
+  entries,
+  todayKey,
+}: {
+  entries: SleepEntry[];
+  todayKey: string;
+}) {
+  // Build 7-day array (oldest to newest)
+  const days = useMemo(() => {
+    const result: { key: string; dayLabel: string; entry: SleepEntry | null }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const key = addDays(todayKey, -i);
+      const entry = entries.find((e) => e.dateKey === key) ?? null;
+      result.push({
+        key,
+        dayLabel: getDayOfWeek(key).charAt(0),
+        entry,
+      });
+    }
+    return result;
+  }, [entries, todayKey]);
+
+  const maxDuration = 600; // 10h max for bar height
+
+  return (
+    <View style={styles.weekChart}>
+      {days.map((day, i) => {
+        const height = day.entry
+          ? Math.max(4, (day.entry.durationMinutes / maxDuration) * 80)
+          : 4;
+        const barColor = day.entry
+          ? durationBarColor(day.entry.durationMinutes)
+          : colors.surfaceBorder;
+        const isToday = day.key === todayKey;
+
+        return (
+          <View key={day.key} style={styles.weekBarCol}>
+            <View style={styles.weekBarContainer}>
+              {day.entry && (
+                <Text style={styles.weekBarValue}>
+                  {Math.round(day.entry.durationMinutes / 60)}h
+                </Text>
+              )}
+              <Animated.View
+                entering={FadeInDown.delay(i * 60).duration(400)}
+                style={[
+                  styles.weekBar,
+                  {
+                    height,
+                    backgroundColor: barColor,
+                    opacity: day.entry ? 1 : 0.3,
+                  },
+                ]}
+              />
+            </View>
+            <Text
+              style={[
+                styles.weekBarDay,
+                isToday && { color: colors.text, fontWeight: "700" },
+              ]}
+            >
+              {day.dayLabel}
+            </Text>
+            {/* Quality dots */}
+            {day.entry && (
+              <View style={styles.qualityDotsRow}>
+                {[1, 2, 3, 4, 5].map((q) => (
+                  <View
+                    key={q}
+                    style={[
+                      styles.qualityMiniDot,
+                      {
+                        backgroundColor:
+                          q <= day.entry!.quality
+                            ? colors.warning
+                            : colors.surfaceBorder,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+});
+
 // ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function SleepScreen() {
   const router = useRouter();
+  const { width: SCREEN_WIDTH } = useWindowDimensions();
 
-  // Bug 5: AppState listener to refresh todayKey past midnight
+  // AppState listener to refresh todayKey past midnight
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") setAppActive(c => c + 1);
+      if (state === "active") setAppActive((c) => c + 1);
     });
     return () => sub.remove();
   }, []);
@@ -63,7 +375,6 @@ export default function SleepScreen() {
   const loadEntry = useSleepStore((s) => s.loadEntry);
   const addEntry = useSleepStore((s) => s.addEntry);
   const deleteEntry = useSleepStore((s) => s.deleteEntry);
-  const getRange = useSleepStore((s) => s.getRange);
 
   // Form state
   const [bedtime, setBedtime] = useState("");
@@ -72,16 +383,38 @@ export default function SleepScreen() {
   const [notes, setNotes] = useState("");
   const [showForm, setShowForm] = useState(false);
 
-  // Bug 6: include todayKey and loadEntry in deps
+  // Load 14 days of entries for stats
   useEffect(() => {
-    for (let i = 0; i <= 7; i++) {
+    for (let i = 0; i <= 14; i++) {
       loadEntry(addDays(todayKey, -i));
     }
   }, [todayKey, loadEntry]);
 
   const todayEntry = entries[todayKey] ?? null;
 
-  // 7-day history (excluding today)
+  // Build sorted entries array for stats
+  const allEntries = useMemo(() => {
+    const result: SleepEntry[] = [];
+    for (let i = 0; i <= 14; i++) {
+      const key = addDays(todayKey, -i);
+      const entry = entries[key];
+      if (entry) result.push(entry);
+    }
+    return result.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  }, [entries, todayKey]);
+
+  // 7-day entries for the week chart (today + 6 previous days = 7 total)
+  const weekEntries = useMemo(() => {
+    const result: SleepEntry[] = [];
+    for (let i = 0; i < 7; i++) {
+      const key = addDays(todayKey, -i);
+      const entry = entries[key];
+      if (entry) result.push(entry);
+    }
+    return result;
+  }, [entries, todayKey]);
+
+  // History (excluding today)
   const history = useMemo(() => {
     const result: SleepEntry[] = [];
     for (let i = 1; i <= 7; i++) {
@@ -92,28 +425,40 @@ export default function SleepScreen() {
     return result;
   }, [entries, todayKey]);
 
+  // Sleep consistency (needs 3+ entries)
+  const consistency = useMemo(
+    () => getSleepConsistency(allEntries),
+    [allEntries],
+  );
+
+  // Today's sleep score
+  const todaySleepScore = useMemo(() => {
+    if (!todayEntry) return null;
+    return computeSleepScore(todayEntry, consistency);
+  }, [todayEntry, consistency]);
+
   // Weekly stats
-  const weekStats = useMemo(() => {
-    const all = todayEntry ? [todayEntry, ...history] : history;
-    if (all.length === 0) return { avgDuration: 0, avgQuality: 0 };
-    const totalDuration = all.reduce((sum, e) => sum + e.durationMinutes, 0);
-    const totalQuality = all.reduce((sum, e) => sum + e.quality, 0);
-    return {
-      avgDuration: Math.round(totalDuration / all.length),
-      avgQuality: +(totalQuality / all.length).toFixed(1),
-    };
-  }, [todayEntry, history]);
+  const weekStats = useMemo(() => getSleepStats(weekEntries), [weekEntries]);
+
+  // Sleep debt
+  const sleepDebt = useMemo(
+    () => computeSleepDebt(allEntries),
+    [allEntries],
+  );
+
+  // Sparkline data: last 14 entries duration normalized
+  const sparkData = useMemo(() => {
+    if (allEntries.length < 2) return [];
+    return allEntries.map((e) => Math.min(100, (e.durationMinutes / 600) * 100));
+  }, [allEntries]);
 
   const handleSave = useCallback(() => {
     if (!bedtime || !wakeTime) return;
 
-    // Validate HH:MM format
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
     if (!timeRegex.test(bedtime) || !timeRegex.test(wakeTime)) return;
 
     const durationMinutes = computeDurationMinutes(bedtime, wakeTime);
-
-    // Bug 8: reject if duration is 0
     if (durationMinutes === 0) return;
 
     addEntry({
@@ -133,7 +478,6 @@ export default function SleepScreen() {
     setNotes("");
   }, [bedtime, wakeTime, quality, notes, todayKey, addEntry]);
 
-  // Bug 7: delete handler for history entries
   const handleDelete = useCallback(
     (dateKey: string) => {
       Alert.alert("Delete Entry", "Remove this sleep entry?", [
@@ -178,72 +522,99 @@ export default function SleepScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── Today's Sleep Card ── */}
-          <SectionHeader title="Last Night" />
-          {todayEntry ? (
-            <Panel>
-              <View style={styles.todayGrid}>
-                <View style={styles.todayStat}>
-                  <Ionicons name="moon-outline" size={20} color={colors.mind} />
-                  <Text style={styles.todayValue}>{todayEntry.bedtime}</Text>
-                  <Text style={styles.todayLabel}>Bedtime</Text>
+          {/* ── Sleep Score Hero ── */}
+          {todayEntry && todaySleepScore ? (
+            <>
+              <SectionHeader title="Last Night" />
+              <Panel tone="hero" delay={0}>
+                <View style={styles.heroRow}>
+                  <ScoreRing
+                    score={todaySleepScore.overall}
+                    grade={todaySleepScore.grade}
+                  />
+                  <View style={styles.heroStats}>
+                    <View style={styles.heroStatItem}>
+                      <Ionicons name="moon-outline" size={16} color={colors.mind} />
+                      <Text style={styles.heroStatValue}>{todayEntry.bedtime}</Text>
+                      <Text style={styles.heroStatLabel}>Bedtime</Text>
+                    </View>
+                    <View style={styles.heroStatItem}>
+                      <Ionicons name="sunny-outline" size={16} color={colors.warning} />
+                      <Text style={styles.heroStatValue}>{todayEntry.wakeTime}</Text>
+                      <Text style={styles.heroStatLabel}>Wake</Text>
+                    </View>
+                    <View style={styles.heroStatItem}>
+                      <Ionicons name="time-outline" size={16} color={colors.body} />
+                      <Text style={styles.heroStatValue}>
+                        {formatDuration(todayEntry.durationMinutes)}
+                      </Text>
+                      <Text style={styles.heroStatLabel}>Duration</Text>
+                    </View>
+                  </View>
                 </View>
-                <View style={styles.todayStat}>
-                  <Ionicons name="sunny-outline" size={20} color={colors.warning} />
-                  <Text style={styles.todayValue}>{todayEntry.wakeTime}</Text>
-                  <Text style={styles.todayLabel}>Wake</Text>
+
+                {/* Quality stars */}
+                <View style={styles.qualityRow}>
+                  <Text style={styles.qualityLabel}>Quality</Text>
+                  <View style={styles.starsRow}>
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Ionicons
+                        key={i}
+                        name={i <= todayEntry.quality ? "star" : "star-outline"}
+                        size={16}
+                        color={
+                          i <= todayEntry.quality ? colors.warning : colors.textMuted
+                        }
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.qualityText}>{qualityLabel(todayEntry.quality)}</Text>
                 </View>
-                <View style={styles.todayStat}>
-                  <Ionicons name="time-outline" size={20} color={colors.body} />
-                  <Text style={styles.todayValue}>
-                    {formatDuration(todayEntry.durationMinutes)}
-                  </Text>
-                  <Text style={styles.todayLabel}>Duration</Text>
-                </View>
-              </View>
-              <View style={styles.qualityRow}>
-                <Text style={styles.qualityLabel}>Quality</Text>
-                <View style={styles.starsRow}>
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Ionicons
-                      key={i}
-                      name={i <= todayEntry.quality ? "star" : "star-outline"}
-                      size={18}
-                      color={i <= todayEntry.quality ? colors.warning : colors.textMuted}
-                    />
-                  ))}
-                </View>
-                <Text style={styles.qualityText}>
-                  {qualityLabel(todayEntry.quality)}
-                </Text>
-              </View>
-              {todayEntry.notes.length > 0 && (
-                <Text style={styles.notesText}>{todayEntry.notes}</Text>
-              )}
-            </Panel>
+
+                {/* Sleep Timeline */}
+                <SleepTimeline
+                  bedtime={todayEntry.bedtime}
+                  wakeTime={todayEntry.wakeTime}
+                  width={SCREEN_WIDTH - spacing.lg * 2 - 40}
+                />
+
+                {/* Score Breakdown */}
+                <ScoreBreakdown sleepScore={todaySleepScore} />
+
+                {todayEntry.notes.length > 0 && (
+                  <Text style={styles.notesText}>{todayEntry.notes}</Text>
+                )}
+              </Panel>
+            </>
           ) : (
-            <Panel
-              onPress={() => {
-                setShowForm(true);
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-            >
-              <View style={styles.promptRow}>
-                <Ionicons name="moon-outline" size={28} color={colors.mind} />
-                <View style={{ marginLeft: spacing.md, flex: 1 }}>
-                  <Text style={styles.promptTitle}>Log tonight's sleep</Text>
-                  <Text style={styles.promptSub}>
-                    Tap to record bedtime, wake time, and quality
-                  </Text>
+            <>
+              <SectionHeader title="Last Night" />
+              <Panel
+                delay={0}
+                onPress={() => {
+                  setShowForm(true);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <View style={styles.promptRow}>
+                  <View style={styles.promptIconWrap}>
+                    <Ionicons name="moon-outline" size={28} color={colors.mind} />
+                  </View>
+                  <View style={{ marginLeft: spacing.md, flex: 1 }}>
+                    <Text style={styles.promptTitle}>Log tonight's sleep</Text>
+                    <Text style={styles.promptSub}>
+                      Tap to record bedtime, wake time, and quality
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-              </View>
-            </Panel>
+              </Panel>
+            </>
           )}
 
           {/* ── Log Form ── */}
-          {(showForm || (!todayEntry && showForm)) && (
-            <>
+          {showForm && (
+            <Animated.View entering={FadeInDown.duration(300)}>
               <SectionHeader title="Log Sleep" />
               <Panel>
                 {/* Bedtime */}
@@ -274,7 +645,17 @@ export default function SleepScreen() {
 
                 {/* Duration preview */}
                 {previewDuration !== null && (
-                  <Text style={styles.durationPreview}>
+                  <Text
+                    style={[
+                      styles.durationPreview,
+                      {
+                        color:
+                          previewDuration === 0
+                            ? colors.danger
+                            : durationBarColor(previewDuration),
+                      },
+                    ]}
+                  >
                     {previewDuration === 0
                       ? "Bedtime and wake time cannot be the same"
                       : formatDuration(previewDuration)}
@@ -309,9 +690,7 @@ export default function SleepScreen() {
                 <Text style={styles.qualityHint}>{qualityLabel(quality)}</Text>
 
                 {/* Notes */}
-                <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>
-                  Notes
-                </Text>
+                <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>Notes</Text>
                 <TextInput
                   style={[styles.input, styles.notesInput]}
                   placeholder="How did you sleep?"
@@ -323,19 +702,34 @@ export default function SleepScreen() {
                   textAlignVertical="top"
                 />
 
-                {/* Save */}
-                <Pressable
-                  style={[
-                    styles.saveBtn,
-                    (!bedtime || !wakeTime) && styles.saveBtnDisabled,
-                  ]}
-                  onPress={handleSave}
-                  disabled={!bedtime || !wakeTime}
-                >
-                  <Text style={styles.saveBtnText}>Save</Text>
-                </Pressable>
+                {/* Actions */}
+                <View style={styles.formActions}>
+                  <Pressable
+                    style={styles.cancelFormBtn}
+                    onPress={() => {
+                      setShowForm(false);
+                      setBedtime("");
+                      setWakeTime("");
+                      setQuality(3);
+                      setNotes("");
+                    }}
+                  >
+                    <Text style={styles.cancelFormText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.saveBtn,
+                      { flex: 1 },
+                      (!bedtime || !wakeTime || previewDuration === 0) && styles.saveBtnDisabled,
+                    ]}
+                    onPress={handleSave}
+                    disabled={!bedtime || !wakeTime || previewDuration === 0}
+                  >
+                    <Text style={styles.saveBtnText}>Save</Text>
+                  </Pressable>
+                </View>
               </Panel>
-            </>
+            </Animated.View>
           )}
 
           {/* Toggle form button if today already logged */}
@@ -356,20 +750,128 @@ export default function SleepScreen() {
             </Pressable>
           )}
 
-          {/* ── 7-Day History ── */}
-          <SectionHeader title="7-Day History" right={`${history.length} entries`} />
+          {/* ── 7-Day Chart ── */}
+          <SectionHeader title="This Week" right={`${weekEntries.length} nights`} />
+          <Panel delay={100}>
+            <WeekBarChart entries={weekEntries} todayKey={todayKey} />
+          </Panel>
+
+          {/* ── Weekly Stats ── */}
+          <View style={styles.statsGrid}>
+            <Panel style={styles.statCard} delay={200}>
+              <Ionicons name="time-outline" size={18} color={colors.body} />
+              <MetricValue
+                label="Avg Duration"
+                value={weekStats.avgDuration > 0 ? formatDuration(weekStats.avgDuration) : "--"}
+                size="sm"
+                color={colors.body}
+              />
+            </Panel>
+            <Panel style={styles.statCard} delay={250}>
+              <Ionicons name="star-outline" size={18} color={colors.warning} />
+              <MetricValue
+                label="Avg Quality"
+                value={weekStats.avgQuality > 0 ? `${weekStats.avgQuality}` : "--"}
+                size="sm"
+                color={colors.warning}
+              />
+            </Panel>
+          </View>
+
+          {/* ── Consistency & Sleep Debt ── */}
+          <View style={styles.statsGrid}>
+            {consistency && (
+              <Panel style={styles.statCard} delay={300}>
+                <Ionicons name="analytics-outline" size={18} color={colors.general} />
+                <MetricValue
+                  label="Consistency"
+                  value={`${consistency.score}%`}
+                  size="sm"
+                  color={colors.general}
+                />
+                <Text style={styles.trendBadge}>
+                  {consistency.trend === "improving"
+                    ? "Improving"
+                    : consistency.trend === "declining"
+                      ? "Declining"
+                      : "Stable"}
+                </Text>
+              </Panel>
+            )}
+            {sleepDebt.weekDebtMinutes > 0 && (
+              <Panel style={!consistency ? { ...styles.statCard, flex: 1 } : styles.statCard} delay={350}>
+                <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+                <MetricValue
+                  label="Sleep Debt (7d)"
+                  value={formatDuration(sleepDebt.weekDebtMinutes)}
+                  size="sm"
+                  color={colors.danger}
+                />
+              </Panel>
+            )}
+          </View>
+
+          {/* ── Average Schedule ── */}
+          {consistency && (
+            <>
+              <SectionHeader title="Average Schedule" />
+              <Panel delay={400}>
+                <View style={styles.scheduleRow}>
+                  <View style={styles.scheduleItem}>
+                    <Ionicons name="moon-outline" size={16} color={colors.mind} />
+                    <Text style={styles.scheduleTime}>
+                      {minutesToTime(consistency.avgBedtimeMinutes)}
+                    </Text>
+                    <Text style={styles.scheduleLabel}>Avg Bedtime</Text>
+                    <Text style={styles.scheduleStdDev}>
+                      {"\u00B1"}{consistency.bedtimeStdDev}m
+                    </Text>
+                  </View>
+                  <View style={styles.scheduleDivider} />
+                  <View style={styles.scheduleItem}>
+                    <Ionicons name="sunny-outline" size={16} color={colors.warning} />
+                    <Text style={styles.scheduleTime}>
+                      {minutesToTime(consistency.avgWakeTimeMinutes)}
+                    </Text>
+                    <Text style={styles.scheduleLabel}>Avg Wake</Text>
+                    <Text style={styles.scheduleStdDev}>
+                      {"\u00B1"}{consistency.wakeStdDev}m
+                    </Text>
+                  </View>
+                </View>
+              </Panel>
+            </>
+          )}
+
+          {/* ── Trend Sparkline ── */}
+          {sparkData.length >= 2 && (
+            <>
+              <SectionHeader title="Duration Trend" right={`${allEntries.length} nights`} />
+              <Panel delay={450} style={styles.sparkPanel}>
+                <SparklineChart
+                  data={sparkData}
+                  width={SCREEN_WIDTH - spacing.lg * 2 - 40}
+                  height={60}
+                  color={colors.mind}
+                />
+              </Panel>
+            </>
+          )}
+
+          {/* ── History ── */}
+          <SectionHeader title="Recent Nights" right={`${history.length} entries`} />
           {history.length === 0 ? (
-            <Panel>
+            <Panel delay={500}>
               <Text style={styles.emptyText}>No sleep data yet</Text>
-              <Text style={styles.emptySub}>
-                Start logging to see your history
-              </Text>
+              <Text style={styles.emptySub}>Start logging to see your history</Text>
             </Panel>
           ) : (
-            history.map((entry) => {
-              const barWidth = Math.min((entry.durationMinutes / 600) * 100, 100); // 10h max
+            history.map((entry, i) => {
+              const barWidth = Math.min((entry.durationMinutes / 600) * 100, 100);
+              const entryScore = computeSleepScore(entry, consistency);
+
               return (
-                <Panel key={entry.dateKey} style={styles.historyCard}>
+                <Panel key={entry.dateKey} style={styles.historyCard} delay={500 + i * 50}>
                   <View style={styles.historyTop}>
                     <View>
                       <Text style={styles.historyDate}>
@@ -381,17 +883,27 @@ export default function SleepScreen() {
                       </Text>
                     </View>
                     <View style={styles.historyRight}>
+                      <View style={styles.historyScoreBadge}>
+                        <Text
+                          style={[
+                            styles.historyScoreText,
+                            { color: scoreGradeColor(entryScore.grade) },
+                          ]}
+                        >
+                          {entryScore.overall}
+                        </Text>
+                      </View>
                       <Text style={styles.historyDuration}>
                         {formatDuration(entry.durationMinutes)}
                       </Text>
                       <View style={styles.miniStars}>
-                        {[1, 2, 3, 4, 5].map((i) => (
+                        {[1, 2, 3, 4, 5].map((q) => (
                           <Ionicons
-                            key={i}
-                            name={i <= entry.quality ? "star" : "star-outline"}
+                            key={q}
+                            name={q <= entry.quality ? "star" : "star-outline"}
                             size={10}
                             color={
-                              i <= entry.quality ? colors.warning : colors.textMuted
+                              q <= entry.quality ? colors.warning : colors.textMuted
                             }
                           />
                         ))}
@@ -405,50 +917,25 @@ export default function SleepScreen() {
                         styles.barFill,
                         {
                           width: `${barWidth}%`,
-                          backgroundColor:
-                            entry.durationMinutes >= 420
-                              ? colors.body
-                              : entry.durationMinutes >= 360
-                                ? colors.warning
-                                : colors.danger,
+                          backgroundColor: durationBarColor(entry.durationMinutes),
                         },
                       ]}
                     />
                   </View>
-                  {/* Bug 7: Delete button */}
+                  {/* Delete button */}
                   <Pressable
                     onPress={() => handleDelete(entry.dateKey)}
                     style={styles.historyDeleteBtn}
                     hitSlop={8}
                   >
                     <Ionicons name="trash-outline" size={14} color={colors.danger} />
-                    <Text style={styles.historyDeleteText}>Delete</Text>
                   </Pressable>
                 </Panel>
               );
             })
           )}
 
-          {/* ── Weekly Stats ── */}
-          <SectionHeader title="This Week" />
-          <View style={styles.statsRow}>
-            <Panel style={styles.statCard}>
-              <Ionicons name="time-outline" size={20} color={colors.body} />
-              <Text style={styles.statValue}>
-                {weekStats.avgDuration > 0
-                  ? formatDuration(weekStats.avgDuration)
-                  : "--"}
-              </Text>
-              <Text style={styles.statLabel}>Avg Duration</Text>
-            </Panel>
-            <Panel style={styles.statCard}>
-              <Ionicons name="star-outline" size={20} color={colors.warning} />
-              <Text style={styles.statValue}>
-                {weekStats.avgQuality > 0 ? weekStats.avgQuality : "--"}
-              </Text>
-              <Text style={styles.statLabel}>Avg Quality</Text>
-            </Panel>
-          </View>
+          <View style={{ height: 60 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -476,15 +963,58 @@ const styles = StyleSheet.create({
   body: { flex: 1, paddingHorizontal: spacing.lg },
   bodyContent: { paddingBottom: spacing["5xl"] },
 
-  // Today card
-  todayGrid: {
+  // Hero row
+  heroRow: {
     flexDirection: "row",
-    justifyContent: "space-around",
+    alignItems: "center",
+    gap: spacing.xl,
     marginBottom: spacing.lg,
   },
-  todayStat: { alignItems: "center", gap: spacing.xs },
-  todayValue: { ...fonts.monoValue, fontSize: 18 },
-  todayLabel: { fontSize: 11, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 1 },
+  heroStats: { flex: 1, gap: spacing.md },
+  heroStatItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  heroStatValue: {
+    fontFamily: MONO_FONT,
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  heroStatLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+
+  // Score ring
+  ringWrap: {
+    width: SCORE_RING_SIZE,
+    height: SCORE_RING_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringCenter: {
+    position: "absolute",
+    alignItems: "center",
+  },
+  ringScore: {
+    fontFamily: MONO_FONT,
+    fontSize: 28,
+    fontWeight: "800",
+  },
+  ringGrade: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 2,
+    marginTop: 2,
+  },
+
+  // Quality
   qualityRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -507,10 +1037,115 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
 
+  // Timeline
+  timelineContainer: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.panelBorder,
+  },
+  timelineTrack: {
+    height: 20,
+    backgroundColor: colors.surfaceBorder,
+    borderRadius: radius.full,
+    overflow: "hidden",
+    position: "relative",
+    alignSelf: "center",
+  },
+  timelineIdeal: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 255, 136, 0.06)",
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: "rgba(0, 255, 136, 0.15)",
+  },
+  timelineSleep: {
+    position: "absolute",
+    top: 2,
+    bottom: 2,
+    backgroundColor: colors.mind,
+    borderRadius: radius.full,
+    opacity: 0.8,
+  },
+  timelineMarker: {
+    position: "absolute",
+    top: -4,
+    width: 2,
+    height: 28,
+    alignItems: "center",
+  },
+  markerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: -1,
+  },
+  timelineLabels: {
+    position: "relative",
+    height: 16,
+    marginTop: spacing.xs,
+    alignSelf: "center",
+  },
+  timelineLabel: {
+    position: "absolute",
+    fontSize: 9,
+    color: colors.textMuted,
+    width: 28,
+    textAlign: "center",
+  },
+
+  // Score breakdown
+  breakdownContainer: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.panelBorder,
+    gap: spacing.sm,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  breakdownLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    width: 80,
+  },
+  breakdownBarTrack: {
+    flex: 1,
+    height: 4,
+    backgroundColor: colors.surfaceBorder,
+    borderRadius: radius.full,
+    overflow: "hidden",
+  },
+  breakdownBarFill: {
+    height: 4,
+    borderRadius: radius.full,
+  },
+  breakdownValue: {
+    fontFamily: MONO_FONT,
+    fontSize: 11,
+    fontWeight: "700",
+    width: 36,
+    textAlign: "right",
+  },
+
   // Prompt (no entry)
   promptRow: {
     flexDirection: "row",
     alignItems: "center",
+  },
+  promptIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.mindDim,
+    alignItems: "center",
+    justifyContent: "center",
   },
   promptTitle: { fontSize: 16, fontWeight: "600", color: colors.text },
   promptSub: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
@@ -530,7 +1165,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     fontSize: 16,
     color: colors.text,
-    fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+    fontFamily: MONO_FONT,
   },
   notesInput: {
     minHeight: 80,
@@ -538,8 +1173,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   durationPreview: {
-    ...fonts.mono,
-    color: colors.body,
+    fontFamily: MONO_FONT,
+    fontSize: 14,
+    fontWeight: "600",
     textAlign: "center",
     marginTop: spacing.sm,
   },
@@ -568,12 +1204,26 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: spacing.sm,
   },
+  formActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.xl,
+  },
+  cancelFormBtn: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.panelBorder,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cancelFormText: { fontSize: 14, fontWeight: "600", color: colors.textSecondary },
   saveBtn: {
     backgroundColor: colors.mind,
     borderRadius: radius.full,
     paddingVertical: spacing.md,
     alignItems: "center",
-    marginTop: spacing.xl,
   },
   saveBtnDisabled: { opacity: 0.4 },
   saveBtnText: { fontSize: 16, fontWeight: "700", color: "#000" },
@@ -589,6 +1239,97 @@ const styles = StyleSheet.create({
   },
   editBtnText: { fontSize: 14, color: colors.textSecondary },
 
+  // Week chart
+  weekChart: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    paddingTop: spacing.md,
+  },
+  weekBarCol: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  weekBarContainer: {
+    height: 100,
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  weekBar: {
+    width: 24,
+    borderRadius: 6,
+    minHeight: 4,
+  },
+  weekBarValue: {
+    fontFamily: MONO_FONT,
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  weekBarDay: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: colors.textMuted,
+  },
+  qualityDotsRow: {
+    flexDirection: "row",
+    gap: 2,
+  },
+  qualityMiniDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+  },
+
+  // Stats grid
+  statsGrid: { flexDirection: "row", gap: spacing.md },
+  statCard: { flex: 1, alignItems: "center", gap: spacing.xs },
+  trendBadge: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+
+  // Schedule
+  scheduleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  scheduleItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  scheduleTime: {
+    fontFamily: MONO_FONT,
+    fontSize: 20,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  scheduleLabel: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  scheduleStdDev: {
+    fontFamily: MONO_FONT,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  scheduleDivider: {
+    width: 1,
+    height: 48,
+    backgroundColor: colors.panelBorder,
+  },
+
+  // Sparkline
+  sparkPanel: { alignItems: "center", paddingVertical: spacing.lg },
+
   // History
   historyCard: { marginBottom: spacing.sm },
   historyTop: {
@@ -599,9 +1340,20 @@ const styles = StyleSheet.create({
   },
   historyDate: { fontSize: 14, fontWeight: "600", color: colors.text },
   historyTimes: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  historyRight: { alignItems: "flex-end" },
+  historyRight: { alignItems: "flex-end", gap: 2 },
+  historyScoreBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceBorder,
+  },
+  historyScoreText: {
+    fontFamily: MONO_FONT,
+    fontSize: 12,
+    fontWeight: "700",
+  },
   historyDuration: { ...fonts.mono, fontSize: 14 },
-  miniStars: { flexDirection: "row", gap: 1, marginTop: 2 },
+  miniStars: { flexDirection: "row", gap: 1 },
   barTrack: {
     height: 6,
     backgroundColor: colors.surfaceBorder,
@@ -613,25 +1365,26 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   historyDeleteBtn: {
-    flexDirection: "row",
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 28,
+    height: 28,
     alignItems: "center",
-    justifyContent: "flex-end",
-    gap: 4,
-    marginTop: spacing.sm,
-    paddingTop: spacing.xs,
+    justifyContent: "center",
   },
-  historyDeleteText: {
-    fontSize: 12,
-    color: colors.danger,
-  },
-
-  // Stats
-  statsRow: { flexDirection: "row", gap: spacing.md },
-  statCard: { flex: 1, alignItems: "center", gap: spacing.xs },
-  statValue: { ...fonts.monoValue },
-  statLabel: { fontSize: 11, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 1 },
 
   // Empty
-  emptyText: { fontSize: 15, fontWeight: "600", color: colors.textSecondary, textAlign: "center" },
-  emptySub: { fontSize: 13, color: colors.textMuted, textAlign: "center", marginTop: spacing.xs },
+  emptyText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    textAlign: "center",
+  },
+  emptySub: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: "center",
+    marginTop: spacing.xs,
+  },
 });

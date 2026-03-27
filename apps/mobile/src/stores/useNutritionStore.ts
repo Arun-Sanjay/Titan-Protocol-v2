@@ -23,11 +23,32 @@ export type Meal = {
   fat_g: number;
 };
 
+export type QuickMeal = {
+  id: number;
+  name: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+};
+
+export type WaterLog = {
+  glasses: number; // each glass = 250ml
+  targetGlasses: number; // default 8
+};
+
 // ─── Keys ───────────────────────────────────────────────────────────────────
 
 const PROFILE_KEY = "nutrition_profile";
+const QUICK_MEALS_KEY = "nutrition_quick_meals";
+const WATER_TARGET_KEY = "nutrition_water_target";
+
 function mealsKey(dateKey: string) {
   return `nutrition_meals:${dateKey}`;
+}
+
+function waterKey(dateKey: string) {
+  return `nutrition_water:${dateKey}`;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -64,30 +85,68 @@ export function computeDayMacros(meals: Meal[]): {
   );
 }
 
+/**
+ * Compute BMI from height and weight.
+ */
+export function computeBMI(heightCm: number, weightKg: number): number {
+  const heightM = heightCm / 100;
+  if (heightM <= 0) return 0;
+  return +(weightKg / (heightM * heightM)).toFixed(1);
+}
+
+/**
+ * Get BMI category label.
+ */
+export function getBMICategory(bmi: number): { label: string; color: "success" | "warning" | "danger" | "body" } {
+  if (bmi < 18.5) return { label: "Underweight", color: "warning" };
+  if (bmi < 25) return { label: "Normal", color: "success" };
+  if (bmi < 30) return { label: "Overweight", color: "warning" };
+  return { label: "Obese", color: "danger" };
+}
+
 // ─── Store ──────────────────────────────────────────────────────────────────
 
 type NutritionState = {
   profile: NutritionProfile | null;
   meals: Record<string, Meal[]>;
+  quickMeals: QuickMeal[];
+  waterLog: Record<string, number>; // dateKey -> glasses
+  waterTarget: number;
 
   loadProfile: () => void;
   updateProfile: (p: NutritionProfile) => void;
   loadMeals: (dateKey: string) => void;
   addMeal: (dateKey: string, meal: Omit<Meal, "id">) => void;
   deleteMeal: (dateKey: string, mealId: number) => void;
+  loadQuickMeals: () => void;
+  addQuickMeal: (meal: Omit<QuickMeal, "id">) => void;
+  deleteQuickMeal: (id: number) => void;
+  loadWater: (dateKey: string) => void;
+  addWater: (dateKey: string) => void;
+  removeWater: (dateKey: string) => void;
+  setWaterTarget: (target: number) => void;
 };
 
 export const useNutritionStore = create<NutritionState>()((set, get) => ({
   profile: null,
   meals: {},
+  quickMeals: [],
+  waterLog: {},
+  waterTarget: 8,
 
   loadProfile: () => {
-    const profile = getJSON<NutritionProfile | null>(PROFILE_KEY, null);
-    set({ profile });
+    const raw = getJSON<NutritionProfile | null>(PROFILE_KEY, null);
+    // Validate loaded profile has required fields
+    if (raw && typeof raw.height_cm === "number" && typeof raw.weight_kg === "number"
+        && typeof raw.age === "number" && typeof raw.calorie_target === "number"
+        && raw.calorie_target > 0 && typeof raw.protein_g === "number") {
+      set({ profile: raw });
+    } else {
+      set({ profile: null });
+    }
   },
 
   updateProfile: (p) => {
-    // Bug 15: enforce calorie floor
     let calorie_target = p.calorie_target;
     calorie_target = Math.max(calorie_target, p.sex === "female" ? 1200 : 1500);
     const updated = { ...p, calorie_target };
@@ -114,5 +173,52 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     const updated = current.filter((m) => m.id !== mealId);
     setJSON(mealsKey(dateKey), updated);
     set((s) => ({ meals: { ...s.meals, [dateKey]: updated } }));
+  },
+
+  loadQuickMeals: () => {
+    const qm = getJSON<QuickMeal[]>(QUICK_MEALS_KEY, []);
+    set({ quickMeals: qm });
+  },
+
+  addQuickMeal: (meal) => {
+    const id = nextId();
+    const full: QuickMeal = { ...meal, id };
+    const updated = [...get().quickMeals, full];
+    setJSON(QUICK_MEALS_KEY, updated);
+    set({ quickMeals: updated });
+  },
+
+  deleteQuickMeal: (id) => {
+    const updated = get().quickMeals.filter((m) => m.id !== id);
+    setJSON(QUICK_MEALS_KEY, updated);
+    set({ quickMeals: updated });
+  },
+
+  loadWater: (dateKey) => {
+    const glasses = getJSON<number>(waterKey(dateKey), 0);
+    const target = getJSON<number>(WATER_TARGET_KEY, 8);
+    set((s) => ({
+      waterLog: { ...s.waterLog, [dateKey]: glasses },
+      waterTarget: target,
+    }));
+  },
+
+  addWater: (dateKey) => {
+    const current = get().waterLog[dateKey] ?? 0;
+    const updated = current + 1;
+    setJSON(waterKey(dateKey), updated);
+    set((s) => ({ waterLog: { ...s.waterLog, [dateKey]: updated } }));
+  },
+
+  removeWater: (dateKey) => {
+    const current = get().waterLog[dateKey] ?? 0;
+    const updated = Math.max(0, current - 1);
+    setJSON(waterKey(dateKey), updated);
+    set((s) => ({ waterLog: { ...s.waterLog, [dateKey]: updated } }));
+  },
+
+  setWaterTarget: (target) => {
+    setJSON(WATER_TARGET_KEY, target);
+    set({ waterTarget: target });
   },
 }));

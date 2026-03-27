@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,17 +8,19 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Animated as RNAnimated,
   AppState,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
+import Animated, { FadeInDown, FadeInRight, ZoomIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, fonts } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
+import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey } from "../../src/lib/date";
 import {
   useNutritionStore,
@@ -26,9 +28,12 @@ import {
   computeDayMacros,
   type NutritionProfile,
   type Meal,
+  type QuickMeal,
 } from "../../src/stores/useNutritionStore";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
+
+const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
 
 const ACTIVITY_LEVELS = [
   { label: "Sedentary", value: 1.2 },
@@ -44,14 +49,19 @@ const GOALS = [
   { label: "Bulk", value: "bulk" as const },
 ] as const;
 
-const RING_SIZE = 160;
+const RING_SIZE = 150;
 const STROKE_WIDTH = 12;
 const RING_RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-// ─── Setup Form Component ───────────────────────────────────────────────────
+// Water ring
+const WATER_RING_SIZE = 80;
+const WATER_STROKE = 6;
+const WATER_RADIUS = (WATER_RING_SIZE - WATER_STROKE) / 2;
+const WATER_CIRCUMFERENCE = 2 * Math.PI * WATER_RADIUS;
 
-// Bug 18: Accept optional initialProfile prop to pre-populate form
+// ─── Profile Setup Component ────────────────────────────────────────────────
+
 function ProfileSetup({
   onSave,
   initialProfile,
@@ -70,7 +80,8 @@ function ProfileSetup({
     const h = parseFloat(height);
     const w = parseFloat(weight);
     const a = parseInt(age, 10);
-    if (isNaN(h) || isNaN(w) || isNaN(a) || h <= 0 || w <= 0 || a <= 0)
+    if (isNaN(h) || isNaN(w) || isNaN(a)) return null;
+    if (h < 50 || h > 300 || w < 20 || w > 500 || a < 10 || a > 120)
       return null;
 
     const tdee = computeTDEE({
@@ -86,9 +97,8 @@ function ProfileSetup({
 
     const goalOffset = goal === "cut" ? -500 : goal === "bulk" ? 300 : 0;
     let calorie_target = tdee + goalOffset;
-    // Bug 15: enforce calorie floor in preview too
     calorie_target = Math.max(calorie_target, sex === "female" ? 1200 : 1500);
-    const protein_g = Math.round(w * 2.0); // 2g per kg
+    const protein_g = Math.round(w * 2.0);
 
     return {
       height_cm: h,
@@ -112,7 +122,6 @@ function ProfileSetup({
     <>
       <SectionHeader title="Profile Setup" />
       <Panel>
-        {/* Height */}
         <Text style={styles.fieldLabel}>Height (cm)</Text>
         <TextInput
           style={styles.input}
@@ -124,10 +133,7 @@ function ProfileSetup({
           maxLength={5}
         />
 
-        {/* Weight */}
-        <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>
-          Weight (kg)
-        </Text>
+        <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>Weight (kg)</Text>
         <TextInput
           style={styles.input}
           placeholder="75"
@@ -138,7 +144,6 @@ function ProfileSetup({
           maxLength={6}
         />
 
-        {/* Age */}
         <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>Age</Text>
         <TextInput
           style={styles.input}
@@ -150,56 +155,30 @@ function ProfileSetup({
           maxLength={3}
         />
 
-        {/* Sex */}
         <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>Sex</Text>
         <View style={styles.segmentRow}>
           {(["male", "female"] as const).map((s) => (
             <Pressable
               key={s}
-              style={[
-                styles.segmentBtn,
-                sex === s && styles.segmentBtnActive,
-              ]}
-              onPress={() => {
-                setSex(s);
-                Haptics.selectionAsync();
-              }}
+              style={[styles.segmentBtn, sex === s && styles.segmentBtnActive]}
+              onPress={() => { setSex(s); Haptics.selectionAsync(); }}
             >
-              <Text
-                style={[
-                  styles.segmentText,
-                  sex === s && styles.segmentTextActive,
-                ]}
-              >
+              <Text style={[styles.segmentText, sex === s && styles.segmentTextActive]}>
                 {s.charAt(0).toUpperCase() + s.slice(1)}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        {/* Activity Level */}
-        <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>
-          Activity Level
-        </Text>
+        <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>Activity Level</Text>
         <View style={styles.activityList}>
           {ACTIVITY_LEVELS.map((level) => (
             <Pressable
               key={level.value}
-              style={[
-                styles.activityItem,
-                activity === level.value && styles.activityItemActive,
-              ]}
-              onPress={() => {
-                setActivity(level.value);
-                Haptics.selectionAsync();
-              }}
+              style={[styles.activityItem, activity === level.value && styles.activityItemActive]}
+              onPress={() => { setActivity(level.value); Haptics.selectionAsync(); }}
             >
-              <Text
-                style={[
-                  styles.activityText,
-                  activity === level.value && styles.activityTextActive,
-                ]}
-              >
+              <Text style={[styles.activityText, activity === level.value && styles.activityTextActive]}>
                 {level.label}
               </Text>
               <Text style={styles.activityMult}>{level.value}x</Text>
@@ -207,41 +186,26 @@ function ProfileSetup({
           ))}
         </View>
 
-        {/* Goal */}
         <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>Goal</Text>
         <View style={styles.segmentRow}>
           {GOALS.map((g) => (
             <Pressable
               key={g.value}
-              style={[
-                styles.segmentBtn,
-                goal === g.value && styles.segmentBtnActive,
-              ]}
-              onPress={() => {
-                setGoal(g.value);
-                Haptics.selectionAsync();
-              }}
+              style={[styles.segmentBtn, goal === g.value && styles.segmentBtnActive]}
+              onPress={() => { setGoal(g.value); Haptics.selectionAsync(); }}
             >
-              <Text
-                style={[
-                  styles.segmentText,
-                  goal === g.value && styles.segmentTextActive,
-                ]}
-              >
+              <Text style={[styles.segmentText, goal === g.value && styles.segmentTextActive]}>
                 {g.label}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        {/* TDEE Preview */}
         {previewProfile && (
           <View style={styles.previewBox}>
             <View style={styles.previewRow}>
               <Text style={styles.previewLabel}>TDEE</Text>
-              <Text style={styles.previewValue}>
-                {computeTDEE(previewProfile)} cal
-              </Text>
+              <Text style={styles.previewValue}>{computeTDEE(previewProfile)} cal</Text>
             </View>
             <View style={styles.previewRow}>
               <Text style={styles.previewLabel}>Daily Target</Text>
@@ -270,16 +234,153 @@ function ProfileSetup({
   );
 }
 
+// ─── Macro Bar ───────────────────────────────────────────────────────────────
+
+function MacroBar({
+  label,
+  current,
+  target,
+  unit,
+  color,
+}: {
+  label: string;
+  current: number;
+  target: number;
+  unit: string;
+  color: string;
+}) {
+  if (target <= 0) return null; // Hide bar when target is 0 (e.g. protein cals exceed total)
+  const pct = Math.min(current / target, 1);
+
+  return (
+    <View style={styles.macroBarWrap}>
+      <View style={styles.macroBarHeader}>
+        <Text style={styles.macroBarLabel}>{label}</Text>
+        <Text style={styles.macroBarValue}>
+          {current}
+          <Text style={styles.macroBarTarget}> / {target}{unit}</Text>
+        </Text>
+      </View>
+      <View style={styles.barTrack}>
+        <View
+          style={[styles.barFill, { width: `${pct * 100}%`, backgroundColor: color }]}
+        />
+      </View>
+    </View>
+  );
+}
+
+// ─── Water Ring ──────────────────────────────────────────────────────────────
+
+const WaterRing = React.memo(function WaterRing({
+  glasses,
+  target,
+  onAdd,
+  onRemove,
+}: {
+  glasses: number;
+  target: number;
+  onAdd: () => void;
+  onRemove: () => void;
+}) {
+  const pct = target > 0 ? Math.min(glasses / target, 1) : 0;
+  const offset = WATER_CIRCUMFERENCE * (1 - pct);
+  const ml = glasses * 250;
+
+  return (
+    <View style={styles.waterContainer}>
+      <View style={styles.waterRingWrap}>
+        <Svg width={WATER_RING_SIZE} height={WATER_RING_SIZE}>
+          <Circle
+            cx={WATER_RING_SIZE / 2}
+            cy={WATER_RING_SIZE / 2}
+            r={WATER_RADIUS}
+            stroke={colors.surfaceBorder}
+            strokeWidth={WATER_STROKE}
+            fill="none"
+          />
+          <Circle
+            cx={WATER_RING_SIZE / 2}
+            cy={WATER_RING_SIZE / 2}
+            r={WATER_RADIUS}
+            stroke={colors.general}
+            strokeWidth={WATER_STROKE}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={WATER_CIRCUMFERENCE}
+            strokeDashoffset={offset}
+            transform={`rotate(-90 ${WATER_RING_SIZE / 2} ${WATER_RING_SIZE / 2})`}
+          />
+        </Svg>
+        <View style={styles.waterCenter}>
+          <Ionicons name="water" size={16} color={colors.general} />
+          <Text style={styles.waterValue}>{glasses}</Text>
+        </View>
+      </View>
+      <View style={styles.waterInfo}>
+        <Text style={styles.waterMl}>{ml}ml</Text>
+        <Text style={styles.waterTarget}>/ {target * 250}ml</Text>
+        <View style={styles.waterBtns}>
+          <Pressable
+            onPress={() => { onRemove(); Haptics.selectionAsync(); }}
+            style={styles.waterBtn}
+          >
+            <Ionicons name="remove" size={18} color={colors.textSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={() => { onAdd(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+            style={[styles.waterBtn, styles.waterBtnActive]}
+          >
+            <Ionicons name="add" size={18} color={colors.general} />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+// ─── Quick Meal Card ─────────────────────────────────────────────────────────
+
+const QuickMealCard = React.memo(function QuickMealCard({
+  meal,
+  onUse,
+  onDelete,
+}: {
+  meal: QuickMeal;
+  onUse: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onUse}
+      onLongPress={() => {
+        Alert.alert("Delete Quick Meal", `Remove "${meal.name}" from favorites?`, [
+          { text: "Cancel", style: "cancel" },
+          { text: "Delete", style: "destructive", onPress: onDelete },
+        ]);
+      }}
+      style={styles.quickMealCard}
+    >
+      <Text style={styles.quickMealName} numberOfLines={1}>{meal.name}</Text>
+      <Text style={styles.quickMealCal}>{meal.calories} cal</Text>
+      <View style={styles.quickMealMacros}>
+        <Text style={[styles.quickMealMacro, { color: colors.mind }]}>P{meal.protein_g}</Text>
+        <Text style={[styles.quickMealMacro, { color: colors.general }]}>C{meal.carbs_g}</Text>
+        <Text style={[styles.quickMealMacro, { color: colors.warning }]}>F{meal.fat_g}</Text>
+      </View>
+    </Pressable>
+  );
+});
+
 // ─── Main Screen ────────────────────────────────────────────────────────────
 
 export default function NutritionScreen() {
   const router = useRouter();
 
-  // Bug 20: AppState listener for stale todayKey
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") setAppActive(c => c + 1);
+      if (state === "active") setAppActive((c) => c + 1);
     });
     return () => sub.remove();
   }, []);
@@ -287,43 +388,53 @@ export default function NutritionScreen() {
 
   const profile = useNutritionStore((s) => s.profile);
   const meals = useNutritionStore((s) => s.meals);
+  const quickMeals = useNutritionStore((s) => s.quickMeals);
+  const waterLog = useNutritionStore((s) => s.waterLog);
+  const waterTarget = useNutritionStore((s) => s.waterTarget);
   const loadProfile = useNutritionStore((s) => s.loadProfile);
   const updateProfile = useNutritionStore((s) => s.updateProfile);
   const loadMeals = useNutritionStore((s) => s.loadMeals);
   const addMeal = useNutritionStore((s) => s.addMeal);
   const deleteMeal = useNutritionStore((s) => s.deleteMeal);
+  const loadQuickMeals = useNutritionStore((s) => s.loadQuickMeals);
+  const addQuickMeal = useNutritionStore((s) => s.addQuickMeal);
+  const deleteQuickMeal = useNutritionStore((s) => s.deleteQuickMeal);
+  const loadWater = useNutritionStore((s) => s.loadWater);
+  const addWaterFn = useNutritionStore((s) => s.addWater);
+  const removeWaterFn = useNutritionStore((s) => s.removeWater);
 
   const [showMealForm, setShowMealForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [saveAsQuick, setSaveAsQuick] = useState(false);
   const [mealName, setMealName] = useState("");
   const [mealCalories, setMealCalories] = useState("");
   const [mealProtein, setMealProtein] = useState("");
   const [mealCarbs, setMealCarbs] = useState("");
   const [mealFat, setMealFat] = useState("");
 
-  // Bug 21: include todayKey and load functions in deps
   useEffect(() => {
     loadProfile();
     loadMeals(todayKey);
-  }, [todayKey, loadProfile, loadMeals]);
+    loadQuickMeals();
+    loadWater(todayKey);
+  }, [todayKey, loadProfile, loadMeals, loadQuickMeals, loadWater]);
 
   const todayMeals = meals[todayKey] ?? [];
   const dayMacros = useMemo(() => computeDayMacros(todayMeals), [todayMeals]);
+  const todayWater = waterLog[todayKey] ?? 0;
 
-  // Bug 19: Guard against NaN ring offset when calorie_target is 0
-  const calPct = profile && profile.calorie_target > 0
+  const calPct = profile && profile.calorie_target > 0 && dayMacros.calories >= 0
     ? Math.min(dayMacros.calories / profile.calorie_target, 1)
     : 0;
-  const caloriesRemaining = profile
+  const safeCalPct = Number.isFinite(calPct) ? calPct : 0;
+  const caloriesRemaining = profile && profile.calorie_target > 0
     ? profile.calorie_target - dayMacros.calories
     : 0;
 
-  // Bug 16: Clamp remainingCals to prevent negative macro targets
   const macroTargets = useMemo(() => {
     if (!profile) return { protein: 150, carbs: 250, fat: 65 };
     const proteinCals = profile.protein_g * 4;
     const remainingCals = Math.max(0, profile.calorie_target - proteinCals);
-    // Roughly 55% carbs, 45% fat of remaining
     const carbsCals = remainingCals * 0.55;
     const fatCals = remainingCals * 0.45;
     return {
@@ -333,19 +444,27 @@ export default function NutritionScreen() {
     };
   }, [profile]);
 
-  // Bug 17: Validate negative calories and clamp macros
+  const ringOffset = CIRCUMFERENCE * (1 - safeCalPct);
+
   const handleAddMeal = useCallback(() => {
     const cal = parseInt(mealCalories, 10);
     if (!mealName.trim() || isNaN(cal)) return;
     if (cal < 0) return;
 
-    addMeal(todayKey, {
+    const mealData = {
       name: mealName.trim(),
       calories: cal,
       protein_g: Math.max(0, parseInt(mealProtein, 10) || 0),
       carbs_g: Math.max(0, parseInt(mealCarbs, 10) || 0),
       fat_g: Math.max(0, parseInt(mealFat, 10) || 0),
-    });
+    };
+
+    addMeal(todayKey, mealData);
+
+    // Save as quick meal if toggled
+    if (saveAsQuick) {
+      addQuickMeal(mealData);
+    }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setMealName("");
@@ -353,18 +472,40 @@ export default function NutritionScreen() {
     setMealProtein("");
     setMealCarbs("");
     setMealFat("");
+    setSaveAsQuick(false);
     setShowMealForm(false);
-  }, [mealName, mealCalories, mealProtein, mealCarbs, mealFat, todayKey, addMeal]);
+  }, [mealName, mealCalories, mealProtein, mealCarbs, mealFat, todayKey, addMeal, saveAsQuick, addQuickMeal]);
+
+  const handleUseQuickMeal = useCallback(
+    (qm: QuickMeal) => {
+      addMeal(todayKey, {
+        name: qm.name,
+        calories: qm.calories,
+        protein_g: qm.protein_g,
+        carbs_g: qm.carbs_g,
+        fat_g: qm.fat_g,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [todayKey, addMeal],
+  );
 
   const handleDeleteMeal = useCallback(
     (mealId: number) => {
-      deleteMeal(todayKey, mealId);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      Alert.alert("Delete Meal", "Remove this meal?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            deleteMeal(todayKey, mealId);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          },
+        },
+      ]);
     },
     [todayKey, deleteMeal],
   );
-
-  const ringOffset = CIRCUMFERENCE * (1 - calPct);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -398,7 +539,6 @@ export default function NutritionScreen() {
           {/* ── No Profile: Setup ── */}
           {(!profile || showEditProfile) && (
             <ProfileSetup
-              // Bug 18: pass existing profile as initialProfile
               initialProfile={showEditProfile ? profile : null}
               onSave={(p) => {
                 updateProfile(p);
@@ -410,11 +550,11 @@ export default function NutritionScreen() {
           {/* ── Dashboard (profile exists) ── */}
           {profile && !showEditProfile && (
             <>
-              {/* Calorie Ring */}
+              {/* Calorie Ring + Water */}
               <SectionHeader title="Daily Dashboard" />
-              <Panel style={styles.dashPanel}>
-                <View style={styles.ringRow}>
-                  {/* SVG Ring */}
+              <Panel tone="hero" delay={0}>
+                <View style={styles.dashRow}>
+                  {/* Calorie Ring */}
                   <View style={styles.ringWrap}>
                     <Svg width={RING_SIZE} height={RING_SIZE}>
                       <Circle
@@ -444,23 +584,18 @@ export default function NutritionScreen() {
                     </Svg>
                     <View style={styles.ringCenter}>
                       <Text style={styles.ringValue}>{dayMacros.calories}</Text>
-                      <Text style={styles.ringLabel}>
-                        / {profile.calorie_target}
-                      </Text>
+                      <Text style={styles.ringLabel}>/ {profile.calorie_target}</Text>
                       <Text style={styles.ringUnit}>cal</Text>
                     </View>
                   </View>
 
-                  {/* Remaining */}
-                  <View style={styles.ringInfo}>
+                  {/* Right info column */}
+                  <View style={styles.dashInfo}>
                     <Text
                       style={[
                         styles.remainingValue,
                         {
-                          color:
-                            caloriesRemaining < 0
-                              ? colors.danger
-                              : colors.body,
+                          color: caloriesRemaining < 0 ? colors.danger : colors.body,
                         },
                       ]}
                     >
@@ -469,10 +604,25 @@ export default function NutritionScreen() {
                         : `+${Math.abs(caloriesRemaining)}`}
                     </Text>
                     <Text style={styles.remainingLabel}>
-                      {caloriesRemaining >= 0
-                        ? "cal remaining"
-                        : "cal over target"}
+                      {caloriesRemaining >= 0 ? "cal remaining" : "cal over target"}
                     </Text>
+
+                    {/* Goal badge */}
+                    <View style={[styles.goalBadge, {
+                      backgroundColor:
+                        profile.goal === "cut" ? colors.dangerDim
+                          : profile.goal === "bulk" ? colors.bodyDim
+                            : colors.primaryDim,
+                    }]}>
+                      <Text style={[styles.goalBadgeText, {
+                        color:
+                          profile.goal === "cut" ? colors.danger
+                            : profile.goal === "bulk" ? colors.body
+                              : colors.text,
+                      }]}>
+                        {profile.goal.toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
@@ -502,6 +652,39 @@ export default function NutritionScreen() {
                 </View>
               </Panel>
 
+              {/* ── Water Tracking ── */}
+              <SectionHeader title="Water" />
+              <Panel delay={100}>
+                <WaterRing
+                  glasses={todayWater}
+                  target={waterTarget}
+                  onAdd={() => addWaterFn(todayKey)}
+                  onRemove={() => removeWaterFn(todayKey)}
+                />
+              </Panel>
+
+              {/* ── Quick Meals ── */}
+              {quickMeals.length > 0 && (
+                <>
+                  <SectionHeader title="Quick Add" right={`${quickMeals.length} saved`} />
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.quickMealsScroll}
+                    contentContainerStyle={styles.quickMealsContent}
+                  >
+                    {quickMeals.map((qm) => (
+                      <QuickMealCard
+                        key={qm.id}
+                        meal={qm}
+                        onUse={() => handleUseQuickMeal(qm)}
+                        onDelete={() => deleteQuickMeal(qm.id)}
+                      />
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+
               {/* ── Add Meal ── */}
               {!showMealForm ? (
                 <Pressable
@@ -515,7 +698,7 @@ export default function NutritionScreen() {
                   <Text style={styles.addMealText}>Add Meal</Text>
                 </Pressable>
               ) : (
-                <>
+                <Animated.View entering={FadeInDown.duration(300)}>
                   <SectionHeader title="Add Meal" />
                   <Panel>
                     <Text style={styles.fieldLabel}>Name</Text>
@@ -577,6 +760,29 @@ export default function NutritionScreen() {
                       </View>
                     </View>
 
+                    {/* Save as quick meal toggle */}
+                    <Pressable
+                      style={styles.quickSaveToggle}
+                      onPress={() => {
+                        setSaveAsQuick(!saveAsQuick);
+                        Haptics.selectionAsync();
+                      }}
+                    >
+                      <Ionicons
+                        name={saveAsQuick ? "bookmark" : "bookmark-outline"}
+                        size={18}
+                        color={saveAsQuick ? colors.body : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.quickSaveText,
+                          saveAsQuick && { color: colors.body },
+                        ]}
+                      >
+                        Save to Quick Meals
+                      </Text>
+                    </Pressable>
+
                     <View style={styles.formActions}>
                       <Pressable
                         style={styles.cancelFormBtn}
@@ -587,6 +793,7 @@ export default function NutritionScreen() {
                           setMealProtein("");
                           setMealCarbs("");
                           setMealFat("");
+                          setSaveAsQuick(false);
                         }}
                       >
                         <Text style={styles.cancelFormText}>Cancel</Text>
@@ -595,8 +802,7 @@ export default function NutritionScreen() {
                         style={[
                           styles.primaryBtn,
                           { flex: 1 },
-                          (!mealName.trim() || !mealCalories) &&
-                            styles.btnDisabled,
+                          (!mealName.trim() || !mealCalories) && styles.btnDisabled,
                         ]}
                         onPress={handleAddMeal}
                         disabled={!mealName.trim() || !mealCalories}
@@ -605,7 +811,7 @@ export default function NutritionScreen() {
                       </Pressable>
                     </View>
                   </Panel>
-                </>
+                </Animated.View>
               )}
 
               {/* ── Today's Meals ── */}
@@ -614,46 +820,34 @@ export default function NutritionScreen() {
                 right={`${todayMeals.length} meals`}
               />
               {todayMeals.length === 0 ? (
-                <Panel>
+                <Panel delay={200}>
                   <Text style={styles.emptyText}>No meals logged today</Text>
-                  <Text style={styles.emptySub}>
-                    Tap "Add Meal" to start tracking
-                  </Text>
+                  <Text style={styles.emptySub}>Tap "Add Meal" to start tracking</Text>
                 </Panel>
               ) : (
-                todayMeals.map((meal) => (
-                  <Panel key={meal.id} style={styles.mealCard}>
+                todayMeals.map((meal, i) => (
+                  <Panel key={meal.id} style={styles.mealCard} delay={200 + i * 40}>
                     <View style={styles.mealTop}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.mealName}>{meal.name}</Text>
-                        <Text style={styles.mealCal}>
-                          {meal.calories} cal
-                        </Text>
+                        <Text style={styles.mealCal}>{meal.calories} cal</Text>
                       </View>
                       <Pressable
                         onPress={() => handleDeleteMeal(meal.id)}
                         style={styles.deleteBtn}
                         hitSlop={8}
                       >
-                        <Ionicons
-                          name="trash-outline"
-                          size={16}
-                          color={colors.danger}
-                        />
+                        <Ionicons name="trash-outline" size={16} color={colors.danger} />
                       </Pressable>
                     </View>
                     <View style={styles.mealMacros}>
                       <Text style={[styles.mealMacro, { color: colors.mind }]}>
                         P {meal.protein_g}g
                       </Text>
-                      <Text
-                        style={[styles.mealMacro, { color: colors.general }]}
-                      >
+                      <Text style={[styles.mealMacro, { color: colors.general }]}>
                         C {meal.carbs_g}g
                       </Text>
-                      <Text
-                        style={[styles.mealMacro, { color: colors.warning }]}
-                      >
+                      <Text style={[styles.mealMacro, { color: colors.warning }]}>
                         F {meal.fat_g}g
                       </Text>
                     </View>
@@ -664,72 +858,34 @@ export default function NutritionScreen() {
               {/* ── Summary Stats ── */}
               <SectionHeader title="Summary" />
               <View style={styles.summaryRow}>
-                <Panel style={styles.summaryCard}>
-                  <Text style={styles.summaryLabel}>Calories</Text>
-                  <Text style={styles.summaryValue}>
-                    {dayMacros.calories}
-                  </Text>
-                  <Text style={styles.summaryTarget}>
-                    / {profile.calorie_target}
-                  </Text>
+                <Panel style={styles.summaryCard} delay={300}>
+                  <Ionicons name="flame-outline" size={18} color={colors.body} />
+                  <MetricValue
+                    label="Calories"
+                    value={dayMacros.calories}
+                    size="sm"
+                    animated
+                  />
+                  <Text style={styles.summaryTarget}>/ {profile.calorie_target}</Text>
                 </Panel>
-                <Panel style={styles.summaryCard}>
-                  <Text style={styles.summaryLabel}>Protein</Text>
-                  <Text style={[styles.summaryValue, { color: colors.mind }]}>
-                    {dayMacros.protein}g
-                  </Text>
-                  <Text style={styles.summaryTarget}>
-                    / {profile.protein_g}g
-                  </Text>
+                <Panel style={styles.summaryCard} delay={350}>
+                  <Ionicons name="barbell-outline" size={18} color={colors.mind} />
+                  <MetricValue
+                    label="Protein"
+                    value={`${dayMacros.protein}g`}
+                    size="sm"
+                    color={colors.mind}
+                  />
+                  <Text style={styles.summaryTarget}>/ {profile.protein_g}g</Text>
                 </Panel>
               </View>
             </>
           )}
+
+          <View style={{ height: 60 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-// ─── MacroBar Sub-Component ─────────────────────────────────────────────────
-
-function MacroBar({
-  label,
-  current,
-  target,
-  unit,
-  color,
-}: {
-  label: string;
-  current: number;
-  target: number;
-  unit: string;
-  color: string;
-}) {
-  const pct = target > 0 ? Math.min(current / target, 1) : 0;
-
-  return (
-    <View style={styles.macroBarWrap}>
-      <View style={styles.macroBarHeader}>
-        <Text style={styles.macroBarLabel}>{label}</Text>
-        <Text style={styles.macroBarValue}>
-          {current}
-          <Text style={styles.macroBarTarget}>
-            {" "}
-            / {target}
-            {unit}
-          </Text>
-        </Text>
-      </View>
-      <View style={styles.barTrack}>
-        <View
-          style={[
-            styles.barFill,
-            { width: `${pct * 100}%`, backgroundColor: color },
-          ]}
-        />
-      </View>
-    </View>
   );
 }
 
@@ -772,10 +928,7 @@ const styles = StyleSheet.create({
   },
 
   // Segment buttons
-  segmentRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-  },
+  segmentRow: { flexDirection: "row", gap: spacing.sm },
   segmentBtn: {
     flex: 1,
     paddingVertical: spacing.md,
@@ -789,11 +942,7 @@ const styles = StyleSheet.create({
     borderColor: colors.body,
     backgroundColor: colors.bodyDim,
   },
-  segmentText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textSecondary,
-  },
+  segmentText: { fontSize: 14, fontWeight: "600", color: colors.textSecondary },
   segmentTextActive: { color: colors.body },
 
   // Activity
@@ -816,7 +965,7 @@ const styles = StyleSheet.create({
   activityTextActive: { color: colors.body },
   activityMult: { ...fonts.mono, fontSize: 12, color: colors.textMuted },
 
-  // Preview box
+  // Preview
   previewBox: {
     marginTop: spacing.xl,
     padding: spacing.lg,
@@ -846,11 +995,9 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.4 },
 
   // Dashboard
-  dashPanel: { paddingVertical: spacing.xl },
-  ringRow: {
+  dashRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
     gap: spacing.xl,
   },
   ringWrap: {
@@ -864,8 +1011,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   ringValue: {
-    ...fonts.monoValue,
+    fontFamily: MONO_FONT,
     fontSize: 22,
+    fontWeight: "800",
+    color: colors.text,
   },
   ringLabel: {
     fontSize: 12,
@@ -878,16 +1027,27 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 1,
   },
-  ringInfo: { alignItems: "center" },
+  dashInfo: { flex: 1, alignItems: "center", gap: spacing.sm },
   remainingValue: {
-    ...fonts.monoValue,
+    fontFamily: MONO_FONT,
     fontSize: 28,
+    fontWeight: "800",
   },
   remainingLabel: {
     fontSize: 12,
     color: colors.textMuted,
-    marginTop: spacing.xs,
     textAlign: "center",
+  },
+  goalBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    marginTop: spacing.xs,
+  },
+  goalBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 2,
   },
 
   // Macro bars
@@ -916,6 +1076,83 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
 
+  // Water
+  waterContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xl,
+  },
+  waterRingWrap: {
+    width: WATER_RING_SIZE,
+    height: WATER_RING_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  waterCenter: {
+    position: "absolute",
+    alignItems: "center",
+  },
+  waterValue: {
+    fontFamily: MONO_FONT,
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
+    marginTop: 2,
+  },
+  waterInfo: { flex: 1, gap: 4 },
+  waterMl: {
+    fontFamily: MONO_FONT,
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.general,
+  },
+  waterTarget: { fontSize: 12, color: colors.textMuted },
+  waterBtns: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  waterBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.inputBg,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  waterBtnActive: {
+    borderColor: colors.general + "40",
+    backgroundColor: colors.generalDim,
+  },
+
+  // Quick meals
+  quickMealsScroll: { marginTop: spacing.sm },
+  quickMealsContent: { gap: spacing.sm, paddingRight: spacing.lg },
+  quickMealCard: {
+    width: 120,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.panelBorder,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: 4,
+  },
+  quickMealName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  quickMealCal: {
+    fontFamily: MONO_FONT,
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.body,
+  },
+  quickMealMacros: { flexDirection: "row", gap: spacing.sm, marginTop: 4 },
+  quickMealMacro: { fontFamily: MONO_FONT, fontSize: 10, fontWeight: "600" },
+
   // Add Meal button
   addMealBtn: {
     flexDirection: "row",
@@ -929,11 +1166,7 @@ const styles = StyleSheet.create({
     borderColor: colors.body,
     borderStyle: "dashed",
   },
-  addMealText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.body,
-  },
+  addMealText: { fontSize: 16, fontWeight: "600", color: colors.body },
 
   // Meal form
   macroInputRow: {
@@ -942,6 +1175,18 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   macroInputCol: { flex: 1 },
+  quickSaveToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  quickSaveText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: colors.textSecondary,
+  },
   formActions: {
     flexDirection: "row",
     gap: spacing.md,
@@ -986,13 +1231,7 @@ const styles = StyleSheet.create({
 
   // Summary
   summaryRow: { flexDirection: "row", gap: spacing.md },
-  summaryCard: { flex: 1, alignItems: "center", gap: 2 },
-  summaryLabel: {
-    ...fonts.kicker,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
-  },
-  summaryValue: { ...fonts.monoValue },
+  summaryCard: { flex: 1, alignItems: "center", gap: 4 },
   summaryTarget: { fontSize: 12, color: colors.textMuted },
 
   // Empty
