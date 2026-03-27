@@ -17,6 +17,9 @@ import { WeekComparison } from "../../src/components/ui/WeekComparison";
 import { WeeklySummary } from "../../src/components/ui/WeeklySummary";
 import { PulsingGlow } from "../../src/components/ui/PulsingGlow";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
+import { ScoreGauge } from "../../src/components/ui/ScoreGauge";
+import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
+import { FloatingActionButton } from "../../src/components/ui/FloatingActionButton";
 import { useAnalyticsData } from "../../src/hooks/useAnalyticsData";
 import { useEngineStore, selectAllTasksForDate, ENGINES, type TaskWithStatus } from "../../src/stores/useEngineStore";
 import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
@@ -76,6 +79,7 @@ export default function HQScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <HUDBackground />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -100,15 +104,15 @@ export default function HQScreen() {
         <StreakBadge streak={profileStreak} />
 
         {/* Titan Score panel */}
-        <Panel hero style={styles.titanScorePanel}>
+        <Panel hero style={styles.titanScorePanel} delay={0}>
           <View style={styles.titanScoreRow}>
             <View style={styles.titanScoreLeft}>
               <Text style={styles.titanScoreLabel}>TITAN SCORE</Text>
-              <Text style={styles.titanScoreValue}>{analytics.titanScore.toFixed(1)}%</Text>
               <Text style={styles.titanScoreSub}>
                 {analytics.activeEngines}/4 engines active today
               </Text>
             </View>
+            <ScoreGauge score={analytics.titanScore} size={120} label="TODAY" />
           </View>
           {/* Engine progress bars */}
           <View style={styles.engineBars}>
@@ -121,16 +125,8 @@ export default function HQScreen() {
                 <Text style={[styles.engineBarLabel, { color: ENGINE_COLORS[engine] }]}>
                   {ENGINE_LABELS[engine]}
                 </Text>
-                <View style={styles.engineBarTrack}>
-                  <View
-                    style={[
-                      styles.engineBarFill,
-                      {
-                        width: `${analytics.engineScores[engine]}%`,
-                        backgroundColor: ENGINE_COLORS[engine],
-                      },
-                    ]}
-                  />
+                <View style={{ flex: 1 }}>
+                  <TitanProgress value={analytics.engineScores[engine]} color={ENGINE_COLORS[engine]} height={5} />
                 </View>
                 <Text style={styles.engineBarValue}>
                   {analytics.engineScores[engine].toFixed(1)}%
@@ -141,7 +137,7 @@ export default function HQScreen() {
         </Panel>
 
         {/* Engine Overview radar — full width */}
-        <Panel style={styles.radarPanel}>
+        <Panel style={styles.radarPanel} delay={80}>
           <Text style={styles.radarLabel}>ENGINE OVERVIEW</Text>
           <RadarChart scores={analytics.engineScores} size={240} />
         </Panel>
@@ -152,11 +148,12 @@ export default function HQScreen() {
         {/* Engine Sparkline Cards */}
         <SectionHeader title="ENGINES" />
         <View style={styles.sparkGrid}>
-          {ENGINES.map((engine) => (
+          {ENGINES.map((engine, i) => (
             <Panel
               key={engine}
               onPress={() => router.push(`/engine/${engine}`)}
               style={styles.sparkCard}
+              delay={i * 60 + 160}
             >
               <View style={styles.sparkHeader}>
                 <Text style={[styles.sparkLabel, { color: ENGINE_COLORS[engine] }]}>
@@ -164,7 +161,7 @@ export default function HQScreen() {
                 </Text>
                 <Text style={styles.sparkValue}>{analytics.engineScores[engine]}%</Text>
               </View>
-              <SparklineChart data={analytics.sparklineData[engine]} width={140} height={36} />
+              <SparklineChart data={analytics.sparklineData[engine]} width={140} height={36} color={ENGINE_COLORS[engine]} />
               <Text style={styles.sparkSub}>
                 Today: {analytics.engineScores[engine]}%
               </Text>
@@ -182,7 +179,7 @@ export default function HQScreen() {
 
         {/* Heatmap */}
         <SectionHeader title="ACTIVITY" />
-        <Panel>
+        <Panel delay={300}>
           <HeatmapGrid data={analytics.heatmapData} />
         </Panel>
 
@@ -203,6 +200,7 @@ export default function HQScreen() {
               xp={task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST}
               completed={task.completed}
               kind={task.kind}
+              engine={task.engine}
               onToggle={() => handleToggle(task)}
             />
           ))
@@ -210,6 +208,7 @@ export default function HQScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+      <FloatingActionButton />
     </SafeAreaView>
   );
 }
@@ -234,22 +233,14 @@ const styles = StyleSheet.create({
   // Engine progress bars inside titan score panel
   engineBars: { marginTop: spacing.md, gap: spacing.sm },
   engineBarRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  engineBarLabel: { ...fonts.kicker, fontSize: 9, width: 55 },
-  engineBarTrack: {
-    flex: 1,
-    height: 5,
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    borderRadius: radius.full,
-    overflow: "hidden",
-  },
-  engineBarFill: { height: "100%", borderRadius: radius.full },
+  engineBarLabel: { ...fonts.kicker, fontSize: 9, width: 60, flexShrink: 0 },
   engineBarValue: { ...fonts.mono, fontSize: 11, color: colors.textSecondary, width: 42, textAlign: "right" },
 
   radarLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.sm },
 
   // Sparkline grid
-  sparkGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  sparkCard: { flex: 1, minWidth: "47%" },
+  sparkGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "space-between" },
+  sparkCard: { width: "48%" },
   sparkHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
   sparkLabel: { ...fonts.kicker, fontSize: 9 },
   sparkValue: { ...fonts.mono, fontSize: 16, fontWeight: "800", color: colors.text },

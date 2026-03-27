@@ -9,6 +9,7 @@ import { colors, spacing, radius, TOUCH_MIN, fonts, shadows } from "../../src/th
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { PageHeader } from "../../src/components/ui/PageHeader";
+import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { HabitGrid } from "../../src/components/ui/HabitGrid";
 import { ProgressRing } from "../../src/components/ui/ProgressRing";
 import { getTodayKey } from "../../src/lib/date";
@@ -27,6 +28,7 @@ export default function TrackScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <HUDBackground />
       <View style={styles.header}>
         <PageHeader kicker="TRACK" title="Track" />
         <View style={styles.tabs}>

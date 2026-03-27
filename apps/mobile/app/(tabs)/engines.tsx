@@ -8,6 +8,7 @@ import { EngineCard } from "../../src/components/ui/EngineCard";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { PageHeader } from "../../src/components/ui/PageHeader";
 import { Panel } from "../../src/components/ui/Panel";
+import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { getTodayKey } from "../../src/lib/date";
 import { useEngineStore, selectTotalScore, selectAllTasksForDate } from "../../src/stores/useEngineStore";
 import type { EngineKey } from "../../src/db/schema";
@@ -48,6 +49,7 @@ export default function EnginesScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <HUDBackground />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <PageHeader kicker="SYSTEM // ENGINES" title="Engines" subtitle="Your life operating system" />
 

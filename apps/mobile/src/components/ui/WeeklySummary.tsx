@@ -22,16 +22,16 @@ export const WeeklySummary = React.memo(function WeeklySummary({
     <>
       <SectionHeader title="THIS WEEK" />
       <View style={styles.row}>
-        <Panel style={styles.card}>
-          <Text style={styles.label}>AVG TITAN SCORE</Text>
+        <Panel style={styles.card} delay={0}>
+          <Text style={styles.label} numberOfLines={1}>AVG SCORE</Text>
           <Text style={styles.value}>{avgScore}%</Text>
         </Panel>
-        <Panel style={styles.card}>
-          <Text style={styles.label}>TASKS COMPLETED</Text>
+        <Panel style={styles.card} delay={60}>
+          <Text style={styles.label} numberOfLines={1}>COMPLETED</Text>
           <Text style={styles.value}>{tasksCompleted}</Text>
         </Panel>
-        <Panel style={styles.card}>
-          <Text style={styles.label}>BEST DAY</Text>
+        <Panel style={styles.card} delay={120}>
+          <Text style={styles.label} numberOfLines={1}>BEST DAY</Text>
           <Text style={styles.value}>{bestDayScore}%</Text>
           <Text style={styles.subLabel}>{formatDateShort(bestDayDate)}</Text>
         </Panel>

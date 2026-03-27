@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, fonts, shadows } from "../../src/theme";
+import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
 import { Card } from "../../src/components/ui/Card";
@@ -25,6 +26,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <HUDBackground />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}

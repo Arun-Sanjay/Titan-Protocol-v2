@@ -6,6 +6,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius } from "../../src/theme";
 import { PageHeader } from "../../src/components/ui/PageHeader";
+import { Panel } from "../../src/components/ui/Panel";
+import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 
 type HubItem = {
   icon: string;
@@ -35,6 +37,7 @@ export default function HubScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
+      <HUDBackground />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -43,18 +46,15 @@ export default function HubScreen() {
         <PageHeader kicker="TOOLS" title="Hub" subtitle="Tools & utilities" />
 
         <View style={styles.grid}>
-          {HUB_ITEMS.map((item) => (
-            <Pressable
+          {HUB_ITEMS.map((item, i) => (
+            <Panel
               key={item.route}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push(item.route as any);
               }}
-              style={({ pressed }) => [
-                styles.card,
-                pressed && styles.cardPressed,
-                { borderColor: item.color + "20" },
-              ]}
+              style={{ ...styles.card, borderColor: item.color + "20" }}
+              delay={i * 50}
             >
               <View style={[styles.iconCircle, { backgroundColor: item.color + "15" }]}>
                 <Text style={styles.emoji}>{item.icon}</Text>
@@ -65,7 +65,7 @@ export default function HubScreen() {
                   <Text style={styles.comingSoonText}>SOON</Text>
                 </View>
               )}
-            </Pressable>
+            </Panel>
           ))}
         </View>
 

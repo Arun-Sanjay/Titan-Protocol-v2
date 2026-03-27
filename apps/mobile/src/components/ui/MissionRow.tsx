@@ -9,17 +9,26 @@ import Animated, {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, TOUCH_MIN, fonts, shadows } from "../../theme";
+import type { EngineKey } from "../../db/schema";
+
+const ENGINE_BORDER_COLORS: Record<EngineKey, string> = {
+  body: "#00FF88",
+  mind: "#A78BFA",
+  money: "#FBBF24",
+  general: "#60A5FA",
+};
 
 type Props = {
   title: string;
   xp: number;
   completed: boolean;
   kind: "main" | "secondary";
+  engine?: EngineKey;
   onToggle: () => void;
   onDelete?: () => void;
 };
 
-export const MissionRow = React.memo(function MissionRow({ title, xp, completed, kind, onToggle, onDelete }: Props) {
+export const MissionRow = React.memo(function MissionRow({ title, xp, completed, kind, engine, onToggle, onDelete }: Props) {
   const translateX = useSharedValue(0);
   const checkScale = useSharedValue(completed ? 1 : 0);
 
@@ -61,7 +70,7 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
   return (
     <GestureDetector gesture={swipeGesture}>
       <Animated.View style={[styles.container, rowStyle]}>
-        <Pressable onPress={handleToggle} style={[styles.row, completed && styles.rowDone]}>
+        <Pressable onPress={handleToggle} style={[styles.row, completed && styles.rowDone, { borderLeftWidth: 3, borderLeftColor: engine ? ENGINE_BORDER_COLORS[engine] : "rgba(255, 255, 255, 0.12)" }]}>
           <View style={[styles.checkbox, completed && styles.checkboxDone]}>
             <Animated.View style={[styles.checkInner, checkStyle]} />
           </View>
