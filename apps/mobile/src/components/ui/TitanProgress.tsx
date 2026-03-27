@@ -4,43 +4,119 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withRepeat,
   Easing,
+  interpolate,
 } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors, radius } from "../../theme";
 
+const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
+
 type Props = {
-  value: number; // 0–1
+  /** Progress value 0-100 */
+  value: number;
+  /** Override fill color (replaces gradient with solid) */
   color?: string;
+  /** Track height in px. Default 7 */
   height?: number;
+  /** Animate fill width. Default true */
+  animated?: boolean;
+  /** Show shimmer on fill. Default true */
+  shimmer?: boolean;
 };
 
-export const TitanProgress = React.memo(function TitanProgress({
-  value,
-  color = colors.text,
-  height = 7,
-}: Props) {
-  const width = useSharedValue(0);
+/* ---------- Shimmer highlight strip ---------- */
+const Shimmer = React.memo(function Shimmer() {
+  const translate = useSharedValue(-1);
 
   useEffect(() => {
-    width.value = withTiming(Math.min(1, Math.max(0, value)), {
-      duration: 800,
-      easing: Easing.bezierFn(0.25, 0.1, 0.25, 1),
-    });
-  }, [value]);
+    translate.value = withRepeat(
+      withTiming(2, { duration: 2500, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      false,
+    );
+  }, []);
 
-  const fillStyle = useAnimatedStyle(() => ({
-    width: `${width.value * 100}%` as any,
+  const shimmerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: `${translate.value * 100}%` as any }],
+    opacity: interpolate(
+      translate.value,
+      [-1, 0, 1, 2],
+      [0, 0.5, 0.5, 0],
+    ),
   }));
 
   return (
-    <View style={[styles.track, { height }]}>
-      <Animated.View
-        style={[
-          styles.fill,
-          { height, backgroundColor: color },
-          fillStyle,
-        ]}
-      />
+    <Animated.View style={[styles.shimmerStrip, shimmerStyle]} />
+  );
+});
+
+/* ---------- Main Component ---------- */
+export const TitanProgress = React.memo(function TitanProgress({
+  value,
+  color,
+  height = 7,
+  animated = true,
+  shimmer = true,
+}: Props) {
+  const clamped = Math.max(0, Math.min(value, 100));
+  const isOverflow = value > 100;
+  const fillWidth = useSharedValue(animated ? 0 : clamped);
+
+  useEffect(() => {
+    if (animated) {
+      fillWidth.value = withTiming(clamped, {
+        duration: 600,
+        easing: Easing.bezierFn(0.4, 0, 0.2, 1),
+      });
+    } else {
+      fillWidth.value = clamped;
+    }
+  }, [clamped, animated]);
+
+  const fillAnimStyle = useAnimatedStyle(() => ({
+    width: `${fillWidth.value}%` as any,
+  }));
+
+  // Danger glow for overflow
+  const trackOverflowStyle = isOverflow
+    ? {
+        borderColor: "rgba(248,113,113,0.40)",
+        shadowColor: colors.danger,
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 0 },
+      }
+    : undefined;
+
+  return (
+    <View style={[styles.track, { height }, trackOverflowStyle]}>
+      <Animated.View style={[styles.fillContainer, { height }, fillAnimStyle]}>
+        {color ? (
+          <View
+            style={[
+              styles.fillSolid,
+              {
+                height,
+                backgroundColor: isOverflow ? colors.danger : color,
+              },
+            ]}
+          />
+        ) : (
+          <LinearGradient
+            colors={
+              isOverflow
+                ? [colors.danger, "rgba(248,113,113,0.7)"]
+                : ["rgba(210,220,233,0.58)", "rgba(244,248,255,0.95)"]
+            }
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={[styles.fillGradient, { height }]}
+          />
+        )}
+        {shimmer && clamped > 0 && <Shimmer />}
+      </Animated.View>
     </View>
   );
 });
@@ -48,13 +124,31 @@ export const TitanProgress = React.memo(function TitanProgress({
 const styles = StyleSheet.create({
   track: {
     width: "100%",
-    backgroundColor: "rgba(0, 0, 0, 0.92)",
+    backgroundColor: "rgba(0,0,0,0.92)",
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.12)",
+    borderColor: "rgba(255,255,255,0.12)",
     overflow: "hidden",
   },
-  fill: {
+  fillContainer: {
+    borderRadius: radius.full,
+    overflow: "hidden",
+  },
+  fillSolid: {
+    flex: 1,
+    borderRadius: radius.full,
+  },
+  fillGradient: {
+    flex: 1,
+    borderRadius: radius.full,
+  },
+  shimmerStrip: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "50%",
+    height: "100%",
+    backgroundColor: "rgba(255,255,255,0.25)",
     borderRadius: radius.full,
   },
 });
