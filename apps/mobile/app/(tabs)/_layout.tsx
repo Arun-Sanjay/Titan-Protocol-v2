@@ -56,7 +56,7 @@ export default function TabLayout() {
         name="engines"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon name="flash" label="Engines" focused={focused} />
+            <TabIcon name="flash" label="Engine" focused={focused} />
           ),
         }}
       />
