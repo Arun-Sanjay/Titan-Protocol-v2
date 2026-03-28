@@ -150,7 +150,26 @@ export default function SettingsScreen() {
         Alert.alert("No Data", "Nothing to export yet.");
         return;
       }
-      const json = JSON.stringify(data, null, 2);
+      const json = JSON.stringify(data);
+      // Warn if export is very large
+      if (json.length > 500000) {
+        Alert.alert(
+          "Large Backup",
+          `Your backup is ${(json.length / 1024).toFixed(0)}KB. Sharing may be slow. Continue?`,
+          [
+            { text: "Cancel", style: "cancel", onPress: () => setExporting(false) },
+            {
+              text: "Continue",
+              onPress: async () => {
+                await Share.share({ message: json, title: "Titan Protocol Backup" });
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                setExporting(false);
+              },
+            },
+          ],
+        );
+        return;
+      }
       await Share.share({
         message: json,
         title: "Titan Protocol Backup",

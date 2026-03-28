@@ -22,6 +22,7 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey } from "../../src/lib/date";
+import { useWeightStore } from "../../src/stores/useWeightStore";
 import {
   useNutritionStore,
   computeTDEE,
@@ -403,8 +404,13 @@ export default function NutritionScreen() {
   const addWaterFn = useNutritionStore((s) => s.addWater);
   const removeWaterFn = useNutritionStore((s) => s.removeWater);
 
+  // Weight sync: check if weight tracker has a different weight
+  const weightLoad = useWeightStore((s) => s.load);
+  const weightGetLatest = useWeightStore((s) => s.getLatest);
+
   const [showMealForm, setShowMealForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showWeightSync, setShowWeightSync] = useState(false);
   const [saveAsQuick, setSaveAsQuick] = useState(false);
   const [mealName, setMealName] = useState("");
   const [mealCalories, setMealCalories] = useState("");
@@ -417,7 +423,17 @@ export default function NutritionScreen() {
     loadMeals(todayKey);
     loadQuickMeals();
     loadWater(todayKey);
-  }, [todayKey, loadProfile, loadMeals, loadQuickMeals, loadWater]);
+    weightLoad();
+  }, [todayKey, loadProfile, loadMeals, loadQuickMeals, loadWater, weightLoad]);
+
+  // Check if weight tracker has a newer weight than the profile
+  useEffect(() => {
+    if (!profile) return;
+    const latest = weightGetLatest();
+    if (latest && Math.abs(latest.weightKg - profile.weight_kg) >= 1) {
+      setShowWeightSync(true);
+    }
+  }, [profile, weightGetLatest]);
 
   const todayMeals = meals[todayKey] ?? [];
   const dayMacros = useMemo(() => computeDayMacros(todayMeals), [todayMeals]);
@@ -433,14 +449,17 @@ export default function NutritionScreen() {
 
   const macroTargets = useMemo(() => {
     if (!profile) return { protein: 150, carbs: 250, fat: 65 };
-    const proteinCals = profile.protein_g * 4;
+    // Cap protein calories at 40% of total to prevent carbs/fat from disappearing
+    const maxProteinCals = profile.calorie_target * 0.4;
+    const proteinCals = Math.min(profile.protein_g * 4, maxProteinCals);
+    const effectiveProtein = Math.round(proteinCals / 4);
     const remainingCals = Math.max(0, profile.calorie_target - proteinCals);
     const carbsCals = remainingCals * 0.55;
     const fatCals = remainingCals * 0.45;
     return {
-      protein: profile.protein_g,
-      carbs: Math.round(carbsCals / 4),
-      fat: Math.round(fatCals / 9),
+      protein: effectiveProtein,
+      carbs: Math.max(20, Math.round(carbsCals / 4)),
+      fat: Math.max(10, Math.round(fatCals / 9)),
     };
   }, [profile]);
 
@@ -550,6 +569,32 @@ export default function NutritionScreen() {
           {/* ── Dashboard (profile exists) ── */}
           {profile && !showEditProfile && (
             <>
+              {/* Weight sync banner */}
+              {showWeightSync && (() => {
+                const latest = weightGetLatest();
+                if (!latest) return null;
+                return (
+                  <Pressable
+                    style={styles.syncBanner}
+                    onPress={() => {
+                      const updated = { ...profile, weight_kg: latest.weightKg };
+                      const tdee = computeTDEE(updated);
+                      const goalOffset = profile.goal === "cut" ? -500 : profile.goal === "bulk" ? 300 : 0;
+                      updated.calorie_target = Math.max(tdee + goalOffset, profile.sex === "female" ? 1200 : 1500);
+                      updated.protein_g = Math.round(latest.weightKg * 2.0);
+                      updateProfile(updated);
+                      setShowWeightSync(false);
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    }}
+                  >
+                    <Ionicons name="sync-outline" size={16} color={colors.general} />
+                    <Text style={styles.syncBannerText}>
+                      Weight tracker shows {latest.weightKg}kg (profile: {profile.weight_kg}kg). Tap to sync.
+                    </Text>
+                  </Pressable>
+                );
+              })()}
+
               {/* Calorie Ring + Water */}
               <SectionHeader title="Daily Dashboard" />
               <Panel tone="hero" delay={0}>
@@ -995,6 +1040,26 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.4 },
 
   // Dashboard
+  // Weight sync banner
+  syncBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.generalDim,
+    borderWidth: 1,
+    borderColor: colors.general + "30",
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.md,
+  },
+  syncBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.general,
+    fontWeight: "500",
+  },
+
   dashRow: {
     flexDirection: "row",
     alignItems: "center",

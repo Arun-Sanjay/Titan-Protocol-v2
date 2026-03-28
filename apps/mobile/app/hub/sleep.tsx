@@ -383,12 +383,16 @@ export default function SleepScreen() {
   const [notes, setNotes] = useState("");
   const [showForm, setShowForm] = useState(false);
 
-  // Load 14 days of entries for stats
+  // How many days of history to show
+  const [historyDays, setHistoryDays] = useState(7);
+
+  // Load entries for stats + visible history
   useEffect(() => {
-    for (let i = 0; i <= 14; i++) {
+    const daysToLoad = Math.max(historyDays, 14); // always load 14 for stats
+    for (let i = 0; i <= daysToLoad; i++) {
       loadEntry(addDays(todayKey, -i));
     }
-  }, [todayKey, loadEntry]);
+  }, [todayKey, loadEntry, historyDays]);
 
   const todayEntry = entries[todayKey] ?? null;
 
@@ -414,16 +418,16 @@ export default function SleepScreen() {
     return result;
   }, [entries, todayKey]);
 
-  // History (excluding today)
+  // History (excluding today) — shows up to historyDays
   const history = useMemo(() => {
     const result: SleepEntry[] = [];
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 1; i <= historyDays; i++) {
       const key = addDays(todayKey, -i);
       const entry = entries[key];
       if (entry) result.push(entry);
     }
     return result;
-  }, [entries, todayKey]);
+  }, [entries, todayKey, historyDays]);
 
   // Sleep consistency (needs 3+ entries)
   const consistency = useMemo(
@@ -946,6 +950,30 @@ export default function SleepScreen() {
             })
           )}
 
+          {/* Show More / Show Less */}
+          {history.length > 0 && (
+            <Pressable
+              style={styles.showMoreBtn}
+              onPress={() => {
+                if (historyDays >= 90) {
+                  setHistoryDays(7);
+                } else {
+                  setHistoryDays((d) => Math.min(d + 30, 90));
+                }
+                Haptics.selectionAsync();
+              }}
+            >
+              <Ionicons
+                name={historyDays >= 90 ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={colors.textSecondary}
+              />
+              <Text style={styles.showMoreText}>
+                {historyDays >= 90 ? "Show Less" : "Show More"}
+              </Text>
+            </Pressable>
+          )}
+
           <View style={{ height: 60 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1383,6 +1411,21 @@ const styles = StyleSheet.create({
     height: 28,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  // Show more
+  showMoreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
+  },
+  showMoreText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.textSecondary,
   },
 
   // Empty
