@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
-  TextInput, Alert,
+  TextInput, Alert, Platform, KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, TOUCH_MIN, fonts, shadows } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
@@ -12,13 +14,15 @@ import { PageHeader } from "../../src/components/ui/PageHeader";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { HabitGrid } from "../../src/components/ui/HabitGrid";
 import { ProgressRing } from "../../src/components/ui/ProgressRing";
-import { getTodayKey } from "../../src/lib/date";
+import { getTodayKey, formatDateShort, getDayOfWeek } from "../../src/lib/date";
 import { useHabitStore } from "../../src/stores/useHabitStore";
 import { useJournalStore } from "../../src/stores/useJournalStore";
 import { useGoalStore } from "../../src/stores/useGoalStore";
 import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
 import type { Habit, Goal } from "../../src/db/schema";
 import { getJSON } from "../../src/db/storage";
+
+const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
 
 type Tab = "habits" | "journal" | "goals";
 
@@ -209,39 +213,264 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
 
 // ─── Journal Tab ───────────────────────────────────────────────────────────
 
+function JournalEntryCard({
+  dateKey,
+  entry,
+  isToday,
+  onPress,
+}: {
+  dateKey: string;
+  entry: { content: string; updated_at: number };
+  isToday: boolean;
+  onPress: () => void;
+}) {
+  const preview = entry.content.length > 120
+    ? entry.content.slice(0, 120).trimEnd() + "..."
+    : entry.content;
+  const wordCount = entry.content.trim().split(/\s+/).filter(Boolean).length;
+  const dayLabel = getDayOfWeek(dateKey);
+  const dateLabel = formatDateShort(dateKey);
+
+  return (
+    <Panel
+      onPress={onPress}
+      style={jStyles.entryCard}
+    >
+      <View style={jStyles.entryHeader}>
+        <View style={jStyles.entryDateCol}>
+          <Text style={[jStyles.entryDay, isToday && { color: colors.body }]}>
+            {isToday ? "Today" : dayLabel}
+          </Text>
+          <Text style={jStyles.entryDate}>{dateLabel}</Text>
+        </View>
+        <View style={jStyles.entryMeta}>
+          <Text style={jStyles.entryWordCount}>{wordCount} words</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+        </View>
+      </View>
+      <Text style={jStyles.entryPreview} numberOfLines={3}>
+        {preview}
+      </Text>
+    </Panel>
+  );
+}
+
+type JournalView = "list" | "write";
+
 function JournalTab({ dateKey }: { dateKey: string }) {
-  const entry = useJournalStore((s) => s.entries[dateKey]);
+  const entries = useJournalStore((s) => s.entries);
+  const recentKeys = useJournalStore((s) => s.recentKeys);
   const loadEntry = useJournalStore((s) => s.loadEntry);
+  const loadRecentEntries = useJournalStore((s) => s.loadRecentEntries);
   const saveEntry = useJournalStore((s) => s.saveEntry);
+  const deleteEntry = useJournalStore((s) => s.deleteEntry);
   const awardXP = useProfileStore((s) => s.awardXP);
 
+  const [view, setView] = useState<JournalView>("list");
+  const [editingKey, setEditingKey] = useState(dateKey); // which date we're editing
   const [content, setContent] = useState("");
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => { loadEntry(dateKey); }, [dateKey]);
-  useEffect(() => { setContent(entry?.content ?? ""); }, [entry]);
+  // Load all recent entries on mount
+  useEffect(() => {
+    loadRecentEntries(90);
+    loadEntry(dateKey);
+  }, [dateKey, loadRecentEntries, loadEntry]);
 
-  const handleSave = () => {
-    saveEntry(dateKey, content);
-    awardXP(dateKey, "journal_entry", XP_REWARDS.JOURNAL_ENTRY);
+  // When switching to write view, populate content
+  useEffect(() => {
+    if (view === "write") {
+      const existing = entries[editingKey];
+      setContent(existing?.content ?? "");
+      setSaved(false);
+    }
+  }, [view, editingKey, entries]);
+
+  const todayEntry = entries[dateKey] ?? null;
+  const hasEntryToday = todayEntry && todayEntry.content && todayEntry.content.trim().length > 0;
+
+  const handleSave = useCallback(() => {
+    if (!content.trim()) return;
+    saveEntry(editingKey, content);
+    // Only award XP for new entries (not edits of existing ones)
+    const wasNew = !entries[editingKey] || !entries[editingKey]?.content?.trim();
+    if (wasNew) {
+      awardXP(editingKey, "journal_entry", XP_REWARDS.JOURNAL_ENTRY);
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  };
+  }, [content, editingKey, entries, saveEntry, awardXP]);
 
+  const handleDelete = useCallback((dk: string) => {
+    Alert.alert("Delete Entry", "Remove this journal entry?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => {
+          deleteEntry(dk);
+          if (view === "write" && editingKey === dk) {
+            setView("list");
+          }
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        },
+      },
+    ]);
+  }, [deleteEntry, view, editingKey]);
+
+  const openEntry = useCallback((dk: string) => {
+    setEditingKey(dk);
+    setView("write");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
+  const openNewToday = useCallback(() => {
+    setEditingKey(dateKey);
+    setView("write");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [dateKey]);
+
+  // ─── Write View ──────────────────────────────────────────────────────
+  if (view === "write") {
+    const isToday = editingKey === dateKey;
+    return (
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+          {/* Back button + date */}
+          <View style={jStyles.writeHeader}>
+            <Pressable
+              onPress={() => setView("list")}
+              style={jStyles.writeBackBtn}
+            >
+              <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
+              <Text style={jStyles.writeBackText}>Entries</Text>
+            </Pressable>
+            <Text style={jStyles.writeDateLabel}>
+              {isToday ? "Today" : `${getDayOfWeek(editingKey)} ${formatDateShort(editingKey)}`}
+            </Text>
+            {!isToday && (
+              <Pressable
+                onPress={() => handleDelete(editingKey)}
+                style={jStyles.writeDeleteBtn}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              </Pressable>
+            )}
+          </View>
+
+          <Panel>
+            <TextInput
+              value={content}
+              onChangeText={(text) => { setContent(text); setSaved(false); }}
+              placeholder={isToday ? "How was your day? What's on your mind..." : "Edit this entry..."}
+              placeholderTextColor={colors.textMuted}
+              style={jStyles.writeInput}
+              multiline
+              textAlignVertical="top"
+              autoFocus={!hasEntryToday && isToday}
+            />
+          </Panel>
+
+          {/* Word count + save */}
+          <View style={jStyles.writeFooter}>
+            <Text style={jStyles.wordCount}>
+              {content.trim().split(/\s+/).filter(Boolean).length} words
+            </Text>
+            <Pressable
+              onPress={handleSave}
+              style={[jStyles.writeSaveBtn, !content.trim() && { opacity: 0.4 }]}
+              disabled={!content.trim()}
+            >
+              <Ionicons
+                name={saved ? "checkmark-circle" : "save-outline"}
+                size={16}
+                color={saved ? colors.body : "#000"}
+              />
+              <Text style={jStyles.writeSaveBtnText}>
+                {saved ? "Saved" : "Save"}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={{ height: 120 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ─── List View ────────────────────────────────────────────────────────
   return (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <SectionHeader title="TODAY'S JOURNAL" />
-      <Panel>
-        <TextInput
-          value={content} onChangeText={setContent} placeholder="Write your thoughts..."
-          placeholderTextColor={colors.textMuted} style={styles.journalInput}
-          multiline textAlignVertical="top"
-        />
-      </Panel>
-      <Pressable onPress={handleSave} style={styles.saveBtn}>
-        <Text style={styles.saveBtnText}>{saved ? "✓ Saved" : "Save Entry"}</Text>
+      {/* Write today prompt */}
+      {!hasEntryToday ? (
+        <Panel onPress={openNewToday} style={jStyles.todayPrompt}>
+          <View style={jStyles.todayPromptRow}>
+            <View style={jStyles.todayPromptIconWrap}>
+              <Ionicons name="create-outline" size={24} color={colors.mind} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={jStyles.todayPromptTitle}>Write today's entry</Text>
+              <Text style={jStyles.todayPromptSub}>
+                Capture your thoughts, wins, and reflections
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </View>
+        </Panel>
+      ) : (
+        <>
+          <SectionHeader title="Today" />
+          <JournalEntryCard
+            dateKey={dateKey}
+            entry={todayEntry!}
+            isToday
+            onPress={() => openEntry(dateKey)}
+          />
+        </>
+      )}
+
+      {/* Past entries */}
+      <SectionHeader
+        title="Past Entries"
+        right={`${recentKeys.filter((k) => k !== dateKey).length} entries`}
+      />
+
+      {recentKeys.filter((k) => k !== dateKey).length === 0 ? (
+        <View style={jStyles.emptyState}>
+          <Ionicons name="book-outline" size={32} color={colors.textMuted} />
+          <Text style={jStyles.emptyText}>No past entries yet</Text>
+          <Text style={jStyles.emptySub}>
+            Your journal history will appear here
+          </Text>
+        </View>
+      ) : (
+        recentKeys
+          .filter((k) => k !== dateKey)
+          .map((dk, i) => {
+            const entry = entries[dk];
+            if (!entry) return null;
+            return (
+              <JournalEntryCard
+                key={dk}
+                dateKey={dk}
+                entry={entry}
+                isToday={false}
+                onPress={() => openEntry(dk)}
+              />
+            );
+          })
+      )}
+
+      {/* New entry button (for past dates — future feature, currently always writes to today) */}
+      <Pressable onPress={openNewToday} style={jStyles.newEntryBtn}>
+        <Ionicons name="add" size={18} color={colors.mind} />
+        <Text style={jStyles.newEntryBtnText}>New Entry</Text>
       </Pressable>
+
       <View style={{ height: 120 }} />
     </ScrollView>
   );
@@ -481,16 +710,7 @@ const styles = StyleSheet.create({
   habitStreak: { ...fonts.mono, fontSize: 10, color: colors.warning },
   habitGridWrap: { marginTop: spacing.md },
 
-  // Journal
-  journalInput: { color: colors.text, fontSize: 16, lineHeight: 26, minHeight: 200 },
-  saveBtn: {
-    backgroundColor: colors.text,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    alignItems: "center",
-    marginTop: spacing.lg,
-  },
-  saveBtnText: { color: "#000", fontWeight: "700", fontSize: 16 },
+  // Journal (old styles removed — now using jStyles below)
 
   // Goals
   goalCard: { marginTop: spacing.md },
@@ -547,4 +767,168 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48, marginBottom: spacing.md },
   emptyText: { fontSize: 18, fontWeight: "600", color: colors.text },
   emptyHint: { fontSize: 14, color: colors.textSecondary, marginTop: spacing.xs },
+});
+
+// ─── Journal Styles ──────────────────────────────────────────────────────────
+
+const jStyles = StyleSheet.create({
+  // Entry card (list view)
+  entryCard: { marginBottom: spacing.sm },
+  entryHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  entryDateCol: {},
+  entryDay: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  entryDate: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 1,
+  },
+  entryMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  entryWordCount: {
+    fontFamily: MONO_FONT,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  entryPreview: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textSecondary,
+  },
+
+  // Today prompt
+  todayPrompt: { marginBottom: spacing.md },
+  todayPromptRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  todayPromptIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.mindDim,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  todayPromptTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  todayPromptSub: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+
+  // Write view
+  writeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  writeBackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: spacing.sm,
+    paddingRight: spacing.md,
+  },
+  writeBackText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  writeDateLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text,
+    textAlign: "center",
+  },
+  writeDeleteBtn: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  writeInput: {
+    color: colors.text,
+    fontSize: 16,
+    lineHeight: 26,
+    minHeight: 280,
+  },
+  writeFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: spacing.md,
+  },
+  wordCount: {
+    fontFamily: MONO_FONT,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  writeSaveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.text,
+    borderRadius: radius.full,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  writeSaveBtnText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#000",
+  },
+
+  // New entry button
+  newEntryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.mind,
+    borderStyle: "dashed",
+  },
+  newEntryBtnText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.mind,
+  },
+
+  // Empty state
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: spacing["3xl"],
+    gap: spacing.sm,
+  },
+  emptyText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
 });
