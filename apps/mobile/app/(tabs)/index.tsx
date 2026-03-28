@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo } from "react";
-import { View, Text, StyleSheet, RefreshControl, Pressable, ScrollView, useWindowDimensions } from "react-native";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
+import { View, Text, StyleSheet, RefreshControl, Pressable, ScrollView, useWindowDimensions, AppState } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, fonts, shadows, radius } from "../../src/theme";
@@ -41,6 +41,16 @@ const ENGINE_COLORS: Record<EngineKey, string> = {
 export default function HQScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
+
+  // AppState listener for midnight crossing
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") setAppActive((c) => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+
   const analytics = useAnalyticsData();
 
   const storeTasks = useEngineStore((s) => s.tasks);

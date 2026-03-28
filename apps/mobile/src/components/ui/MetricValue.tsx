@@ -147,7 +147,7 @@ export const MetricValue = React.memo(function MetricValue({
   suffix,
   animated = false,
 }: Props) {
-  const isNumeric = typeof value === "number";
+  const isNumeric = typeof value === "number" && !isNaN(value) && isFinite(value);
 
   return (
     <View style={styles.container}>

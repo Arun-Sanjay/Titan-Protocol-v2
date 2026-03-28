@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View, Text, ScrollView, StyleSheet, Pressable,
-  TextInput, Alert, Platform, KeyboardAvoidingView,
+  TextInput, Alert, Platform, KeyboardAvoidingView, AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -28,7 +28,14 @@ type Tab = "habits" | "journal" | "goals";
 
 export default function TrackScreen() {
   const [tab, setTab] = useState<Tab>("habits");
-  const dateKey = getTodayKey();
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") setAppActive((c) => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+  const dateKey = useMemo(() => getTodayKey(), [appActive]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

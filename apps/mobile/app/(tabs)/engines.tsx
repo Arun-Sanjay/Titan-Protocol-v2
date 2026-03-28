@@ -1,5 +1,5 @@
-import React, { useEffect, useCallback, useMemo } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
+import React, { useEffect, useCallback, useMemo, useState } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, AppState } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -17,7 +17,14 @@ const ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
 
 export default function EnginesScreen() {
   const router = useRouter();
-  const dateKey = getTodayKey();
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") setAppActive((c) => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+  const dateKey = useMemo(() => getTodayKey(), [appActive]);
 
   const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
   const scores = useEngineStore((s) => s.scores);

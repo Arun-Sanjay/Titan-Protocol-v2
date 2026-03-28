@@ -79,7 +79,7 @@ export default function ProfileScreen() {
         )}
 
         <Pressable
-          onPress={() => router.push("/settings" as any)}
+          onPress={() => router.push("/hub/settings" as any)}
           style={styles.settingsBtn}
         >
           <Ionicons name="settings-outline" size={20} color={colors.text} />

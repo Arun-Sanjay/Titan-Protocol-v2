@@ -22,6 +22,7 @@ type Props = {
 export const PowerRing = React.memo(function PowerRing({ score, size = 200, strokeWidth = 10, showRank = true }: Props) {
   const progress = useSharedValue(0);
   const lastScore = useRef(-1);
+  const ringGradId = useRef(`ringGrad-${Math.random().toString(36).slice(2)}`).current;
   const rank = getDailyRank(score);
 
   const r = (size - strokeWidth) / 2;
@@ -48,7 +49,7 @@ export const PowerRing = React.memo(function PowerRing({ score, size = 200, stro
     <View style={[styles.container, { width: size, height: size }, shadows.ring]}>
       <Svg width={size} height={size}>
         <Defs>
-          <LinearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+          <LinearGradient id={ringGradId} x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0%" stopColor={ringColor} stopOpacity="0.6" />
             <Stop offset="100%" stopColor={ringColor} stopOpacity="0.95" />
           </LinearGradient>
@@ -67,7 +68,7 @@ export const PowerRing = React.memo(function PowerRing({ score, size = 200, stro
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke="url(#ringGrad)"
+          stroke={`url(#${ringGradId})`}
           strokeWidth={strokeWidth}
           fill="none"
           strokeLinecap="round"

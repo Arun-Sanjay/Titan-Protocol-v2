@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import { View, Text, StyleSheet, Platform } from "react-native";
 import Svg, {
   Circle,
@@ -42,6 +42,8 @@ export const ScoreGauge = React.memo(function ScoreGauge({
 }: Props) {
   const progress = useSharedValue(0);
   const lastScore = useRef(-1);
+  const gradId = useRef(`scoreGrad-${Math.random().toString(36).slice(2)}`).current;
+  const glowGradId = useRef(`scoreGlow-${Math.random().toString(36).slice(2)}`).current;
 
   const cx = size / 2;
   const cy = size / 2;
@@ -92,11 +94,11 @@ export const ScoreGauge = React.memo(function ScoreGauge({
     <View style={[styles.container, { width: size, height: size }]}>
       <Svg width={size} height={size}>
         <Defs>
-          <LinearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="1">
+          <LinearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0%" stopColor={gradStart} stopOpacity="1" />
             <Stop offset="100%" stopColor={gradEnd} stopOpacity="1" />
           </LinearGradient>
-          <LinearGradient id="scoreGlowGrad" x1="0" y1="0" x2="1" y2="1">
+          <LinearGradient id={glowGradId} x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0%" stopColor={gradStart} stopOpacity="0.25" />
             <Stop offset="100%" stopColor={gradEnd} stopOpacity="0.35" />
           </LinearGradient>
@@ -128,7 +130,7 @@ export const ScoreGauge = React.memo(function ScoreGauge({
           cx={cx}
           cy={cy}
           r={glowR}
-          stroke="url(#scoreGlowGrad)"
+          stroke={`url(#${glowGradId})`}
           strokeWidth={glowStrokeWidth}
           fill="none"
           strokeLinecap="round"
@@ -142,7 +144,7 @@ export const ScoreGauge = React.memo(function ScoreGauge({
           cx={cx}
           cy={cy}
           r={r}
-          stroke="url(#scoreGrad)"
+          stroke={`url(#${gradId})`}
           strokeWidth={strokeWidth}
           fill="none"
           strokeLinecap="round"

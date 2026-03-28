@@ -33,7 +33,7 @@ export const WeekComparison = React.memo(function WeekComparison({ thisWeek, las
               <View key={engine} style={styles.col}>
                 <Text style={styles.engineLabel}>{ENGINE_LABELS[engine]}</Text>
                 <Text style={[styles.value, { color: isUp ? colors.success : colors.danger }]}>
-                  {isUp ? "↑" : "↓"} {Math.abs(current)}%
+                  {diff === 0 ? "=" : isUp ? "↑" : "↓"} {Math.abs(diff)}%
                 </Text>
                 <Text style={styles.comparison}>
                   {current}% vs {prev}%

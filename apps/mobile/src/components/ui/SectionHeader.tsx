@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 10,
-    fontWeight: "620" as any,
+    fontWeight: "700",
     color: "rgba(233,240,255,0.72)",
     textTransform: "uppercase",
     letterSpacing: 3.0, // 0.24em at ~10px

@@ -735,10 +735,10 @@ export default function SleepScreen() {
                     style={[
                       styles.saveBtn,
                       { flex: 1 },
-                      (!bedtime || !wakeTime || previewDuration === 0) && styles.saveBtnDisabled,
+                      (!bedtime || !wakeTime || !previewDuration) && styles.saveBtnDisabled,
                     ]}
                     onPress={handleSave}
-                    disabled={!bedtime || !wakeTime || previewDuration === 0}
+                    disabled={!bedtime || !wakeTime || !previewDuration}
                   >
                     <Text style={styles.saveBtnText}>Save</Text>
                   </Pressable>

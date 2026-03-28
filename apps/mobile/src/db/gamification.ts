@@ -77,7 +77,7 @@ export function awardXP(dateKey: string, _source: string, amount: number): UserP
 export function updateStreak(dateKey: string): number {
   const profile = getProfile();
 
-  const today = new Date(dateKey);
+  const today = new Date(dateKey + "T00:00:00");
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
