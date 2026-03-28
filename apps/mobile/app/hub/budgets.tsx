@@ -267,8 +267,10 @@ const AddBudgetForm = React.memo(function AddBudgetForm({
   }, []);
 
   const handleSave = useCallback(() => {
+    if (!category) { Alert.alert("Missing", "Select a category"); return; }
     const parsed = parseFloat(limitStr);
-    if (!category || !Number.isFinite(parsed) || parsed <= 0 || parsed > 999999.99) return;
+    if (!Number.isFinite(parsed) || parsed <= 0) { Alert.alert("Invalid", "Enter a positive amount"); return; }
+    if (parsed > 999999.99) { Alert.alert("Invalid", "Max budget is $999,999.99"); return; }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     addBudget(category, Math.round(parsed * 100) / 100);

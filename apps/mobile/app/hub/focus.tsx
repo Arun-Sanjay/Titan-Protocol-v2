@@ -362,7 +362,10 @@ export default function FocusTimerScreen() {
     }
   }, [phase, getPhaseDuration, sessionStarted]);
 
-  const totalSeconds = getPhaseDuration(phase) * 60;
+  // Track the duration that was active when the session started
+  // so settings changes mid-session don't corrupt the progress ring
+  const [sessionDuration, setSessionDuration] = useState(getPhaseDuration(phase) * 60);
+  const totalSeconds = sessionStarted ? sessionDuration : getPhaseDuration(phase) * 60;
   const progress = useSharedValue(1);
 
   useEffect(() => {
@@ -429,7 +432,10 @@ export default function FocusTimerScreen() {
 
   const toggleTimer = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!running) setSessionStarted(true);
+    if (!running) {
+      setSessionStarted(true);
+      setSessionDuration(secondsLeft); // lock the duration at start
+    }
     setRunning(!running);
   };
 

@@ -72,8 +72,8 @@ export function getDailyRemaining(
     const today = now.getDate();
     remainingDays = Math.max(daysInMonth - today + 1, 1);
   } else if (year < currentYear || (year === currentYear && month < currentMonth)) {
-    // Past month: no remaining days
-    remainingDays = 1;
+    // Past month: budget period is over, no daily remaining
+    return 0;
   } else {
     // Future month: full month
     remainingDays = daysInMonth;

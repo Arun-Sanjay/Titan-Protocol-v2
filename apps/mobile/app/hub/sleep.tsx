@@ -460,6 +460,14 @@ export default function SleepScreen() {
 
     const durationMinutes = computeDurationMinutes(bedtime, wakeTime);
     if (durationMinutes === 0) return;
+    if (durationMinutes < 15) {
+      Alert.alert("Too Short", "Sleep must be at least 15 minutes.");
+      return;
+    }
+    if (durationMinutes > 960) {
+      Alert.alert("Too Long", "Sleep cannot exceed 16 hours.");
+      return;
+    }
 
     addEntry({
       dateKey: todayKey,

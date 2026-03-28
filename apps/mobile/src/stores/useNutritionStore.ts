@@ -147,6 +147,10 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   },
 
   updateProfile: (p) => {
+    // Validate ranges at store level
+    if (p.height_cm < 50 || p.height_cm > 300) return;
+    if (p.weight_kg < 20 || p.weight_kg > 500) return;
+    if (p.age < 10 || p.age > 120) return;
     let calorie_target = p.calorie_target;
     calorie_target = Math.max(calorie_target, p.sex === "female" ? 1200 : 1500);
     const updated = { ...p, calorie_target };
@@ -205,6 +209,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
 
   addWater: (dateKey) => {
     const current = get().waterLog[dateKey] ?? 0;
+    if (current >= 30) return; // cap at 30 glasses (7.5L)
     const updated = current + 1;
     setJSON(waterKey(dateKey), updated);
     set((s) => ({ waterLog: { ...s.waterLog, [dateKey]: updated } }));

@@ -335,7 +335,7 @@ export const useSleepStore = create<SleepState>()((set, get) => ({
     // Validate before saving
     if (!isValidTime(entry.bedtime) || !isValidTime(entry.wakeTime)) return;
     if (!isValidQuality(entry.quality)) return;
-    if (entry.durationMinutes <= 0 || entry.durationMinutes > 1440) return;
+    if (entry.durationMinutes < 15 || entry.durationMinutes > 960) return; // 15min min, 16h max
 
     setJSON(storageKey(entry.dateKey), entry);
     set((s) => ({ entries: { ...s.entries, [entry.dateKey]: entry } }));

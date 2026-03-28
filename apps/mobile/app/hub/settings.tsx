@@ -174,6 +174,7 @@ export default function SettingsScreen() {
                     storage.clearAll();
                     loadProfile();
                     loadAllEngines(getTodayKey());
+                    setDataPointCount(0);
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                     Alert.alert("Done", "All data has been cleared.");
                   },
@@ -184,7 +185,7 @@ export default function SettingsScreen() {
         },
       ],
     );
-  }, [loadProfile]);
+  }, [loadProfile, loadAllEngines]);
 
   const handleResetProfile = useCallback(() => {
     Alert.alert(
@@ -215,7 +216,7 @@ export default function SettingsScreen() {
     );
   }, [loadProfile]);
 
-  const dataPointCount = useMemo(() => getAllStorageKeys().length, []);
+  const [dataPointCount, setDataPointCount] = useState(() => getAllStorageKeys().length);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>

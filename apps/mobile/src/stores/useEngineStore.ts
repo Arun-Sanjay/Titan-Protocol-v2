@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getJSON, setJSON, nextId } from "../db/storage";
+import { addDays } from "../lib/date";
 import type { EngineKey, Task } from "../db/schema";
 
 export const ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
@@ -148,11 +149,10 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
   loadDateRange: (startDate, endDate) => {
     const newCompletions: Record<string, number[]> = {};
     const newScores: Record<string, number> = {};
-    const start = new Date(startDate + "T00:00:00");
-    const end = new Date(endDate + "T00:00:00");
 
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    // Use addDays for DST-safe date iteration
+    let dk = startDate;
+    while (dk <= endDate) {
       for (const engine of ENGINES) {
         const cKey = `${engine}:${dk}`;
         if (get().scores[cKey] !== undefined) continue; // already loaded
@@ -163,6 +163,7 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
         newCompletions[cKey] = ids;
         newScores[cKey] = computeScore(tasks, new Set(ids));
       }
+      dk = addDays(dk, 1);
     }
 
     if (Object.keys(newScores).length > 0) {
@@ -178,8 +179,9 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
 
 export function selectTotalScore(scores: Record<string, number>, dateKey: string): number {
   const vals = ENGINES.map((e) => scores[`${e}:${dateKey}`] ?? 0);
-  if (vals.every((v) => v === 0)) return 0;
-  return Math.round(vals.reduce((a, b) => a + b, 0) / 4);
+  const active = vals.filter((v) => v > 0);
+  if (active.length === 0) return 0;
+  return Math.round(active.reduce((a, b) => a + b, 0) / active.length);
 }
 
 export function selectAllTasksForDate(

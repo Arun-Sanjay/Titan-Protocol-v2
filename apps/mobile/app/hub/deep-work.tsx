@@ -89,7 +89,7 @@ const TaskRow = React.memo(function TaskRow({
 
   const handleEarningsBlur = useCallback(() => {
     isFocusedRef.current = false;
-    const val = parseFloat(earningsStr) || 0;
+    const val = Math.max(0, parseFloat(earningsStr) || 0); // clamp negative to 0
     onEarningsChange(val);
   }, [earningsStr, onEarningsChange]);
 
