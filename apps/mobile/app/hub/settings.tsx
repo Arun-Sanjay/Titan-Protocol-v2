@@ -28,7 +28,7 @@ import { getTodayKey } from "../../src/lib/date";
 const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
 const APP_VERSION = "1.0.0";
 
-// Known storage key prefixes for backup
+// Known storage key prefixes (documentation — export uses getAllKeys())
 const BACKUP_PREFIXES = [
   "user_profile",
   "focus_settings",
@@ -45,9 +45,20 @@ const BACKUP_PREFIXES = [
   "nutrition_quick_meals",
   "nutrition_water:",
   "nutrition_water_target",
-  "budget_categories",
-  "budget_targets:",
-  "transactions",
+  "budgets",
+  "money_txs",
+  "money_loans",
+  "gym_exercises",
+  "gym_templates",
+  "gym_template_exercises",
+  "gym_sessions",
+  "gym_sets",
+  "gym_prs",
+  "habits",
+  "habit_logs:",
+  "goals",
+  "goal_tasks:",
+  "journal:",
   "id_counter",
 ];
 

@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { getJSON, setJSON, nextId } from "../db/storage";
-import { updateStreak, awardXP } from "../db/gamification";
 import type { Habit } from "../db/schema";
 
 const HABITS_KEY = "habits";
@@ -73,12 +72,8 @@ export const useHabitStore = create<HabitState>()((set, get) => ({
       completedIds: { ...s.completedIds, [dateKey]: ids },
     }));
 
-    // Bug 12: Wire up XP/streak on habit completion
-    if (completed) {
-      updateStreak(dateKey);
-      awardXP(dateKey, "habit_complete", 10);
-    }
-
+    // XP/streak is handled by the UI component (track.tsx HabitsTab)
+    // to avoid dual-write race on the MMKV user_profile key
     return completed;
   },
 

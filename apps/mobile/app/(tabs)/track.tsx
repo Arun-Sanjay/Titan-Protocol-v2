@@ -121,7 +121,11 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
   const handleToggle = (id: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const completed = toggle(id, dateKey);
-    if (completed) awardXP(dateKey, "habit_complete", XP_REWARDS.HABIT_COMPLETE);
+    if (completed) {
+      awardXP(dateKey, "habit_complete", XP_REWARDS.HABIT_COMPLETE);
+    } else {
+      awardXP(dateKey, "habit_uncomplete", -XP_REWARDS.HABIT_COMPLETE);
+    }
   };
 
   const handleAdd = () => {

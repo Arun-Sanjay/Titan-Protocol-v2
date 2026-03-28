@@ -102,6 +102,7 @@ export const useBudgetStore = create<BudgetState>()((set, get) => ({
   },
 
   addBudget: (category, monthlyLimit) => {
+    if (!Number.isFinite(monthlyLimit) || monthlyLimit <= 0) return;
     if (get().budgets.some((b) => b.category === category)) return;
     const id = nextId();
     const entry: Budget = { id, category, monthlyLimit };
@@ -117,6 +118,7 @@ export const useBudgetStore = create<BudgetState>()((set, get) => ({
   },
 
   updateBudget: (id, monthlyLimit) => {
+    if (!Number.isFinite(monthlyLimit) || monthlyLimit <= 0) return;
     const budgets = get().budgets.map((b) =>
       b.id === id ? { ...b, monthlyLimit } : b,
     );

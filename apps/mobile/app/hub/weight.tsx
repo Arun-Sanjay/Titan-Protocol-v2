@@ -368,7 +368,10 @@ export default function WeightScreen() {
 
   const handleSaveGoal = useCallback(() => {
     const val = parseFloat(goalInput);
-    if (isNaN(val) || val <= 0 || val > 500) return;
+    if (isNaN(val) || val < 20 || val > 500) {
+      Alert.alert("Invalid Goal", "Goal weight must be between 20 and 500 kg.");
+      return;
+    }
     setGoalWeight(+val.toFixed(1));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setGoalInput("");

@@ -459,7 +459,10 @@ export default function SleepScreen() {
     if (!timeRegex.test(bedtime) || !timeRegex.test(wakeTime)) return;
 
     const durationMinutes = computeDurationMinutes(bedtime, wakeTime);
-    if (durationMinutes === 0) return;
+    if (durationMinutes === 0) {
+      Alert.alert("Invalid", "Bedtime and wake time cannot be the same.");
+      return;
+    }
     if (durationMinutes < 15) {
       Alert.alert("Too Short", "Sleep must be at least 15 minutes.");
       return;

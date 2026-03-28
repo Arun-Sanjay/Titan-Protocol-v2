@@ -432,9 +432,10 @@ export default function FocusTimerScreen() {
 
   const toggleTimer = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!running) {
+    if (!running && !sessionStarted) {
+      // Only lock duration on FIRST start, not on resume from pause
       setSessionStarted(true);
-      setSessionDuration(secondsLeft); // lock the duration at start
+      setSessionDuration(secondsLeft);
     }
     setRunning(!running);
   };
