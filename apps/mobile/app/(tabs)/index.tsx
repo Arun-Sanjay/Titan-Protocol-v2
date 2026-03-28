@@ -41,7 +41,6 @@ const ENGINE_COLORS: Record<EngineKey, string> = {
 export default function HQScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
-  const sparkCardWidth = (screenWidth - spacing.lg * 2 - spacing.sm) / 2 - 24; // account for padding
   const analytics = useAnalyticsData();
 
   const storeTasks = useEngineStore((s) => s.tasks);
@@ -72,12 +71,14 @@ export default function HQScreen() {
 
   const handleToggle = useCallback((task: TaskWithStatus) => {
     const completed = toggleTask(task.engine, task.id!, analytics.today);
+    const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
     if (completed) {
-      const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
       awardXP(analytics.today, "task_complete", xp);
       updateStreak(analytics.today);
+    } else {
+      awardXP(analytics.today, "task_uncomplete", -xp);
     }
-  }, [analytics.today]);
+  }, [analytics.today, toggleTask, awardXP, updateStreak]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -147,28 +148,32 @@ export default function HQScreen() {
         {/* VS Last Week */}
         <WeekComparison thisWeek={analytics.thisWeekEngines} lastWeek={analytics.lastWeek} />
 
-        {/* Engine Sparkline Cards */}
+        {/* Engine Sparkline Cards — 2x2 grid */}
         <SectionHeader title="ENGINES" />
         <View style={styles.sparkGrid}>
-          {ENGINES.map((engine, i) => (
-            <Panel
-              key={engine}
-              onPress={() => router.push(`/engine/${engine}`)}
-              style={styles.sparkCard}
-              delay={i * 60 + 160}
-            >
-              <View style={styles.sparkHeader}>
-                <Text style={[styles.sparkLabel, { color: ENGINE_COLORS[engine] }]}>
-                  {ENGINE_LABELS[engine]}
+          {ENGINES.map((engine, i) => {
+            const cardW = (screenWidth - spacing.lg * 2 - spacing.sm) / 2;
+            const chartW = cardW - 40; // account for panel padding
+            return (
+              <Panel
+                key={engine}
+                onPress={() => router.push(`/engine/${engine}`)}
+                style={{ ...styles.sparkCard, width: cardW }}
+                delay={i * 60 + 160}
+              >
+                <View style={styles.sparkHeader}>
+                  <Text style={[styles.sparkLabel, { color: ENGINE_COLORS[engine] }]}>
+                    {ENGINE_LABELS[engine]}
+                  </Text>
+                  <Text style={styles.sparkValue}>{analytics.engineScores[engine]}%</Text>
+                </View>
+                <SparklineChart data={analytics.sparklineData[engine]} width={Math.max(chartW, 60)} height={36} color={ENGINE_COLORS[engine]} />
+                <Text style={styles.sparkSub}>
+                  Today: {analytics.engineScores[engine]}%
                 </Text>
-                <Text style={styles.sparkValue}>{analytics.engineScores[engine]}%</Text>
-              </View>
-              <SparklineChart data={analytics.sparklineData[engine]} width={sparkCardWidth} height={36} color={ENGINE_COLORS[engine]} />
-              <Text style={styles.sparkSub}>
-                Today: {analytics.engineScores[engine]}%
-              </Text>
-            </Panel>
-          ))}
+              </Panel>
+            );
+          })}
         </View>
 
         {/* Weekly Summary */}
@@ -242,9 +247,9 @@ const styles = StyleSheet.create({
 
   // Sparkline grid
   sparkGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  sparkCard: { width: "48%", flexGrow: 1 },
+  sparkCard: { flexGrow: 0, flexShrink: 0 },
   sparkHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
-  sparkLabel: { ...fonts.kicker, fontSize: 11, letterSpacing: 2 },
+  sparkLabel: { ...fonts.kicker, fontSize: 10, letterSpacing: 1.5 },
   sparkValue: { ...fonts.mono, fontSize: 16, fontWeight: "800", color: colors.text },
   sparkSub: { ...fonts.mono, fontSize: 10, color: colors.textMuted, marginTop: spacing.xs },
 
