@@ -223,6 +223,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   },
 
   setWaterTarget: (target) => {
+    if (!Number.isFinite(target) || target < 1 || target > 30) return;
     setJSON(WATER_TARGET_KEY, target);
     set({ waterTarget: target });
   },

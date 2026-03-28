@@ -39,7 +39,10 @@ export const useGoalStore = create<GoalState>()((set, get) => ({
   deleteGoal: (id) => {
     const goals = get().goals.filter((g) => g.id !== id);
     setJSON(GOALS_KEY, goals);
-    set({ goals });
+    // Clean up orphaned goal tasks
+    setJSON(goalTasksKey(id), null);
+    const { [id]: _, ...remainingTasks } = get().goalTasks;
+    set({ goals, goalTasks: remainingTasks });
   },
 
   loadGoalTasks: (goalId) => {

@@ -19,8 +19,8 @@ export const SparklineChart = React.memo(function SparklineChart({
   // Bug 22: unique gradient ID per instance to avoid collisions
   const gradId = useRef(`sparkFill-${Math.random().toString(36).slice(2)}`).current;
 
-  // Bug 24: clamp values to 0-100
-  const clamped = data.map(v => Math.max(0, Math.min(100, v)));
+  // Clamp values to 0-100, guard NaN
+  const clamped = data.map(v => Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0);
 
   // Bug 23: single data point renders a dot instead of empty view
   if (clamped.length === 0) return <View style={{ width, height }} />;

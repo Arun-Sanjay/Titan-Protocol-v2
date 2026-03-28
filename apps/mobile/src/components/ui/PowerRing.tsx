@@ -31,7 +31,8 @@ export const PowerRing = React.memo(function PowerRing({ score, size = 200, stro
   useEffect(() => {
     if (lastScore.current !== score) {
       lastScore.current = score;
-      progress.value = withTiming(score / 100, {
+      const safeScore = Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : 0;
+      progress.value = withTiming(safeScore / 100, {
         duration: 1200,
         easing: Easing.bezierFn(0.25, 0.1, 0.25, 1),
       });

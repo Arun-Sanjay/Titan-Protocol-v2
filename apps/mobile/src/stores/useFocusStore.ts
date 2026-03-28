@@ -46,9 +46,12 @@ export const useFocusStore = create<FocusState>()((set, get) => ({
   },
 
   updateSettings: (partial) => {
-    const settings = { ...get().settings, ...partial };
-    setJSON(SETTINGS_KEY, settings);
-    set({ settings });
+    const merged = { ...get().settings, ...partial };
+    // Validate all timer values are positive
+    if (merged.focusMinutes < 1 || merged.breakMinutes < 1 || merged.longBreakMinutes < 1
+        || merged.longBreakAfter < 1 || merged.dailyTarget < 1) return;
+    setJSON(SETTINGS_KEY, merged);
+    set({ settings: merged });
   },
 
   loadDaily: (dateKey) => {

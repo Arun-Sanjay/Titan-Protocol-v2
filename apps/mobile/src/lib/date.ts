@@ -2,6 +2,7 @@
 // IMPORTANT: Never use d.toISOString().slice(0,10) — it converts to UTC
 // and produces wrong dates in timezones east of UTC (e.g. IST, JST)
 export function toLocalDateKey(d: Date): string {
+  if (isNaN(d.getTime())) return getTodayKey(); // fallback to today for invalid dates
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
@@ -18,7 +19,9 @@ export function formatDateDisplay(dateKey: string): string {
 }
 
 export function formatDateShort(dateKey: string): string {
+  if (!dateKey) return "--";
   const d = new Date(dateKey + "T00:00:00");
+  if (isNaN(d.getTime())) return "--";
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 

@@ -30,7 +30,8 @@ export const ProgressRing = React.memo(function ProgressRing({
   useEffect(() => {
     if (lastProgress.current !== progress) {
       lastProgress.current = progress;
-      animProgress.value = withTiming(Math.min(1, Math.max(0, progress)), {
+      const safe = Number.isFinite(progress) ? progress : 0;
+      animProgress.value = withTiming(Math.min(1, Math.max(0, safe)), {
         duration: 800,
         easing: Easing.bezierFn(0.25, 0.1, 0.25, 1),
       });

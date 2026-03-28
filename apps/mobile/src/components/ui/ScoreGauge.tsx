@@ -69,7 +69,8 @@ export const ScoreGauge = React.memo(function ScoreGauge({
   useEffect(() => {
     if (lastScore.current !== score) {
       lastScore.current = score;
-      progress.value = withSpring(Math.min(100, Math.max(0, score)) / 100, {
+      const safeScore = Number.isFinite(score) ? score : 0;
+      progress.value = withSpring(Math.min(100, Math.max(0, safeScore)) / 100, {
         stiffness: 60,
         damping: 20,
       });

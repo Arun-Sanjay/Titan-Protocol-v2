@@ -30,7 +30,8 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 200 }:
   const gridLevels = [0.25, 0.5, 0.75, 1.0];
 
   const dataPoints = AXES.map((axis, i) => {
-    const val = (scores[axis.key] ?? 0) / 100;
+    const raw = scores[axis.key];
+    const val = (Number.isFinite(raw) ? raw : 0) / 100;
     const r = Math.max(val, 0.03) * maxR;
     return polarToXY(cx, cy, r, i, n);
   });

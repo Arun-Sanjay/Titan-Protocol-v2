@@ -39,6 +39,7 @@ export const useProfileStore = create<ProfileState>()((set, get) => ({
   },
 
   awardXP: (_dateKey, _source, amount) => {
+    if (!Number.isFinite(amount)) return;
     const profile = { ...get().profile };
     profile.xp = Math.max(0, profile.xp + amount); // Clamp to 0 minimum
     profile.level = Math.max(1, Math.floor(profile.xp / XP_PER_LEVEL) + 1);

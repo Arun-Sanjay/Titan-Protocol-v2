@@ -59,15 +59,10 @@ function saveProfile(p: UserProfile): void {
 }
 
 export function awardXP(dateKey: string, _source: string, amount: number): UserProfile {
+  if (!Number.isFinite(amount)) return getProfile();
   const profile = getProfile();
-  profile.xp += amount;
-
-  // Level up
-  const newLevel = Math.floor(profile.xp / XP_PER_LEVEL) + 1;
-  if (newLevel > profile.level) {
-    profile.level = newLevel;
-  }
-
+  profile.xp = Math.max(0, profile.xp + amount);
+  profile.level = Math.max(1, Math.floor(profile.xp / XP_PER_LEVEL) + 1);
   saveProfile(profile);
   return profile;
 }

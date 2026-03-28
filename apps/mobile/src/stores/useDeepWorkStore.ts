@@ -73,12 +73,13 @@ export const useDeepWorkStore = create<DeepWorkState>()((set, get) => ({
   },
 
   logWork: (taskId, dateKey, completed, earnings) => {
+    const safeEarnings = Number.isFinite(earnings) ? Math.max(0, earnings) : 0;
     const existing = get().logs.find((l) => l.taskId === taskId && l.dateKey === dateKey);
 
     let logs: DeepWorkLog[];
     if (existing) {
       logs = get().logs.map((l) =>
-        l.id === existing.id ? { ...l, completed, earningsToday: earnings } : l
+        l.id === existing.id ? { ...l, completed, earningsToday: safeEarnings } : l
       );
     } else {
       const log: DeepWorkLog = {
@@ -86,7 +87,7 @@ export const useDeepWorkStore = create<DeepWorkState>()((set, get) => ({
         taskId,
         dateKey,
         completed,
-        earningsToday: earnings,
+        earningsToday: safeEarnings,
       };
       logs = [...get().logs, log];
     }

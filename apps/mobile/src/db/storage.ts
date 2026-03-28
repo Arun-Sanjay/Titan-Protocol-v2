@@ -16,7 +16,12 @@ export function getJSON<T>(key: string, fallback: T): T {
 }
 
 export function setJSON(key: string, value: unknown): void {
-  storage.set(key, JSON.stringify(value));
+  if (value === undefined) return;
+  try {
+    storage.set(key, JSON.stringify(value));
+  } catch {
+    // Silently ignore non-serializable values (circular refs, BigInt, etc.)
+  }
 }
 
 // ─── ID generator ──────────────────────────────────────────────────────────

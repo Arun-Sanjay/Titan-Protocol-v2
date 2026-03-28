@@ -10,10 +10,12 @@ type Props = {
 };
 
 export const XPBar = React.memo(function XPBar({ xp, level }: Props) {
-  const rank = getRankForLevel(level);
-  const currentLevelXP = xp - (level - 1) * 500;
+  const safeLevel = Math.max(1, Number.isFinite(level) ? level : 1);
+  const safeXP = Number.isFinite(xp) ? Math.max(0, xp) : 0;
+  const rank = getRankForLevel(safeLevel);
+  const currentLevelXP = safeXP - (safeLevel - 1) * 500;
   const needed = 500;
-  const fraction = Math.min(1, currentLevelXP / needed);
+  const fraction = Math.min(1, Math.max(0, currentLevelXP / needed));
 
   return (
     <View style={styles.container}>

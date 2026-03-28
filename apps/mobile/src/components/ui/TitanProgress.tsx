@@ -60,8 +60,9 @@ export const TitanProgress = React.memo(function TitanProgress({
   animated = true,
   shimmer = true,
 }: Props) {
-  const clamped = Math.max(0, Math.min(value, 100));
-  const isOverflow = value > 100;
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const clamped = Math.max(0, Math.min(safeValue, 100));
+  const isOverflow = safeValue > 100;
   const fillWidth = useSharedValue(animated ? 0 : clamped);
 
   useEffect(() => {

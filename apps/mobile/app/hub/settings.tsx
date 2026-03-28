@@ -148,6 +148,7 @@ export default function SettingsScreen() {
       const data = exportAllData();
       if (Object.keys(data).length === 0) {
         Alert.alert("No Data", "Nothing to export yet.");
+        setExporting(false);
         return;
       }
       const json = JSON.stringify(data);

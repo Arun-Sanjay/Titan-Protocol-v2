@@ -29,7 +29,7 @@ type Props = {
 };
 
 export const EngineCard = React.memo(function EngineCard({ engine, score, completedCount, totalCount, onPress }: Props) {
-  const meta = ENGINE_META[engine];
+  const meta = ENGINE_META[engine] ?? { icon: "⚙️", label: "Engine", color: "#999" };
   const progress = useSharedValue(0);
   const lastScore = useRef(-1);
 
@@ -41,7 +41,8 @@ export const EngineCard = React.memo(function EngineCard({ engine, score, comple
   useEffect(() => {
     if (lastScore.current !== score) {
       lastScore.current = score;
-      progress.value = withTiming(score / 100, {
+      const safeScore = Number.isFinite(score) ? Math.min(100, Math.max(0, score)) : 0;
+      progress.value = withTiming(safeScore / 100, {
         duration: 800,
         easing: Easing.bezierFn(0.25, 0.1, 0.25, 1),
       });
