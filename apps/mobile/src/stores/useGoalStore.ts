@@ -64,12 +64,10 @@ export const useGoalStore = create<GoalState>()((set, get) => ({
   },
 
   toggleGoalTask: (taskId, goalId) => {
-    const tasks = [...(get().goalTasks[goalId] ?? [])];
-    const task = tasks.find((t) => t.id === taskId);
-    if (task) {
-      task.completed = task.completed === 1 ? 0 : 1;
-      setJSON(goalTasksKey(goalId), tasks);
-      set((s) => ({ goalTasks: { ...s.goalTasks, [goalId]: tasks } }));
-    }
+    const tasks = (get().goalTasks[goalId] ?? []).map((t) =>
+      t.id === taskId ? { ...t, completed: t.completed === 1 ? 0 : 1 } : t,
+    );
+    setJSON(goalTasksKey(goalId), tasks);
+    set((s) => ({ goalTasks: { ...s.goalTasks, [goalId]: tasks } }));
   },
 }));

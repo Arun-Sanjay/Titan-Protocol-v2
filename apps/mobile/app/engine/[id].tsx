@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, Pressable, Alert,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, AppState,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FlashList } from "@shopify/flash-list";
 import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, TOUCH_MIN } from "../../src/theme";
 import { PowerRing } from "../../src/components/ui/PowerRing";
 import { MissionRow } from "../../src/components/ui/MissionRow";
@@ -37,8 +38,23 @@ export default function EngineScreen() {
   const meta = ENGINE_META[engine] ?? ENGINE_META.general;
   const router = useRouter();
 
+  // AppState listener for midnight crossing
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") setAppActive((c) => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+
+  const todayKey = useMemo(() => getTodayKey(), [appActive]);
   const [dateKey, setDateKey] = useState(getTodayKey());
   const lastLoadRef = useRef("");
+
+  // Sync dateKey when todayKey changes (midnight crossing)
+  useEffect(() => {
+    setDateKey(todayKey);
+  }, [todayKey]);
 
   const loadEngine = useEngineStore((s) => s.loadEngine);
   const toggleTask = useEngineStore((s) => s.toggleTask);
@@ -70,13 +86,15 @@ export default function EngineScreen() {
 
   const handleToggle = useCallback((task: Task) => {
     const completed = toggleTask(engine, task.id!, dateKey);
+    const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
     if (completed) {
-      const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
       awardXP(dateKey, "task_complete", xp);
       updateStreak(dateKey);
+    } else {
+      awardXP(dateKey, "task_uncomplete", -xp);
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [engine, dateKey]);
+  }, [engine, dateKey, toggleTask, awardXP, updateStreak]);
 
   const handleDelete = useCallback((task: Task) => {
     Alert.alert("Delete Mission", `Delete "${task.title}"?`, [
@@ -174,7 +192,7 @@ export default function EngineScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>←</Text>
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: meta.color }]}>
             {meta.icon} {meta.label}
@@ -188,7 +206,6 @@ export default function EngineScreen() {
           keyExtractor={(item, index) =>
             item.type === "task" ? `task-${item.task.id}` : `${item.type}-${index}`
           }
-
           ListHeaderComponent={ListHeader}
           ListFooterComponent={<View style={{ height: 120 }} />}
           contentContainerStyle={{ paddingHorizontal: spacing.lg }}
@@ -205,7 +222,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   backBtn: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
-  backText: { fontSize: 24, color: colors.text },
   headerTitle: { fontSize: 18, fontWeight: "700" },
   ringWrap: { alignItems: "center", marginVertical: spacing.xl },
   emptyAdd: { borderWidth: 1, borderColor: colors.surfaceBorder, borderStyle: "dashed", borderRadius: radius.md, paddingVertical: spacing.xl, alignItems: "center" },
