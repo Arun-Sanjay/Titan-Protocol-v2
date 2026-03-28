@@ -1,16 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, Dimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, AppState, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Rect } from "react-native-svg";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, fonts } from "../../src/theme";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { Panel } from "../../src/components/ui/Panel";
+import { MetricValue } from "../../src/components/ui/MetricValue";
 import { HeatmapGrid } from "../../src/components/ui/HeatmapGrid";
 import { useEngineStore } from "../../src/stores/useEngineStore";
 import type { EngineKey } from "../../src/db/schema";
-import { getTodayKey } from "../../src/lib/date";
+import { getTodayKey, addDays } from "../../src/lib/date";
 
 const ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
 const ENGINE_COLORS: Record<EngineKey, string> = {
@@ -22,37 +25,44 @@ const ENGINE_COLORS: Record<EngineKey, string> = {
 
 type Range = 7 | 30 | 90;
 
-function getDateKeys(range: Range): string[] {
+function getDateKeys(range: Range, today?: string): string[] {
+  const todayKey = today ?? getTodayKey();
   const keys: string[] = [];
-  const today = new Date();
   for (let i = range - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    keys.push(addDays(todayKey, -i));
   }
   return keys;
 }
 
 export default function AnalyticsScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const [range, setRange] = useState<Range>(30);
   const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
   const loadDateRange = useEngineStore((s) => s.loadDateRange);
   const scores = useEngineStore((s) => s.scores);
 
-  const dateKeys = useMemo(() => getDateKeys(range), [range]);
+  // AppState refresh for midnight crossing
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setAppActive((c) => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+  const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
-  // Bug 9: Always load 90 days so heatmap has data regardless of selected range
-  const allDateKeys = useMemo(() => getDateKeys(90), []);
+  const dateKeys = useMemo(() => getDateKeys(range, todayKey), [range, todayKey]);
+
+  // Always load 90 days so heatmap has data regardless of selected range
+  const allDateKeys = useMemo(() => getDateKeys(90, todayKey), [todayKey]);
 
   useEffect(() => {
-    const today = getTodayKey();
-    loadAllEngines(today);
-    // Always load 90 days worth of data for the heatmap
+    loadAllEngines(todayKey);
     if (allDateKeys.length > 0) {
       loadDateRange(allDateKeys[0], allDateKeys[allDateKeys.length - 1]);
     }
-  }, [loadAllEngines, loadDateRange, allDateKeys]);
+  }, [todayKey, loadAllEngines, loadDateRange, allDateKeys]);
 
   const dailyScores = useMemo(() => {
     return dateKeys.map((dk) => {
@@ -69,10 +79,13 @@ export default function AnalyticsScreen() {
     return Math.round(nonZero.reduce((a, b) => a + b.score, 0) / nonZero.length);
   }, [dailyScores]);
 
-  // Streak calculation
+  // Streak calculation — give today benefit of the doubt if no data yet
   const { currentStreak, bestStreak } = useMemo(() => {
     let current = 0;
-    for (let i = dailyScores.length - 1; i >= 0; i--) {
+    let startIdx = dailyScores.length - 1;
+    // If today has no score yet, don't break the streak — start from yesterday
+    if (startIdx >= 0 && dailyScores[startIdx].score === 0) startIdx--;
+    for (let i = startIdx; i >= 0; i--) {
       if (dailyScores[i].score > 0) current++;
       else break;
     }
@@ -108,9 +121,10 @@ export default function AnalyticsScreen() {
     });
   }, [allDateKeys, scores]);
 
-  // Bar chart config — dynamically size bars to fit container
-  const CHART_WIDTH = Dimensions.get("window").width - 2 * spacing.lg - 2 * spacing.lg;
-  const barWidth = Math.max(2, Math.floor((CHART_WIDTH - 2) / dailyScores.length) - 2);
+  // Bar chart config — compute bar width to actually fit the container
+  const CHART_WIDTH = screenWidth - 2 * spacing.lg - 40; // screen padding + panel padding
+  const BAR_GAP = 1;
+  const barWidth = Math.max(1, (CHART_WIDTH / dailyScores.length) - BAR_GAP);
   const chartHeight = 160;
 
   const engineBreakdown = useMemo(() => {
@@ -136,9 +150,9 @@ export default function AnalyticsScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>←</Text>
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>ANALYTICS</Text>
+        <Text style={styles.headerTitle}>Analytics</Text>
         <View style={{ width: 48 }} />
       </View>
 
@@ -160,27 +174,27 @@ export default function AnalyticsScreen() {
 
         {/* Stats row */}
         <View style={styles.statsRow}>
-          <Panel style={styles.statCard}>
-            <Text style={styles.statValue}>{avgScore}%</Text>
-            <Text style={styles.statLabel}>AVG SCORE</Text>
+          <Panel style={styles.statCard} delay={0}>
+            <Ionicons name="analytics-outline" size={18} color={colors.body} />
+            <MetricValue label="Avg Score" value={avgScore} size="sm" color={colors.body} animated suffix="%" />
           </Panel>
-          <Panel style={styles.statCard}>
-            <Text style={styles.statValue}>{currentStreak}</Text>
-            <Text style={styles.statLabel}>STREAK</Text>
+          <Panel style={styles.statCard} delay={50}>
+            <Ionicons name="flame-outline" size={18} color={colors.warning} />
+            <MetricValue label="Streak" value={currentStreak} size="sm" color={colors.warning} animated />
           </Panel>
-          <Panel style={styles.statCard}>
-            <Text style={styles.statValue}>{bestDay.score}%</Text>
-            <Text style={styles.statLabel}>BEST DAY</Text>
+          <Panel style={styles.statCard} delay={100}>
+            <Ionicons name="trophy-outline" size={18} color={colors.mind} />
+            <MetricValue label="Best Day" value={bestDay.score} size="sm" color={colors.mind} animated suffix="%" />
           </Panel>
         </View>
 
         {/* Titan Score Trend (bar chart) */}
-        <SectionHeader title="TITAN SCORE TREND" />
-        <Panel style={styles.chartCard}>
+        <SectionHeader title="Titan Score Trend" />
+        <Panel style={styles.chartCard} delay={150}>
           <Svg width="100%" height={chartHeight}>
             {dailyScores.map((d, i) => {
               const barH = (d.score / 100) * (chartHeight - 20);
-              const x = i * (barWidth + 2) + 2;
+              const x = i * (barWidth + BAR_GAP);
               return (
                 <Rect
                   key={d.dateKey}
@@ -198,8 +212,8 @@ export default function AnalyticsScreen() {
         </Panel>
 
         {/* Engine Performance */}
-        <SectionHeader title="ENGINE PERFORMANCE" />
-        <Panel>
+        <SectionHeader title="Engine Performance" />
+        <Panel delay={200}>
           {engineBreakdown.map((eb, idx) => (
             <View key={eb.engine} style={[styles.engineRow, idx < engineBreakdown.length - 1 && styles.engineRowBorder]}>
               <Text style={[styles.engineLabel, { color: ENGINE_COLORS[eb.engine] }]}>
@@ -214,31 +228,31 @@ export default function AnalyticsScreen() {
         </Panel>
 
         {/* Consistency Heatmap */}
-        <SectionHeader title="CONSISTENCY HEATMAP" />
-        <Panel>
+        <SectionHeader title="Consistency Heatmap" />
+        <Panel delay={250}>
           <HeatmapGrid data={heatmapData} />
         </Panel>
 
         {/* Streak Stats */}
-        <SectionHeader title="STREAK STATS" />
+        <SectionHeader title="Streak Stats" />
         <View style={styles.streakRow}>
-          <Panel style={styles.streakCard}>
-            <Text style={styles.streakValue}>{currentStreak}</Text>
-            <Text style={styles.streakLabel}>CURRENT</Text>
+          <Panel style={styles.streakCard} delay={300}>
+            <Ionicons name="flame" size={18} color={colors.warning} />
+            <MetricValue label="Current" value={currentStreak} size="sm" color={colors.warning} animated />
           </Panel>
-          <Panel style={styles.streakCard}>
-            <Text style={styles.streakValue}>{bestStreak}</Text>
-            <Text style={styles.streakLabel}>BEST</Text>
+          <Panel style={styles.streakCard} delay={350}>
+            <Ionicons name="ribbon" size={18} color={colors.body} />
+            <MetricValue label="Best" value={bestStreak} size="sm" color={colors.body} animated />
           </Panel>
-          <Panel style={styles.streakCard}>
-            <Text style={styles.streakValue}>{consistentDays}</Text>
-            <Text style={styles.streakLabel}>60%+ DAYS</Text>
+          <Panel style={styles.streakCard} delay={400}>
+            <Ionicons name="checkmark-done" size={18} color={colors.general} />
+            <MetricValue label="60%+ Days" value={consistentDays} size="sm" color={colors.general} animated />
           </Panel>
         </View>
 
         {/* Task Reliability */}
-        <SectionHeader title="TASK RELIABILITY" />
-        <Panel>
+        <SectionHeader title="Task Reliability" />
+        <Panel delay={450}>
           {taskReliability.map((tr, idx) => (
             <View key={tr.engine} style={[styles.reliabilityRow, idx < taskReliability.length - 1 && styles.reliabilityBorder]}>
               <View style={[styles.reliabilityDot, { backgroundColor: ENGINE_COLORS[tr.engine] }]} />
@@ -267,8 +281,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   backBtn: { width: 48, height: 48, alignItems: "center", justifyContent: "center" },
-  backText: { fontSize: 24, color: colors.text },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text, letterSpacing: 2 },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
   rangePicker: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg, backgroundColor: colors.surface, borderRadius: radius.md, padding: 4, borderWidth: 1, borderColor: colors.panelBorder },
@@ -277,9 +290,7 @@ const styles = StyleSheet.create({
   rangeBtnText: { fontSize: 14, fontWeight: "700", color: colors.textMuted, letterSpacing: 1 },
   rangeBtnTextActive: { color: colors.text },
   statsRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg },
-  statCard: { flex: 1, alignItems: "center", paddingVertical: spacing.lg },
-  statValue: { ...fonts.monoValue, fontSize: 22 },
-  statLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginTop: 6 },
+  statCard: { flex: 1, alignItems: "center", gap: spacing.xs },
   chartCard: { overflow: "hidden", paddingVertical: spacing.md },
   engineRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
   engineRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.panelBorder },
@@ -288,9 +299,7 @@ const styles = StyleSheet.create({
   engineFill: { height: "100%", borderRadius: radius.full },
   engineScore: { width: 40, ...fonts.mono, fontSize: 13, color: colors.textSecondary, textAlign: "right" },
   streakRow: { flexDirection: "row", gap: spacing.md },
-  streakCard: { flex: 1, alignItems: "center", paddingVertical: spacing.lg },
-  streakValue: { ...fonts.monoValue, fontSize: 28 },
-  streakLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginTop: 6 },
+  streakCard: { flex: 1, alignItems: "center", gap: spacing.xs },
   reliabilityRow: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.md, gap: spacing.md },
   reliabilityBorder: { borderBottomWidth: 1, borderBottomColor: colors.panelBorder },
   reliabilityDot: { width: 8, height: 8, borderRadius: 4 },

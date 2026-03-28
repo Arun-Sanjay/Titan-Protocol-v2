@@ -14,11 +14,13 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, fonts } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
+import { MetricValue } from "../../src/components/ui/MetricValue";
 import {
   useDeepWorkStore,
   DeepWorkCategory,
@@ -305,32 +307,53 @@ export default function DeepWorkScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* ── Today's Earnings Hero ──────────────────────────────── */}
-          <Panel style={styles.heroPanel} glowColor={colors.money}>
+          <Panel style={styles.heroPanel} glowColor={colors.money} tone="hero" delay={0}>
             <Text style={styles.heroKicker}>TODAY'S EARNINGS</Text>
             <Text style={styles.heroValue}>{formatCurrency(todayEarnings)}</Text>
 
-            {/* Category breakdown */}
-            {Object.keys(categoryBreakdown).length > 0 && (
-              <View style={styles.breakdownRow}>
-                {(Object.entries(categoryBreakdown) as [DeepWorkCategory, number][]).map(
-                  ([cat, amount]) => (
-                    <View key={cat} style={styles.breakdownItem}>
-                      <View
-                        style={[
-                          styles.breakdownDot,
-                          { backgroundColor: CATEGORY_COLORS[cat] },
-                        ]}
-                      />
-                      <Text style={styles.breakdownLabel}>
-                        {CATEGORY_SHORT[cat]}
-                      </Text>
-                      <Text style={styles.breakdownAmount}>
-                        {formatCurrency(amount)}
-                      </Text>
-                    </View>
-                  )
-                )}
-              </View>
+            {/* Category breakdown with stacked bar */}
+            {Object.keys(categoryBreakdown).length > 0 && todayEarnings > 0 && (
+              <>
+                <View style={styles.stackedBarTrack}>
+                  {(Object.entries(categoryBreakdown) as [DeepWorkCategory, number][]).map(
+                    ([cat, amount]) => {
+                      const pct = (amount / todayEarnings) * 100;
+                      return (
+                        <View
+                          key={cat}
+                          style={[
+                            styles.stackedBarSegment,
+                            {
+                              width: `${pct}%`,
+                              backgroundColor: CATEGORY_COLORS[cat],
+                            },
+                          ]}
+                        />
+                      );
+                    }
+                  )}
+                </View>
+                <View style={styles.breakdownRow}>
+                  {(Object.entries(categoryBreakdown) as [DeepWorkCategory, number][]).map(
+                    ([cat, amount]) => (
+                      <View key={cat} style={styles.breakdownItem}>
+                        <View
+                          style={[
+                            styles.breakdownDot,
+                            { backgroundColor: CATEGORY_COLORS[cat] },
+                          ]}
+                        />
+                        <Text style={styles.breakdownLabel}>
+                          {CATEGORY_SHORT[cat]}
+                        </Text>
+                        <Text style={styles.breakdownAmount}>
+                          {formatCurrency(amount)}
+                        </Text>
+                      </View>
+                    )
+                  )}
+                </View>
+              </>
             )}
           </Panel>
 
@@ -387,7 +410,7 @@ export default function DeepWorkScreen() {
               <Text style={styles.addTaskBtnText}>Add Task</Text>
             </Pressable>
           ) : (
-            <Panel style={styles.formPanel}>
+            <Panel style={styles.formPanel} delay={50}>
               <Text style={styles.formTitle}>New Task</Text>
 
               <TextInput
@@ -450,28 +473,36 @@ export default function DeepWorkScreen() {
           {/* ── Weekly Summary ─────────────────────────────────────── */}
           <SectionHeader title="This Week" />
 
-          <Panel style={styles.weeklyPanel}>
-            <View style={styles.weeklyRow}>
-              <View style={styles.weeklyStat}>
-                <Text style={styles.weeklyValue}>
-                  {formatCurrency(weeklyEarnings)}
-                </Text>
-                <Text style={styles.weeklyLabel}>TOTAL</Text>
-              </View>
-              <View style={styles.weeklyDivider} />
-              <View style={styles.weeklyStat}>
-                <Text style={styles.weeklyValue}>{weeklyDaysWorked}</Text>
-                <Text style={styles.weeklyLabel}>DAYS</Text>
-              </View>
-              <View style={styles.weeklyDivider} />
-              <View style={styles.weeklyStat}>
-                <Text style={styles.weeklyValue}>
-                  {formatCurrency(weeklyAvg)}
-                </Text>
-                <Text style={styles.weeklyLabel}>AVG / DAY</Text>
-              </View>
-            </View>
-          </Panel>
+          <View style={styles.weeklyStatsRow}>
+            <Panel style={styles.weeklyStatCard} delay={100}>
+              <Ionicons name="cash-outline" size={18} color={colors.money} />
+              <MetricValue
+                label="Weekly Total"
+                value={formatCurrency(weeklyEarnings)}
+                size="sm"
+                color={colors.money}
+              />
+            </Panel>
+            <Panel style={styles.weeklyStatCard} delay={150}>
+              <Ionicons name="calendar-outline" size={18} color={colors.general} />
+              <MetricValue
+                label="Days Worked"
+                value={weeklyDaysWorked}
+                size="sm"
+                color={colors.general}
+                animated
+              />
+            </Panel>
+            <Panel style={styles.weeklyStatCard} delay={200}>
+              <Ionicons name="trending-up" size={18} color={colors.mind} />
+              <MetricValue
+                label="Daily Avg"
+                value={formatCurrency(weeklyAvg)}
+                size="sm"
+                color={colors.mind}
+              />
+            </Panel>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -519,8 +550,19 @@ const styles = StyleSheet.create({
     fontSize: 40,
     color: colors.money,
   },
+  stackedBarTrack: {
+    flexDirection: "row",
+    height: 8,
+    borderRadius: radius.full,
+    overflow: "hidden",
+    marginTop: spacing.lg,
+    width: "100%",
+  },
+  stackedBarSegment: {
+    height: 8,
+  },
   breakdownRow: {
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
     width: "100%",
   },
   breakdownItem: {
@@ -701,26 +743,6 @@ const styles = StyleSheet.create({
   formSaveBtnText: { fontSize: 14, fontWeight: "700", color: "#000" },
 
   // Weekly summary
-  weeklyPanel: { paddingVertical: spacing["2xl"] },
-  weeklyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-  },
-  weeklyStat: { alignItems: "center" },
-  weeklyValue: {
-    ...fonts.monoValue,
-    fontSize: 18,
-    color: colors.money,
-  },
-  weeklyLabel: {
-    ...fonts.kicker,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
-  weeklyDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: colors.panelBorder,
-  },
+  weeklyStatsRow: { flexDirection: "row", gap: spacing.md },
+  weeklyStatCard: { flex: 1, alignItems: "center", gap: spacing.xs },
 });
