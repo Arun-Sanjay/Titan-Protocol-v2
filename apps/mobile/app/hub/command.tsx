@@ -6,14 +6,17 @@ import {
   Pressable,
   SectionList,
   ScrollView,
+  AppState,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeInDown, Easing } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, fonts, shadows } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { PageHeader } from "../../src/components/ui/PageHeader";
+import { MetricValue } from "../../src/components/ui/MetricValue";
 import { ScoreGauge } from "../../src/components/ui/ScoreGauge";
 import { getTodayKey } from "../../src/lib/date";
 import {
@@ -169,15 +172,19 @@ const StatCard = React.memo(function StatCard({
   label,
   value,
   delay,
+  color,
+  icon,
 }: {
   label: string;
   value: string | number;
   delay: number;
+  color?: string;
+  icon?: keyof typeof Ionicons.glyphMap;
 }) {
   return (
     <Panel delay={delay} style={styles.statCard}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      {icon && <Ionicons name={icon} size={16} color={color ?? colors.textSecondary} />}
+      <MetricValue label={label} value={value} size="sm" color={color} animated={typeof value === "number"} />
     </Panel>
   );
 });
@@ -186,8 +193,17 @@ const StatCard = React.memo(function StatCard({
 
 export default function CommandCentreScreen() {
   const router = useRouter();
-  const dateKey = getTodayKey();
   const [filter, setFilter] = useState<FilterKey>("all");
+
+  // AppState refresh for midnight crossing
+  const [appActive, setAppActive] = useState(0);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") setAppActive((c) => c + 1);
+    });
+    return () => sub.remove();
+  }, []);
+  const dateKey = useMemo(() => getTodayKey(), [appActive]);
 
   // Engine store
   const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
@@ -241,14 +257,17 @@ export default function CommandCentreScreen() {
   const completedCount = useMemo(() => allTasks.filter((t) => t.completed).length, [allTasks]);
   const totalTasks = allTasks.length;
 
-  // Toggle handler
+  // Toggle handler — award XP on complete, deduct on un-complete
   const handleToggle = useCallback(
     (task: TaskWithStatus) => {
       const completed = toggleTask(task.engine, task.id!, dateKey);
+      const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
       if (completed) {
-        const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
         awardXP(dateKey, "task_complete", xp);
         updateStreak(dateKey);
+      } else {
+        // Deduct XP on un-complete to prevent farming
+        awardXP(dateKey, "task_uncomplete", -xp);
       }
     },
     [dateKey, toggleTask, awardXP, updateStreak],
@@ -288,7 +307,7 @@ export default function CommandCentreScreen() {
         {/* Back + Title */}
         <View style={styles.navRow}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>{"\u2190"}</Text>
+            <Ionicons name="chevron-back" size={24} color={colors.text} />
           </Pressable>
         </View>
 
@@ -308,10 +327,10 @@ export default function CommandCentreScreen() {
 
         {/* Summary Stats */}
         <View style={styles.statsRow}>
-          <StatCard label="Total" value={totalTasks} delay={150} />
-          <StatCard label="Done" value={completedCount} delay={200} />
-          <StatCard label="Score" value={`${totalScore}%`} delay={250} />
-          <StatCard label="Streak" value={streak} delay={300} />
+          <StatCard label="Total" value={totalTasks} delay={150} icon="list" color={colors.general} />
+          <StatCard label="Done" value={completedCount} delay={200} icon="checkmark-done" color={colors.body} />
+          <StatCard label="Score" value={`${totalScore}%`} delay={250} icon="analytics" color={colors.mind} />
+          <StatCard label="Streak" value={streak} delay={300} icon="flame" color={colors.warning} />
         </View>
 
         {/* Filter Chips */}
@@ -386,10 +405,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  backText: {
-    fontSize: 24,
-    color: colors.text,
-  },
 
   // Gauge
   gaugeWrap: {
@@ -407,18 +422,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xs,
-  },
-  statValue: {
-    ...fonts.monoValue,
-    fontSize: 20,
-  },
-  statLabel: {
-    ...fonts.kicker,
-    fontSize: 9,
-    color: colors.textMuted,
-    marginTop: 4,
+    gap: spacing.xs,
   },
 
   // Filter chips

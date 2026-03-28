@@ -40,9 +40,8 @@ export const useProfileStore = create<ProfileState>()((set, get) => ({
 
   awardXP: (_dateKey, _source, amount) => {
     const profile = { ...get().profile };
-    profile.xp += amount;
-    const newLevel = Math.floor(profile.xp / XP_PER_LEVEL) + 1;
-    if (newLevel > profile.level) profile.level = newLevel;
+    profile.xp = Math.max(0, profile.xp + amount); // Clamp to 0 minimum
+    profile.level = Math.max(1, Math.floor(profile.xp / XP_PER_LEVEL) + 1);
     setJSON(PROFILE_KEY, profile);
     set({ profile });
   },
