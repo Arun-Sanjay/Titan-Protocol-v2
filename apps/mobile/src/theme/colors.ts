@@ -83,3 +83,19 @@ export const colors = {
 } as const;
 
 export type ColorKey = keyof typeof colors;
+
+// Titan Mode gold accent (only active when mode === 'titan')
+export const titanColors = {
+  accent: "#FFD700",
+  accentMuted: "rgba(255, 215, 0, 0.30)",
+  accentGlow: "rgba(255, 215, 0, 0.15)",
+  accentDim: "rgba(255, 215, 0, 0.06)",
+  ringGlow: "rgba(255, 215, 0, 0.20)",
+} as const;
+
+/**
+ * Get the appropriate accent color — gold in Titan Mode, default otherwise.
+ */
+export function getTitanAccent(isTitanMode: boolean): string {
+  return isTitanMode ? titanColors.accent : colors.primary;
+}

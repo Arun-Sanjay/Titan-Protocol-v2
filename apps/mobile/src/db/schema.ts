@@ -30,6 +30,9 @@ export type Habit = {
   engine: string;
   icon: string;
   created_at: number;
+  trigger?: string;         // Implementation intention: "After waking up"
+  duration?: string;        // e.g. "30 min"
+  frequency?: string;       // e.g. "daily"
 };
 
 export type HabitLog = {

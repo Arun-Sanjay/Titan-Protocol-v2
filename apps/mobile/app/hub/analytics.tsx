@@ -12,6 +12,8 @@ import { Panel } from "../../src/components/ui/Panel";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { HeatmapGrid } from "../../src/components/ui/HeatmapGrid";
 import { useEngineStore } from "../../src/stores/useEngineStore";
+import { useHabitStore, type HabitStats } from "../../src/stores/useHabitStore";
+import { useModeStore } from "../../src/stores/useModeStore";
 import type { EngineKey } from "../../src/db/schema";
 import { getTodayKey, addDays } from "../../src/lib/date";
 
@@ -250,6 +252,9 @@ export default function AnalyticsScreen() {
           </Panel>
         </View>
 
+        {/* Habit Performance */}
+        <HabitPerformanceSection todayKey={todayKey} />
+
         {/* Task Reliability */}
         <SectionHeader title="Task Reliability" />
         <Panel delay={450}>
@@ -271,11 +276,169 @@ export default function AnalyticsScreen() {
           ))}
         </Panel>
 
+        {/* Titan Analytics (only in Titan Mode) */}
+        <TitanAnalyticsSection scores={scores} dateKeys={dateKeys} todayKey={todayKey} />
+
         <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+// ─── Habit Performance Section ───────────────────────────────────────────
+
+function HabitPerformanceSection({ todayKey }: { todayKey: string }) {
+  const habits = useHabitStore((s) => s.habits);
+  const loadHabits = useHabitStore((s) => s.load);
+  const getHabitStats = useHabitStore((s) => s.getHabitStats);
+  const overallScore = useHabitStore((s) => s.getOverallHabitScore(todayKey));
+
+  // Ensure habits are loaded
+  useEffect(() => { loadHabits(todayKey); }, [todayKey]);
+
+  if (habits.length === 0) return null;
+
+  return (
+    <>
+      <SectionHeader title="Habit Performance" />
+      <Panel delay={425}>
+        <View style={hStyles.overallRow}>
+          <Text style={hStyles.overallLabel}>Today's Completion</Text>
+          <Text style={hStyles.overallValue}>{overallScore}%</Text>
+        </View>
+        {habits.map((h, idx) => {
+          const stats = getHabitStats(h.id!, 30);
+          return (
+            <View key={h.id} style={[hStyles.habitRow, idx < habits.length - 1 && hStyles.habitBorder]}>
+              <Text style={hStyles.habitIcon}>{h.icon}</Text>
+              <View style={hStyles.habitInfo}>
+                <Text style={hStyles.habitName} numberOfLines={1}>{h.title}</Text>
+                <Text style={hStyles.habitMeta}>
+                  {stats.currentChain}d chain · {stats.completionRate}% rate · best {stats.longestChain}d
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </Panel>
+    </>
+  );
+}
+
+// ─── Titan Analytics Section ─────────────────────────────────────────────
+
+function TitanAnalyticsSection({ scores, dateKeys, todayKey }: { scores: Record<string, number>; dateKeys: string[]; todayKey: string }) {
+  const isTitanMode = useModeStore((s) => s.mode) === "titan";
+  if (!isTitanMode) return null;
+
+  // Weakness ID: find weakest engine this period
+  const engineAvgs = ENGINES.map((engine) => {
+    const vals = dateKeys.map((dk) => scores[`${engine}:${dk}`] ?? 0).filter((v) => v > 0);
+    const avg = vals.length > 0 ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+    return { engine, avg };
+  });
+  engineAvgs.sort((a, b) => a.avg - b.avg);
+  const weakest = engineAvgs[0];
+  const strongest = engineAvgs[engineAvgs.length - 1];
+
+  // Score distribution: count days above thresholds
+  const dayScores = dateKeys.map((dk) => {
+    const vals = ENGINES.map((e) => scores[`${e}:${dk}`] ?? 0);
+    const active = vals.filter((v) => v > 0);
+    return active.length > 0 ? Math.round(active.reduce((a, b) => a + b, 0) / active.length) : 0;
+  }).filter((s) => s > 0);
+
+  const above80 = dayScores.filter((s) => s >= 80).length;
+  const above85 = dayScores.filter((s) => s >= 85).length;
+  const above90 = dayScores.filter((s) => s >= 90).length;
+  const pct80 = dayScores.length > 0 ? Math.round((above80 / dayScores.length) * 100) : 0;
+
+  return (
+    <>
+      <SectionHeader title="TITAN ANALYTICS" />
+
+      {/* Weakness ID */}
+      <Panel delay={500}>
+        <View style={tStyles.row}>
+          <View style={tStyles.weakBox}>
+            <Text style={tStyles.weakLabel}>WEAKEST</Text>
+            <Text style={[tStyles.weakEngine, { color: ENGINE_COLORS[weakest.engine as EngineKey] }]}>
+              {weakest.engine.toUpperCase()}
+            </Text>
+            <Text style={tStyles.weakAvg}>{weakest.avg}% avg</Text>
+          </View>
+          <View style={tStyles.divider} />
+          <View style={tStyles.weakBox}>
+            <Text style={tStyles.weakLabel}>STRONGEST</Text>
+            <Text style={[tStyles.weakEngine, { color: ENGINE_COLORS[strongest.engine as EngineKey] }]}>
+              {strongest.engine.toUpperCase()}
+            </Text>
+            <Text style={tStyles.weakAvg}>{strongest.avg}% avg</Text>
+          </View>
+        </View>
+      </Panel>
+
+      {/* Score Distribution */}
+      <Panel delay={550}>
+        <Text style={tStyles.distTitle}>SCORE DISTRIBUTION</Text>
+        <View style={tStyles.distRows}>
+          <View style={tStyles.distRow}>
+            <Text style={tStyles.distLabel}>80%+ days</Text>
+            <Text style={tStyles.distValue}>{above80}/{dayScores.length}</Text>
+            <Text style={tStyles.distPct}>{pct80}%</Text>
+          </View>
+          <View style={tStyles.distRow}>
+            <Text style={tStyles.distLabel}>85%+ days (Titan standard)</Text>
+            <Text style={[tStyles.distValue, { color: "#FFD700" }]}>{above85}/{dayScores.length}</Text>
+            <Text style={tStyles.distPct}>{dayScores.length > 0 ? Math.round((above85 / dayScores.length) * 100) : 0}%</Text>
+          </View>
+          <View style={tStyles.distRow}>
+            <Text style={tStyles.distLabel}>90%+ days</Text>
+            <Text style={tStyles.distValue}>{above90}/{dayScores.length}</Text>
+            <Text style={tStyles.distPct}>{dayScores.length > 0 ? Math.round((above90 / dayScores.length) * 100) : 0}%</Text>
+          </View>
+        </View>
+      </Panel>
+
+      {/* Engine Gap Analysis */}
+      <Panel delay={600}>
+        <Text style={tStyles.distTitle}>ENGINE GAP</Text>
+        <Text style={tStyles.gapText}>
+          {strongest.avg - weakest.avg} point gap between {strongest.engine} and {weakest.engine}.
+          {strongest.avg - weakest.avg > 15 ? " Focus on closing this gap." : " Well balanced."}
+        </Text>
+      </Panel>
+    </>
+  );
+}
+
+const tStyles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center" },
+  weakBox: { flex: 1, alignItems: "center", gap: spacing.xs, paddingVertical: spacing.md },
+  weakLabel: { fontSize: 9, fontWeight: "700", color: colors.textMuted, letterSpacing: 2 },
+  weakEngine: { fontSize: 18, fontWeight: "800", letterSpacing: 1 },
+  weakAvg: { ...fonts.mono, fontSize: 12, color: colors.textSecondary },
+  divider: { width: 1, height: 50, backgroundColor: colors.surfaceBorder },
+  distTitle: { fontSize: 9, fontWeight: "700", color: colors.textMuted, letterSpacing: 2, marginBottom: spacing.md },
+  distRows: { gap: spacing.sm },
+  distRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.xs },
+  distLabel: { flex: 1, fontSize: 12, color: colors.textSecondary },
+  distValue: { ...fonts.mono, fontSize: 14, fontWeight: "700", color: colors.text, width: 50, textAlign: "right" },
+  distPct: { ...fonts.mono, fontSize: 11, color: colors.textMuted, width: 35, textAlign: "right" },
+  gapText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
+});
+
+const hStyles = StyleSheet.create({
+  overallRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.panelBorder, marginBottom: spacing.sm },
+  overallLabel: { fontSize: 13, fontWeight: "600", color: colors.textSecondary },
+  overallValue: { ...fonts.mono, fontSize: 16, fontWeight: "800", color: colors.text },
+  habitRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
+  habitBorder: { borderBottomWidth: 1, borderBottomColor: colors.panelBorder },
+  habitIcon: { fontSize: 16, width: 24, textAlign: "center" },
+  habitInfo: { flex: 1, gap: 2 },
+  habitName: { fontSize: 14, fontWeight: "500", color: colors.text },
+  habitMeta: { fontSize: 11, color: colors.textMuted },
+});
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },

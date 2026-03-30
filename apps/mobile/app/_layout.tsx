@@ -6,11 +6,14 @@ import { StyleSheet } from "react-native";
 import * as SystemUI from "expo-system-ui";
 import { colors } from "../src/theme";
 import { MotivationalSplash } from "../src/components/ui/MotivationalSplash";
+import { OnboardingShell } from "../src/components/v2/onboarding/OnboardingShell";
+import { useOnboardingStore } from "../src/stores/useOnboardingStore";
 
 import "../src/db/database";
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
+  const onboardingCompleted = useOnboardingStore((s) => s.completed);
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg);
@@ -34,8 +37,22 @@ export default function RootLayout() {
             animation: "slide_from_bottom",
           }}
         />
+        <Stack.Screen
+          name="protocol"
+          options={{
+            presentation: "fullScreenModal",
+            animation: "slide_from_bottom",
+          }}
+        />
+        <Stack.Screen
+          name="skill-tree/[engine]"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
       </Stack>
       {showSplash && <MotivationalSplash onDismiss={() => setShowSplash(false)} />}
+      {!showSplash && !onboardingCompleted && <OnboardingShell />}
     </GestureHandlerRootView>
   );
 }

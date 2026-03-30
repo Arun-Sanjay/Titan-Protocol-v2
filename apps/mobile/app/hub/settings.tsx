@@ -21,6 +21,12 @@ import { MetricValue } from "../../src/components/ui/MetricValue";
 import { storage } from "../../src/db/storage";
 import { useProfileStore } from "../../src/stores/useProfileStore";
 import { useEngineStore } from "../../src/stores/useEngineStore";
+import { useModeStore, type ExperienceMode } from "../../src/stores/useModeStore";
+import { useIdentityStore, IDENTITIES, selectIdentityMeta, type Archetype } from "../../src/stores/useIdentityStore";
+import { useOnboardingStore, type SchedulePreference } from "../../src/stores/useOnboardingStore";
+import { useTitanModeStore } from "../../src/stores/useTitanModeStore";
+import { scheduleDailyReminder } from "../../src/lib/notifications";
+import { getHapticsEnabled, setHapticsEnabled } from "../../src/lib/haptics";
 import { getTodayKey } from "../../src/lib/date";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -130,6 +136,165 @@ function SettingRow({
       </View>
       <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
     </Pressable>
+  );
+}
+
+// ─── V2 Settings ────────────────────────────────────────────────────────────
+
+const MODE_LABELS: Record<ExperienceMode, string> = {
+  full_protocol: "Full Protocol",
+  structured: "Structured",
+  tracker: "Tracker",
+  focus: "Focus",
+  zen: "Zen",
+  titan: "Titan Mode",
+};
+
+const SCHEDULE_LABELS: Record<SchedulePreference, string> = {
+  early_morning: "Early Morning (5-7am)",
+  morning: "Morning (7-9am)",
+  midday: "Midday (11am-1pm)",
+  evening: "Evening (5-8pm)",
+  night: "Night (8-11pm)",
+};
+
+function V2SettingsSection() {
+  const router = useRouter();
+  const mode = useModeStore((s) => s.mode);
+  const setMode = useModeStore((s) => s.setMode);
+  const setFocusEngines = useModeStore((s) => s.setFocusEngines);
+  const focusEngines = useModeStore((s) => s.focusEngines);
+  const archetype = useIdentityStore((s) => s.archetype);
+  const meta = selectIdentityMeta(archetype);
+  const titanUnlocked = useTitanModeStore((s) => s.unlocked);
+  const schedPref = useOnboardingStore((s) => s.schedulePreference);
+
+  const handleChangeMode = () => {
+    const options: ExperienceMode[] = ["full_protocol", "structured", "tracker", "focus", "zen"];
+    if (titanUnlocked) options.push("titan");
+
+    Alert.alert(
+      "Change Mode",
+      "Select your experience mode.",
+      [
+        ...options.map((m) => ({
+          text: MODE_LABELS[m],
+          onPress: () => {
+            if (mode === "titan" && m !== "titan") {
+              Alert.alert(
+                "Leave Titan Mode?",
+                "You can always re-activate Titan Mode later.",
+                [
+                  { text: "Cancel", style: "cancel" as const },
+                  { text: "Switch", onPress: () => setMode(m) },
+                ],
+              );
+            } else {
+              setMode(m);
+            }
+          },
+        })),
+        { text: "Cancel", style: "cancel" },
+      ],
+    );
+  };
+
+  const handleChangeIdentity = () => {
+    Alert.alert(
+      "Change Identity",
+      "This will reset your vote count. Are you sure?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Change",
+          onPress: () => {
+            const options = IDENTITIES.map((i) => ({
+              text: i.name,
+              onPress: () => useIdentityStore.getState().changeIdentity(i.id),
+            }));
+            Alert.alert("Choose Identity", "", [...options, { text: "Cancel", style: "cancel" as const }]);
+          },
+        },
+      ],
+    );
+  };
+
+  const handleChangeSchedule = () => {
+    const options: SchedulePreference[] = ["early_morning", "morning", "midday", "evening", "night"];
+    const schedMap: Record<string, { h: number; m: number }> = {
+      early_morning: { h: 6, m: 0 }, morning: { h: 8, m: 0 }, midday: { h: 12, m: 0 },
+      evening: { h: 18, m: 30 }, night: { h: 21, m: 0 },
+    };
+
+    Alert.alert(
+      "Protocol Reminder",
+      "When should we remind you?",
+      [
+        ...options.map((p) => ({
+          text: SCHEDULE_LABELS[p],
+          onPress: () => {
+            useOnboardingStore.getState().setSchedulePreference(p);
+            const s = schedMap[p];
+            scheduleDailyReminder(s.h, s.m);
+          },
+        })),
+        { text: "Cancel", style: "cancel" },
+      ],
+    );
+  };
+
+  return (
+    <>
+      <SectionHeader title="Experience" />
+      <Panel delay={50}>
+        <SettingRow
+          icon="game-controller-outline"
+          label={`Mode: ${MODE_LABELS[mode]}`}
+          description="Change your experience mode"
+          onPress={handleChangeMode}
+          color={mode === "titan" ? "#FFD700" : colors.primary}
+        />
+        <View style={styles.settingDivider} />
+        <SettingRow
+          icon={meta?.iconName as any ?? "person-outline"}
+          label={meta ? `Identity: ${meta.name}` : "Select Identity"}
+          description="Change your archetype"
+          onPress={handleChangeIdentity}
+          color={colors.mind}
+        />
+        <View style={styles.settingDivider} />
+        <SettingRow
+          icon="notifications-outline"
+          label={`Reminder: ${schedPref ? SCHEDULE_LABELS[schedPref] : "Not set"}`}
+          description="Change protocol reminder time"
+          onPress={handleChangeSchedule}
+          color={colors.warning}
+        />
+        <View style={styles.settingDivider} />
+        <SettingRow
+          icon="phone-portrait-outline"
+          label={`Haptics: ${getHapticsEnabled() ? "On" : "Off"}`}
+          description="Toggle vibration feedback"
+          onPress={() => {
+            const current = getHapticsEnabled();
+            setHapticsEnabled(!current);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          color={colors.body}
+        />
+        <View style={styles.settingDivider} />
+        <SettingRow
+          icon="book-outline"
+          label="Replay Tutorial"
+          description="Watch the app tutorial again"
+          onPress={() => {
+            useOnboardingStore.getState().resetTutorial();
+            router.push("/tutorial");
+          }}
+          color={colors.general}
+        />
+      </Panel>
+    </>
   );
 }
 
@@ -291,6 +456,9 @@ export default function SettingsScreen() {
             </View>
           </View>
         </Panel>
+
+        {/* ── Experience Mode ── */}
+        <V2SettingsSection />
 
         {/* ── Data ── */}
         <SectionHeader title="Data" />

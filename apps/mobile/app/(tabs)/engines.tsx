@@ -11,9 +11,10 @@ import { Panel } from "../../src/components/ui/Panel";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { getTodayKey } from "../../src/lib/date";
 import { useEngineStore, selectTotalScore, selectAllTasksForDate } from "../../src/stores/useEngineStore";
+import { useModeStore, selectActiveEngines } from "../../src/stores/useModeStore";
 import type { EngineKey } from "../../src/db/schema";
 
-const ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
+const ALL_ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
 
 export default function EnginesScreen() {
   const router = useRouter();
@@ -25,6 +26,10 @@ export default function EnginesScreen() {
     return () => sub.remove();
   }, []);
   const dateKey = useMemo(() => getTodayKey(), [appActive]);
+
+  const mode = useModeStore((s) => s.mode);
+  const focusEngines = useModeStore((s) => s.focusEngines);
+  const ENGINES = useMemo(() => selectActiveEngines(mode, focusEngines) as EngineKey[], [mode, focusEngines]);
 
   const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
   const scores = useEngineStore((s) => s.scores);
