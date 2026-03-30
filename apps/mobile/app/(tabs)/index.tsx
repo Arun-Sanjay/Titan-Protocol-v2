@@ -393,6 +393,8 @@ const zenStyles = StyleSheet.create({
 
 function SkillTreeSection() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = (screenWidth - spacing.lg * 2 - spacing.sm) / 2;
   const unlockedNodes = useSkillTreeStore((s) => s.unlockedNodes);
   const getProgress = useSkillTreeStore((s) => s.getProgress);
   const getNextUnlockable = useSkillTreeStore((s) => s.getNextUnlockable);
@@ -411,7 +413,7 @@ function SkillTreeSection() {
             <Panel
               key={engine}
               onPress={() => router.push(`/skill-tree/${engine}`)}
-              style={stStyles.card}
+              style={[stStyles.card, { width: cardWidth }]}
               delay={i * 60 + 200}
             >
               {/* Engine label + progress count */}
@@ -435,13 +437,13 @@ function SkillTreeSection() {
               </View>
 
               {/* Next unlockable */}
-              <Text style={stStyles.nextLabel} numberOfLines={1}>
+              <Text style={stStyles.nextLabel} numberOfLines={2}>
                 {next
                   ? `Next: ${next.name}`
                   : "All nodes unlocked"}
               </Text>
               {next && (
-                <Text style={stStyles.nextCondition} numberOfLines={1}>
+                <Text style={stStyles.nextCondition} numberOfLines={2}>
                   {next.conditionText}
                 </Text>
               )}
@@ -459,7 +461,6 @@ const stStyles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   card: {
-    width: "47.5%",
     flexGrow: 0, flexShrink: 0,
   },
   cardHeader: {

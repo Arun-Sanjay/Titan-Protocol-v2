@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, AppState } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, AppState, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -18,6 +18,8 @@ const ALL_ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
 
 export default function EnginesScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = (screenWidth - spacing.lg * 2 - spacing.md) / 2;
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
@@ -94,14 +96,15 @@ export default function EnginesScreen() {
           {ENGINES.map((engine) => {
             const c = engineCounts(engine);
             return (
-              <EngineCard
-                key={engine}
-                engine={engine}
-                score={scores[`${engine}:${dateKey}`] ?? 0}
-                completedCount={c.completed}
-                totalCount={c.total}
-                onPress={() => router.push(`/engine/${engine}`)}
-              />
+              <View key={engine} style={{ width: cardWidth }}>
+                <EngineCard
+                  engine={engine}
+                  score={scores[`${engine}:${dateKey}`] ?? 0}
+                  completedCount={c.completed}
+                  totalCount={c.total}
+                  onPress={() => router.push(`/engine/${engine}`)}
+                />
+              </View>
             );
           })}
         </View>

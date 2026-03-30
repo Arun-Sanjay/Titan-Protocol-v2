@@ -97,7 +97,6 @@ export const EngineCard = React.memo(function EngineCard({ engine, score, comple
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    minWidth: "45%",
   },
   top: {
     flexDirection: "row",

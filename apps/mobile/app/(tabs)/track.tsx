@@ -27,6 +27,9 @@ import { getJSON } from "../../src/db/storage";
 
 const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
 
+// Stable empty array — prevents Zustand getSnapshot infinite loop when key is missing
+const EMPTY_IDS: number[] = [];
+
 type Tab = "habits" | "journal" | "goals";
 
 export default function TrackScreen() {
@@ -71,7 +74,7 @@ export default function TrackScreen() {
 
 function HabitsTab({ dateKey }: { dateKey: string }) {
   const habits = useHabitStore((s) => s.habits);
-  const completedIds = useHabitStore((s) => s.completedIds[dateKey] ?? []);
+  const completedIds = useHabitStore((s) => s.completedIds[dateKey] ?? EMPTY_IDS);
   const load = useHabitStore((s) => s.load);
   const toggle = useHabitStore((s) => s.toggleHabit);
   const add = useHabitStore((s) => s.addHabit);
