@@ -17,6 +17,18 @@ export type SkillBranch = {
   nodes: SkillNode[];
 };
 
+export type SkillNodeStatus = "locked" | "in_progress" | "completed";
+
+export type SkillNodeProgress = {
+  nodeId: string;
+  engine: string;
+  branch: string;
+  level: number;
+  name: string;
+  status: SkillNodeStatus;
+  progress?: number; // 0-100
+};
+
 // ─── Tree Definitions ─────────────────────────────────────────────────────────
 
 export const SKILL_TREES: Record<EngineKey, SkillBranch[]> = {
@@ -199,27 +211,57 @@ export const SKILL_TREES: Record<EngineKey, SkillBranch[]> = {
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 const UNLOCKS_KEY = "skill_tree_unlocks";
+const PROGRESS_KEY = "skill_tree_progress";
 
 type SkillTreeState = {
   unlockedNodes: Set<string>;
+  /** Per-engine node progress, keyed by engine name */
+  progress: Record<string, SkillNodeProgress[]>;
   load: () => void;
-  unlockNode: (nodeId: string) => void;
+  unlockNode: (nodeIdOrEngine: string, nodeId?: string) => void;
   isUnlocked: (nodeId: string) => boolean;
   /** Returns the first locked node that is immediately unlockable (prev node unlocked or first in branch) */
   getNextUnlockable: (engine: EngineKey) => SkillNode | null;
   getProgress: (engine: EngineKey) => { unlocked: number; total: number };
+  /** Initialize a tree from JSON definitions */
+  initializeTree: (engine: string, nodes: { nodeId: string; engine: string; branch: string; level: number; name: string }[]) => void;
+  /** Get a summary overview across all engines */
+  getOverview: () => { engine: string; totalNodes: number; totalCompleted: number }[];
 };
 
 export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
   unlockedNodes: new Set(getJSON<string[]>(UNLOCKS_KEY, [])),
+  progress: getJSON<Record<string, SkillNodeProgress[]>>(PROGRESS_KEY, {}),
 
   load: () => {
-    set({ unlockedNodes: new Set(getJSON<string[]>(UNLOCKS_KEY, [])) });
+    set({
+      unlockedNodes: new Set(getJSON<string[]>(UNLOCKS_KEY, [])),
+      progress: getJSON<Record<string, SkillNodeProgress[]>>(PROGRESS_KEY, {}),
+    });
   },
 
-  unlockNode: (nodeId) => {
-    const next = new Set([...get().unlockedNodes, nodeId]);
+  unlockNode: (nodeIdOrEngine: string, nodeId?: string) => {
+    // Support both: unlockNode("nodeId") and unlockNode("engine", "nodeId")
+    const actualNodeId = nodeId ?? nodeIdOrEngine;
+    const engine = nodeId ? nodeIdOrEngine : undefined;
+
+    const next = new Set([...get().unlockedNodes, actualNodeId]);
     setJSON(UNLOCKS_KEY, [...next]);
+
+    // Also update progress map if engine is provided
+    if (engine) {
+      const progress = { ...get().progress };
+      const engineNodes = [...(progress[engine] ?? [])];
+      const idx = engineNodes.findIndex((n) => n.nodeId === actualNodeId);
+      if (idx >= 0) {
+        engineNodes[idx] = { ...engineNodes[idx], status: "completed", progress: 100 };
+        progress[engine] = engineNodes;
+        setJSON(PROGRESS_KEY, progress);
+        set({ unlockedNodes: next, progress });
+        return;
+      }
+    }
+
     set({ unlockedNodes: next });
   },
 
@@ -253,5 +295,34 @@ export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
       }
     }
     return { unlocked, total };
+  },
+
+  initializeTree: (engine, nodes) => {
+    const { unlockedNodes, progress } = get();
+    const engineProgress: SkillNodeProgress[] = nodes.map((n) => ({
+      nodeId: n.nodeId,
+      engine: n.engine,
+      branch: n.branch,
+      level: n.level,
+      name: n.name,
+      status: unlockedNodes.has(n.nodeId) ? "completed" : "locked",
+      progress: unlockedNodes.has(n.nodeId) ? 100 : 0,
+    }));
+    const updated = { ...progress, [engine]: engineProgress };
+    setJSON(PROGRESS_KEY, updated);
+    set({ progress: updated });
+  },
+
+  getOverview: () => {
+    const { progress } = get();
+    const engines = ["body", "mind", "money", "general"];
+    return engines.map((engine) => {
+      const nodes = progress[engine] ?? [];
+      return {
+        engine,
+        totalNodes: nodes.length,
+        totalCompleted: nodes.filter((n) => n.status === "completed").length,
+      };
+    });
   },
 }));

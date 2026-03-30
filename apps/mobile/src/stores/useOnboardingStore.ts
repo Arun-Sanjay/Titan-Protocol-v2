@@ -16,6 +16,8 @@ export type OnboardingStepId =
   | "preview"
   | "complete";
 
+export type SchedulePreference = "early_morning" | "morning" | "midday" | "evening" | "night";
+
 export const ONBOARDING_STEPS: OnboardingStepId[] = [
   "welcome",
   "identity",
@@ -31,12 +33,16 @@ const COMPLETED_KEY = "onboarding_completed";
 const GOALS_KEY = "user_goals";
 const ENGINE_PRIORITY_KEY = "engine_priority";
 const SCHEDULE_KEY = "user_schedule";
+const SCHEDULE_PREF_KEY = "schedule_preference";
+const TUTORIAL_COMPLETED_KEY = "tutorial_completed";
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 type OnboardingState = {
   completed: boolean;
   stepIndex: number;
+  /** Alias for stepIndex used by app/onboarding.tsx */
+  currentStep: number;
 
   // User selections (in-progress)
   identity: IdentityArchetype | null;
@@ -44,6 +50,8 @@ type OnboardingState = {
   mode: AppMode | null;
   enginePriority: EngineKey[];
   schedule: Record<string, boolean>;
+  schedulePreference: SchedulePreference | null;
+  tutorialCompleted: boolean;
 
   load: () => void;
   setStepIndex: (index: number) => void;
@@ -54,7 +62,10 @@ type OnboardingState = {
   setMode: (mode: AppMode) => void;
   setEnginePriority: (engines: EngineKey[]) => void;
   setSchedule: (schedule: Record<string, boolean>) => void;
+  setSchedulePreference: (pref: SchedulePreference) => void;
   finish: () => void;
+  completeTutorial: () => void;
+  resetTutorial: () => void;
 };
 
 const DEFAULT_SCHEDULE: Record<string, boolean> = {
@@ -64,26 +75,44 @@ const DEFAULT_SCHEDULE: Record<string, boolean> = {
 export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   completed: getJSON<boolean>(COMPLETED_KEY, false),
   stepIndex: 0,
+  get currentStep() { return get().stepIndex; },
 
   identity: null,
   goals: [],
   mode: null,
   enginePriority: ["body", "mind", "money", "general"],
   schedule: DEFAULT_SCHEDULE,
+  schedulePreference: getJSON<SchedulePreference | null>(SCHEDULE_PREF_KEY, null),
+  tutorialCompleted: getJSON<boolean>(TUTORIAL_COMPLETED_KEY, false),
 
   load: () => {
-    set({ completed: getJSON<boolean>(COMPLETED_KEY, false) });
+    set({
+      completed: getJSON<boolean>(COMPLETED_KEY, false),
+      schedulePreference: getJSON<SchedulePreference | null>(SCHEDULE_PREF_KEY, null),
+      tutorialCompleted: getJSON<boolean>(TUTORIAL_COMPLETED_KEY, false),
+    });
   },
 
-  setStepIndex: (index) => set({ stepIndex: index }),
-  next: () => set((s) => ({ stepIndex: Math.min(s.stepIndex + 1, ONBOARDING_STEPS.length - 1) })),
-  back: () => set((s) => ({ stepIndex: Math.max(s.stepIndex - 1, 0) })),
+  setStepIndex: (index) => set({ stepIndex: index, currentStep: index }),
+  next: () => set((s) => {
+    const next = Math.min(s.stepIndex + 1, ONBOARDING_STEPS.length - 1);
+    return { stepIndex: next, currentStep: next };
+  }),
+  back: () => set((s) => {
+    const prev = Math.max(s.stepIndex - 1, 0);
+    return { stepIndex: prev, currentStep: prev };
+  }),
 
   setIdentity: (identity) => set({ identity }),
   setGoals: (goals) => set({ goals }),
   setMode: (mode) => set({ mode }),
   setEnginePriority: (enginePriority) => set({ enginePriority }),
   setSchedule: (schedule) => set({ schedule }),
+
+  setSchedulePreference: (pref) => {
+    setJSON(SCHEDULE_PREF_KEY, pref);
+    set({ schedulePreference: pref });
+  },
 
   finish: () => {
     const { identity, goals, mode, enginePriority, schedule } = get();
@@ -94,5 +123,15 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
     setJSON(SCHEDULE_KEY, schedule);
     // Identity & mode go via their own stores (set by caller)
     set({ completed: true });
+  },
+
+  completeTutorial: () => {
+    setJSON(TUTORIAL_COMPLETED_KEY, true);
+    set({ tutorialCompleted: true });
+  },
+
+  resetTutorial: () => {
+    setJSON(TUTORIAL_COMPLETED_KEY, false);
+    set({ tutorialCompleted: false });
   },
 }));
