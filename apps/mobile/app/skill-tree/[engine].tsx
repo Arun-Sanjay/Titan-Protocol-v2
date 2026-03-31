@@ -14,6 +14,9 @@ import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { useSkillTreeStore, SKILL_TREES, type SkillBranch } from "../../src/stores/useSkillTreeStore";
 import type { EngineKey } from "../../src/db/schema";
 
+// Stable empty array to prevent Zustand getSnapshot infinite loop
+const EMPTY_PROGRESS: never[] = [];
+
 // ─── Engine meta ──────────────────────────────────────────────────────────────
 
 const ENGINE_LABELS: Record<EngineKey, string> = {
@@ -181,7 +184,7 @@ function BranchSection({
   engineDim: string;
   onClaim: (nodeId: string) => void;
 }) {
-  const progress = useSkillTreeStore((s) => s.progress[engine] ?? []);
+  const progress = useSkillTreeStore((s) => s.progress[engine] ?? EMPTY_PROGRESS);
   const unlockedNodes = useSkillTreeStore((s) => s.unlockedNodes);
 
   // Determine node status from the progress store

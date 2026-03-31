@@ -23,8 +23,10 @@ type Props = {
   engine: string;
 };
 
+const EMPTY_PROGRESS: never[] = [];
+
 export function SkillTreeView({ engine }: Props) {
-  const allProgress = useSkillTreeStore((s) => s.progress[engine] ?? []);
+  const allProgress = useSkillTreeStore((s) => s.progress[engine] ?? EMPTY_PROGRESS);
   const engineColor = ENGINE_COLORS[engine] ?? colors.primary;
 
   // Group nodes by branch
