@@ -57,15 +57,15 @@ export function evaluateSkillTree(engine: string): { nodeId: string; name: strin
       // Find current node progress
       const nodeProgress = progress.find((n) => n.nodeId === levelDef.nodeId);
 
-      // Skip already completed nodes
-      if (nodeProgress && nodeProgress.status === "completed") continue;
+      // Skip already claimed or ready nodes
+      if (nodeProgress && (nodeProgress.status === "claimed" || nodeProgress.status === "ready")) continue;
 
-      // Check prerequisite: previous level must be completed
+      // Check prerequisite: previous level must be claimed
       if (levelDef.level > 1) {
         const prevNode = progress.find(
           (n) => n.branch === branch.id && n.level === levelDef.level - 1,
         );
-        if (!prevNode || prevNode.status !== "completed") continue;
+        if (!prevNode || prevNode.status !== "claimed") continue;
       }
 
       // Check if requirement is met
@@ -320,7 +320,7 @@ function checkBranchLevelCheck(engine: string, minLevel: number): boolean {
   // Check that ALL branches have at least one node at minLevel completed
   for (const branch of engineData.branches) {
     const branchNodes = progress.filter((n) => n.branch === branch.id);
-    const hasLevel = branchNodes.some((n) => n.level >= minLevel && n.status === "completed");
+    const hasLevel = branchNodes.some((n) => n.level >= minLevel && n.status === "claimed");
     if (!hasLevel) return false;
   }
   return true;

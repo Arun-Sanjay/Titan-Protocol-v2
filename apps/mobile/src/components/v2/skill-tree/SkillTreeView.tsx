@@ -35,7 +35,7 @@ export function SkillTreeView({ engine }: Props) {
   }
 
   const totalNodes = allProgress.length;
-  const completedNodes = allProgress.filter((n) => n.status === "completed").length;
+  const completedNodes = allProgress.filter((n) => n.status === "claimed").length;
   const overallProgress = totalNodes > 0 ? Math.round((completedNodes / totalNodes) * 100) : 0;
 
   return (

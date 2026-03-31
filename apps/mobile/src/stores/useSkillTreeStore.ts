@@ -17,7 +17,7 @@ export type SkillBranch = {
   nodes: SkillNode[];
 };
 
-export type SkillNodeStatus = "locked" | "in_progress" | "completed";
+export type SkillNodeStatus = "locked" | "ready" | "claimed";
 
 export type SkillNodeProgress = {
   nodeId: string;
@@ -27,6 +27,7 @@ export type SkillNodeProgress = {
   name: string;
   status: SkillNodeStatus;
   progress?: number; // 0-100
+  progressText?: string; // e.g., "7 / 10 workouts"
 };
 
 // ─── Tree Definitions ─────────────────────────────────────────────────────────
@@ -219,6 +220,8 @@ type SkillTreeState = {
   progress: Record<string, SkillNodeProgress[]>;
   load: () => void;
   unlockNode: (nodeIdOrEngine: string, nodeId?: string) => void;
+  /** Claim a "ready" node — sets it to "claimed", persists, and re-evaluates the next node in the branch */
+  claimNode: (engine: string, nodeId: string) => void;
   isUnlocked: (nodeId: string) => boolean;
   /** Returns the first locked node that is immediately unlockable (prev node unlocked or first in branch) */
   getNextUnlockable: (engine: EngineKey) => SkillNode | null;
@@ -248,13 +251,13 @@ export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
     const next = new Set([...get().unlockedNodes, actualNodeId]);
     setJSON(UNLOCKS_KEY, [...next]);
 
-    // Also update progress map if engine is provided
+    // Also update progress map if engine is provided — set to "ready" (awaiting user claim)
     if (engine) {
       const progress = { ...get().progress };
       const engineNodes = [...(progress[engine] ?? [])];
       const idx = engineNodes.findIndex((n) => n.nodeId === actualNodeId);
       if (idx >= 0) {
-        engineNodes[idx] = { ...engineNodes[idx], status: "completed", progress: 100 };
+        engineNodes[idx] = { ...engineNodes[idx], status: "ready", progress: 100 };
         progress[engine] = engineNodes;
         setJSON(PROGRESS_KEY, progress);
         set({ unlockedNodes: next, progress });
@@ -263,6 +266,35 @@ export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
     }
 
     set({ unlockedNodes: next });
+  },
+
+  claimNode: (engine: string, nodeId: string) => {
+    const progress = { ...get().progress };
+    const engineNodes = [...(progress[engine] ?? [])];
+    const idx = engineNodes.findIndex((n) => n.nodeId === nodeId);
+
+    // Only allow claiming "ready" nodes
+    if (idx < 0 || engineNodes[idx].status !== "ready") return;
+
+    // 1. Set to "claimed"
+    engineNodes[idx] = { ...engineNodes[idx], status: "claimed", progress: 100 };
+
+    // 2. Re-evaluate the next node in the same branch
+    const claimedNode = engineNodes[idx];
+    const nextIdx = engineNodes.findIndex(
+      (n) => n.branch === claimedNode.branch && n.level === claimedNode.level + 1,
+    );
+    if (nextIdx >= 0 && engineNodes[nextIdx].status === "locked") {
+      // Check if this next node is already unlocked (requirement met)
+      const nextNodeId = engineNodes[nextIdx].nodeId;
+      if (get().unlockedNodes.has(nextNodeId)) {
+        engineNodes[nextIdx] = { ...engineNodes[nextIdx], status: "ready", progress: 100 };
+      }
+    }
+
+    progress[engine] = engineNodes;
+    setJSON(PROGRESS_KEY, progress);
+    set({ progress });
   },
 
   isUnlocked: (nodeId) => get().unlockedNodes.has(nodeId),
@@ -285,13 +317,22 @@ export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
   },
 
   getProgress: (engine) => {
-    const { unlockedNodes } = get();
+    const { progress } = get();
+    const engineNodes = progress[engine] ?? [];
     let total = 0;
     let unlocked = 0;
-    for (const branch of SKILL_TREES[engine]) {
-      for (const node of branch.nodes) {
-        total++;
-        if (unlockedNodes.has(node.id)) unlocked++;
+    for (const node of engineNodes) {
+      total++;
+      if (node.status === "claimed") unlocked++;
+    }
+    // Fallback to SKILL_TREES if progress map is empty
+    if (total === 0) {
+      const { unlockedNodes } = get();
+      for (const branch of SKILL_TREES[engine]) {
+        for (const node of branch.nodes) {
+          total++;
+          if (unlockedNodes.has(node.id)) unlocked++;
+        }
       }
     }
     return { unlocked, total };
@@ -305,7 +346,7 @@ export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
       branch: n.branch,
       level: n.level,
       name: n.name,
-      status: unlockedNodes.has(n.nodeId) ? "completed" : "locked",
+      status: unlockedNodes.has(n.nodeId) ? "claimed" : "locked",
       progress: unlockedNodes.has(n.nodeId) ? 100 : 0,
     }));
     const updated = { ...progress, [engine]: engineProgress };
@@ -321,7 +362,7 @@ export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
       return {
         engine,
         totalNodes: nodes.length,
-        totalCompleted: nodes.filter((n) => n.status === "completed").length,
+        totalCompleted: nodes.filter((n) => n.status === "claimed").length,
       };
     });
   },

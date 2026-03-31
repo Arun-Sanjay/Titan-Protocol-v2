@@ -331,7 +331,7 @@ function checkSkillBranchComplete(): boolean {
       if (!branchMap.has(n.branch)) branchMap.set(n.branch, { total: 0, completed: 0 });
       const b = branchMap.get(n.branch)!;
       b.total++;
-      if (n.status === "completed") b.completed++;
+      if (n.status === "claimed") b.completed++;
     }
     for (const b of branchMap.values()) {
       if (b.total > 0 && b.completed === b.total) return true;
