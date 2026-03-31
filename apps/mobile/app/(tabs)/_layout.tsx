@@ -11,6 +11,9 @@ import Animated, {
 import { useEffect } from "react";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
+import { useModeStore, type AppMode } from "../../src/stores/useModeStore";
+import RadialMenu from "../../src/components/ui/RadialMenu";
+
 // ---------------------------------------------------------------------------
 // Tab definitions
 // ---------------------------------------------------------------------------
@@ -187,22 +190,35 @@ function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 // Tab Layout
 // ---------------------------------------------------------------------------
 
+// Modes that use the radial menu instead of the standard tab bar
+const RADIAL_MODES: Set<AppMode> = new Set([
+  "full_protocol",
+  "structured",
+  "titan",
+]);
+
 export default function TabLayout() {
+  const mode = useModeStore((s) => s.mode);
+  const useRadial = RADIAL_MODES.has(mode);
+
   return (
-    <Tabs
-      tabBar={(props) => <TitanTabBar {...props} />}
-      screenOptions={{
-        headerShown: false,
-        animation: "fade",
-        freezeOnBlur: true,
-      }}
-    >
-      <Tabs.Screen name="index" />
-      <Tabs.Screen name="engines" />
-      <Tabs.Screen name="track" />
-      <Tabs.Screen name="hub" />
-      <Tabs.Screen name="profile" />
-    </Tabs>
+    <View style={{ flex: 1 }}>
+      <Tabs
+        tabBar={(props) => (useRadial ? null : <TitanTabBar {...props} />)}
+        screenOptions={{
+          headerShown: false,
+          animation: "fade",
+          freezeOnBlur: true,
+        }}
+      >
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="engines" />
+        <Tabs.Screen name="track" />
+        <Tabs.Screen name="hub" />
+        <Tabs.Screen name="profile" />
+      </Tabs>
+      {useRadial && <RadialMenu />}
+    </View>
   );
 }
 
