@@ -2,20 +2,13 @@ import { Tabs } from "expo-router";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  interpolate,
-} from "react-native-reanimated";
-import { useEffect } from "react";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
 import { useModeStore, type AppMode } from "../../src/stores/useModeStore";
-import RadialMenu from "../../src/components/ui/RadialMenu";
+import { colors } from "../../src/theme";
 
 // ---------------------------------------------------------------------------
-// Tab definitions
+// Tab definitions — game mode uses different icons/labels
 // ---------------------------------------------------------------------------
 
 type TabDef = {
@@ -23,104 +16,156 @@ type TabDef = {
   icon: keyof typeof Ionicons.glyphMap;
   iconFocused: keyof typeof Ionicons.glyphMap;
   label: string;
+  // Game mode overrides
+  gameIcon?: keyof typeof Ionicons.glyphMap;
+  gameIconFocused?: keyof typeof Ionicons.glyphMap;
+  gameLabel?: string;
 };
 
 const TABS: TabDef[] = [
-  { key: "index", icon: "home-outline", iconFocused: "home", label: "HQ" },
-  { key: "engines", icon: "flash-outline", iconFocused: "flash", label: "Engines" },
-  { key: "track", icon: "checkbox-outline", iconFocused: "checkbox", label: "Track" },
-  { key: "hub", icon: "grid-outline", iconFocused: "grid", label: "Hub" },
-  { key: "profile", icon: "person-outline", iconFocused: "person", label: "Profile" },
+  {
+    key: "index",
+    icon: "home-outline", iconFocused: "home", label: "HQ",
+    gameIcon: "game-controller-outline", gameIconFocused: "game-controller", gameLabel: "Command",
+  },
+  {
+    key: "engines",
+    icon: "flash-outline", iconFocused: "flash", label: "Engines",
+    gameIcon: "flame-outline", gameIconFocused: "flame", gameLabel: "Engines",
+  },
+  {
+    key: "track",
+    icon: "checkbox-outline", iconFocused: "checkbox", label: "Track",
+    gameIcon: "checkbox-outline", gameIconFocused: "checkbox", gameLabel: "Track",
+  },
+  {
+    key: "hub",
+    icon: "grid-outline", iconFocused: "grid", label: "Hub",
+    gameIcon: "apps-outline", gameIconFocused: "apps", gameLabel: "Hub",
+  },
+  {
+    key: "profile",
+    icon: "person-outline", iconFocused: "person", label: "Profile",
+    gameIcon: "shield-outline", gameIconFocused: "shield", gameLabel: "Profile",
+  },
 ];
 
-const TAB_BAR_HEIGHT = 64;
-const INDICATOR_WIDTH = 24;
-const INDICATOR_HEIGHT = 2;
+const TAB_BAR_HEIGHT = 56;
 
 // ---------------------------------------------------------------------------
-// AnimatedTabIcon — icon with scale + glow bar + label opacity transitions
+// Game modes that use the command bar style
 // ---------------------------------------------------------------------------
 
-type AnimatedTabIconProps = {
-  icon: keyof typeof Ionicons.glyphMap;
-  iconFocused: keyof typeof Ionicons.glyphMap;
-  label: string;
-  focused: boolean;
-};
+const GAME_MODES: Set<AppMode> = new Set([
+  "full_protocol",
+  "structured",
+  "titan",
+]);
 
-function AnimatedTabIcon({ icon, iconFocused, label, focused }: AnimatedTabIconProps) {
-  const progress = useSharedValue(focused ? 1 : 0);
+// ---------------------------------------------------------------------------
+// Command Bar (Game Mode) — slim, dark, glow dot
+// ---------------------------------------------------------------------------
 
-  useEffect(() => {
-    progress.value = withSpring(focused ? 1 : 0, {
-      damping: 18,
-      stiffness: 180,
-      mass: 0.8,
-    });
-  }, [focused, progress]);
-
-  // Glow indicator bar — fades + scales in
-  const indicatorStyle = useAnimatedStyle(() => {
-    return {
-      opacity: interpolate(progress.value, [0, 1], [0, 1]),
-      transform: [
-        { scaleX: interpolate(progress.value, [0, 1], [0.3, 1]) },
-      ],
-    };
-  });
-
-  // Icon scale: 1.0 → 1.1
-  const iconContainerStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        { scale: interpolate(progress.value, [0, 1], [1.0, 1.1]) },
-      ],
-    };
-  });
-
-  // Label opacity: dim → bright
-  const labelStyle = useAnimatedStyle(() => {
-    return {
-      opacity: interpolate(progress.value, [0, 1], [0.42, 0.92]),
-    };
-  });
+function CommandBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.tabItem}>
-      {/* Active glow indicator bar */}
-      <Animated.View style={[styles.indicator, indicatorStyle]} />
+    <View
+      style={[
+        cmdStyles.bar,
+        { height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom },
+      ]}
+    >
+      {state.routes.map((route, index) => {
+        const tab = TABS.find((t) => t.key === route.name);
+        if (!tab) return null;
 
-      {/* Icon */}
-      <Animated.View style={iconContainerStyle}>
-        <Ionicons
-          name={focused ? iconFocused : icon}
-          size={21}
-          color={focused ? "rgba(245, 248, 255, 0.92)" : "rgba(210, 220, 242, 0.42)"}
-        />
-      </Animated.View>
+        const focused = state.index === index;
+        const { options } = descriptors[route.key];
 
-      {/* Label */}
-      <Animated.View style={labelStyle}>
-        <Text
-          numberOfLines={1}
-          style={[
-            styles.label,
-            {
-              color: focused
-                ? "rgba(245, 248, 255, 0.92)"
-                : "rgba(210, 220, 242, 0.42)",
-            },
-          ]}
-        >
-          {label}
-        </Text>
-      </Animated.View>
+        const onPress = () => {
+          const event = navigation.emit({
+            type: "tabPress",
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!focused && !event.defaultPrevented) {
+            navigation.navigate(route.name, route.params);
+          }
+        };
+
+        return (
+          <Pressable
+            key={route.key}
+            onPress={onPress}
+            style={cmdStyles.item}
+            accessibilityRole="button"
+            accessibilityState={focused ? { selected: true } : {}}
+            accessibilityLabel={options.tabBarAccessibilityLabel ?? tab.gameLabel ?? tab.label}
+            hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+          >
+            {/* Glow dot above active icon */}
+            <View style={[cmdStyles.glowDot, focused && cmdStyles.glowDotActive]} />
+
+            <Ionicons
+              name={focused ? (tab.gameIconFocused ?? tab.iconFocused) : (tab.gameIcon ?? tab.icon)}
+              size={22}
+              color={focused ? "#FFFFFF" : "rgba(255,255,255,0.35)"}
+            />
+
+            <Text
+              style={[
+                cmdStyles.label,
+                { color: focused ? "#FFFFFF" : "rgba(255,255,255,0.35)" },
+              ]}
+              numberOfLines={1}
+            >
+              {tab.gameLabel ?? tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
+const cmdStyles = StyleSheet.create({
+  bar: {
+    flexDirection: "row",
+    backgroundColor: "#050607",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.06)",
+    paddingTop: 4,
+  },
+  item: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+  },
+  glowDot: {
+    width: 4, height: 4, borderRadius: 2,
+    backgroundColor: "transparent",
+    marginBottom: 2,
+  },
+  glowDotActive: {
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#FFFFFF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  label: {
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+});
+
 // ---------------------------------------------------------------------------
-// Custom Tab Bar
+// Standard Tab Bar (Tracker / Zen modes)
 // ---------------------------------------------------------------------------
 
 function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
@@ -130,10 +175,7 @@ function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     <View
       style={[
         styles.tabBar,
-        {
-          height: TAB_BAR_HEIGHT + insets.bottom,
-          paddingBottom: insets.bottom,
-        },
+        { height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom },
       ]}
     >
       {state.routes.map((route, index) => {
@@ -149,17 +191,9 @@ function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             target: route.key,
             canPreventDefault: true,
           });
-
           if (!focused && !event.defaultPrevented) {
             navigation.navigate(route.name, route.params);
           }
-        };
-
-        const onLongPress = () => {
-          navigation.emit({
-            type: "tabLongPress",
-            target: route.key,
-          });
         };
 
         return (
@@ -169,16 +203,26 @@ function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             accessibilityState={focused ? { selected: true } : {}}
             accessibilityLabel={options.tabBarAccessibilityLabel ?? tab.label}
             onPress={onPress}
-            onLongPress={onLongPress}
             style={styles.tabPressable}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
           >
-            <AnimatedTabIcon
-              icon={tab.icon}
-              iconFocused={tab.iconFocused}
-              label={tab.label}
-              focused={focused}
-            />
+            <View style={styles.tabItem}>
+              {focused && <View style={styles.indicator} />}
+              <Ionicons
+                name={focused ? tab.iconFocused : tab.icon}
+                size={21}
+                color={focused ? "rgba(245,248,255,0.92)" : "rgba(210,220,242,0.42)"}
+              />
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.label,
+                  { color: focused ? "rgba(245,248,255,0.92)" : "rgba(210,220,242,0.42)" },
+                ]}
+              >
+                {tab.label}
+              </Text>
+            </View>
           </Pressable>
         );
       })}
@@ -190,40 +234,30 @@ function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 // Tab Layout
 // ---------------------------------------------------------------------------
 
-// Modes that use the radial menu instead of the standard tab bar
-const RADIAL_MODES: Set<AppMode> = new Set([
-  "full_protocol",
-  "structured",
-  "titan",
-]);
-
 export default function TabLayout() {
   const mode = useModeStore((s) => s.mode);
-  const useRadial = RADIAL_MODES.has(mode);
+  const isGameMode = GAME_MODES.has(mode);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Tabs
-        tabBar={(props) => (useRadial ? null : <TitanTabBar {...props} />)}
-        screenOptions={{
-          headerShown: false,
-          animation: "fade",
-          freezeOnBlur: true,
-        }}
-      >
-        <Tabs.Screen name="index" />
-        <Tabs.Screen name="engines" />
-        <Tabs.Screen name="track" />
-        <Tabs.Screen name="hub" />
-        <Tabs.Screen name="profile" />
-      </Tabs>
-      {useRadial && <RadialMenu />}
-    </View>
+    <Tabs
+      tabBar={(props) => (isGameMode ? <CommandBar {...props} /> : <TitanTabBar {...props} />)}
+      screenOptions={{
+        headerShown: false,
+        animation: "fade",
+        freezeOnBlur: true,
+      }}
+    >
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="engines" />
+      <Tabs.Screen name="track" />
+      <Tabs.Screen name="hub" />
+      <Tabs.Screen name="profile" />
+    </Tabs>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Styles
+// Standard Tab Bar Styles
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
@@ -231,10 +265,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "#050607",
     borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.08)",
+    borderTopColor: "rgba(255,255,255,0.08)",
     paddingTop: 6,
-    // Subtle top glow
-    shadowColor: "rgba(255, 255, 255, 0.06)",
+    shadowColor: "rgba(255,255,255,0.06)",
     shadowOffset: { width: 0, height: -1 },
     shadowOpacity: 1,
     shadowRadius: 4,
@@ -252,13 +285,10 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   indicator: {
-    width: INDICATOR_WIDTH,
-    height: INDICATOR_HEIGHT,
-    borderRadius: INDICATOR_HEIGHT / 2,
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    width: 24, height: 2, borderRadius: 1,
+    backgroundColor: "rgba(255,255,255,0.8)",
     marginBottom: 4,
-    // Glow effect
-    shadowColor: "rgba(242, 247, 255, 0.9)",
+    shadowColor: "rgba(242,247,255,0.9)",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 6,
