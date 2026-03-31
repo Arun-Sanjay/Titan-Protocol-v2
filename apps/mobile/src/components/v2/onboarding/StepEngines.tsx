@@ -11,7 +11,7 @@ const ENGINE_META: { id: EngineKey; label: string; icon: string; desc: string; c
   { id: "body",    label: "Body",    icon: "💪", desc: "Physical health, fitness, nutrition, sleep", color: colors.body },
   { id: "mind",    label: "Mind",    icon: "🧠", desc: "Learning, focus, mental clarity, reading",   color: colors.mind },
   { id: "money",   label: "Money",   icon: "💰", desc: "Income, budgets, savings, career growth",    color: colors.money },
-  { id: "charisma", label: "Charisma", icon: "⚡", desc: "Social skills, confidence, speaking, presence", color: colors.charisma },
+  { id: "charisma", label: "Charisma", icon: "🗣️", desc: "Confidence, public speaking, networking, presence", color: colors.charisma },
 ];
 
 export function StepEngines({ onNext, onBack }: Props) {

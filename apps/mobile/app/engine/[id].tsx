@@ -23,10 +23,10 @@ import type { EngineKey, Task } from "../../src/db/schema";
 // ─── Engine metadata ──────────────────────────────────────────────────────────
 
 const ENGINE_META: Record<EngineKey, { icon: string; label: string; color: string; dimColor: string }> = {
-  body:    { icon: "⚡", label: "Body Engine",    color: colors.body,    dimColor: colors.bodyDim },
+  body:    { icon: "💪", label: "Body Engine",    color: colors.body,    dimColor: colors.bodyDim },
   mind:    { icon: "🧠", label: "Mind Engine",    color: colors.mind,    dimColor: colors.mindDim },
   money:   { icon: "💰", label: "Money Engine",   color: colors.money,   dimColor: colors.moneyDim },
-  charisma: { icon: "🎤", label: "Charisma Engine", color: colors.charisma, dimColor: colors.charismaDim },
+  charisma: { icon: "🗣️", label: "Charisma Engine", color: colors.charisma, dimColor: colors.charismaDim },
 };
 
 // ─── Suggestions pool (engine-scoped) ────────────────────────────────────────

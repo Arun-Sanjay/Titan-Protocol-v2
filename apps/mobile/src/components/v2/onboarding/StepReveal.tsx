@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, useWindowDimensions } from "react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import Animated, {
+  FadeIn, FadeInDown,
+  useSharedValue, useAnimatedStyle, withTiming, withSequence,
+} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { titanColors } from "../../../theme/colors";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
-import { IDENTITIES, type Archetype } from "../../../stores/useIdentityStore";
+import { IDENTITIES } from "../../../stores/useIdentityStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 
 type Props = { onNext: () => void; onBack: () => void };
@@ -13,11 +16,9 @@ type Props = { onNext: () => void; onBack: () => void };
 const ENGINE_LABELS: Record<string, string> = {
   body: "BODY", mind: "MIND", money: "MONEY", charisma: "CHARISMA",
 };
-
 const ENGINE_COLORS: Record<string, string> = {
   body: colors.body, mind: colors.mind, money: colors.money, charisma: colors.charisma,
 };
-
 const ARCHETYPE_ICONS: Record<string, string> = {
   titan: "\u26A1", athlete: "\uD83D\uDCAA", scholar: "\uD83D\uDCDA", hustler: "\uD83D\uDCB0",
   showman: "\uD83C\uDFA4", warrior: "\u2694\uFE0F", founder: "\uD83D\uDE80", charmer: "\u2728",
@@ -27,46 +28,76 @@ export function StepReveal({ onNext, onBack }: Props) {
   const quizResult = useOnboardingStore((s) => s.quizResult);
   const identity = useOnboardingStore((s) => s.identity);
   const setIdentity = useOnboardingStore((s) => s.setIdentity);
-  const [phase, setPhase] = useState<"reveal" | "gallery">("reveal");
+  const [phase, setPhase] = useState<"pause" | "reveal" | "gallery">("pause");
   const [selectedOverride, setSelectedOverride] = useState<IdentityArchetype | null>(null);
-  const { width: screenWidth } = useWindowDimensions();
 
   const matchedArchetype = quizResult?.archetype ?? identity ?? "athlete";
   const currentSelection = selectedOverride ?? matchedArchetype;
   const isTitan = matchedArchetype === "titan";
+  const earnedTitan = (quizResult?.titanPoints ?? 0) >= 8 || matchedArchetype === "titan";
 
   const meta = useMemo(
     () => IDENTITIES.find((i) => i.id === currentSelection),
     [currentSelection],
   );
 
-  const accentColor = isTitan && !selectedOverride ? titanColors.accent : colors.primary;
+  // Dark pause before reveal
+  useEffect(() => {
+    const pauseDuration = isTitan ? 1000 : 500;
+    const timer = setTimeout(() => setPhase("reveal"), pauseDuration);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Scale animation for archetype name
+  const nameScale = useSharedValue(0.8);
+  const nameOpacity = useSharedValue(0);
+  useEffect(() => {
+    if (phase === "reveal") {
+      const delay = isTitan ? 800 : 300;
+      setTimeout(() => {
+        nameScale.value = withTiming(1.0, { duration: 600 });
+        nameOpacity.value = withTiming(1, { duration: 600 });
+      }, delay);
+    }
+  }, [phase]);
+
+  const nameStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: nameScale.value }],
+    opacity: nameOpacity.value,
+  }));
+
   const extraDelay = isTitan ? 500 : 0;
 
   const handleContinue = () => {
-    if (phase === "reveal") {
-      setPhase("gallery");
-    } else {
-      setIdentity(currentSelection);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onNext();
-    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPhase("gallery");
+  };
+
+  const handleConfirm = () => {
+    setIdentity(currentSelection);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    onNext();
   };
 
   const handleSelectArchetype = (id: IdentityArchetype) => {
+    // Block Titan selection if not earned
+    if (id === "titan" && !earnedTitan) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedOverride(id === matchedArchetype ? null : id);
   };
 
+  // Dark pause phase
+  if (phase === "pause") {
+    return <View style={styles.container} />;
+  }
+
+  // Reveal phase
   if (phase === "reveal" && meta) {
     return (
       <View style={styles.container}>
         <View style={styles.revealCenter}>
-          {/* Archetype name */}
-          <Animated.Text
-            entering={FadeIn.delay(300 + extraDelay).duration(600)}
-            style={[styles.revealName, { color: accentColor }]}
-          >
+          {/* Archetype name with scale animation */}
+          <Animated.Text style={[styles.revealName, nameStyle, isTitan && { color: titanColors.accent }]}>
             {meta.name}
           </Animated.Text>
 
@@ -88,7 +119,7 @@ export function StepReveal({ onNext, onBack }: Props) {
 
           {/* Engine weight bars */}
           <Animated.View
-            entering={FadeInDown.delay(2000 + extraDelay).duration(500)}
+            entering={FadeInDown.delay(2000 + extraDelay).duration(400)}
             style={styles.weightBars}
           >
             {Object.entries(meta.engineWeights).map(([engine, weight]) => (
@@ -109,22 +140,36 @@ export function StepReveal({ onNext, onBack }: Props) {
             ))}
           </Animated.View>
 
-          {/* "This is you." / "Few get this result." */}
+          {/* "This is you." */}
           <Animated.Text
             entering={FadeIn.delay(2600 + extraDelay).duration(400)}
-            style={[styles.thisIsYou, isTitan && { color: titanColors.accent }]}
+            style={styles.thisIsYou}
           >
-            {isTitan ? "Few get this result." : "This is you."}
+            This is you.
           </Animated.Text>
 
-          {/* Continue button */}
-          <Animated.View entering={FadeIn.delay(3000 + extraDelay).duration(400)} style={{ width: "100%" }}>
-            <Pressable
-              style={[styles.btn, isTitan && { backgroundColor: titanColors.accent }]}
-              onPress={handleContinue}
-              onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
+          {/* Titan extra: "Few get this result." */}
+          {isTitan && (
+            <Animated.Text
+              entering={FadeIn.delay(3000 + extraDelay).duration(400)}
+              style={[styles.thisIsYou, { color: titanColors.accent, marginTop: spacing.xs }]}
             >
-              <Text style={styles.btnText}>CONTINUE</Text>
+              Few get this result.
+            </Animated.Text>
+          )}
+
+          {/* Continue button */}
+          <Animated.View
+            entering={FadeIn.delay(isTitan ? 3500 : 3000).duration(400)}
+            style={{ width: "100%" }}
+          >
+            <Pressable
+              style={[styles.continueBtn, isTitan && { borderColor: titanColors.accent }]}
+              onPress={handleContinue}
+            >
+              <Text style={[styles.continueBtnText, isTitan && { color: titanColors.accent }]}>
+                CONTINUE
+              </Text>
             </Pressable>
           </Animated.View>
         </View>
@@ -132,46 +177,45 @@ export function StepReveal({ onNext, onBack }: Props) {
     );
   }
 
-  // Gallery phase
+  // Gallery / confirmation phase
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.galleryScroll} showsVerticalScrollIndicator={false}>
-        {/* Matched card */}
+        {/* YOUR MATCH */}
         <Text style={styles.sectionTitle}>YOUR MATCH</Text>
-        <ArchetypeCard
+        <GalleryCard
           archetype={matchedArchetype}
           isMatched
           isSelected={!selectedOverride}
+          isLocked={false}
           onPress={() => handleSelectArchetype(matchedArchetype)}
-          screenWidth={screenWidth}
         />
 
-        {/* All archetypes */}
+        {/* ALL ARCHETYPES */}
         <Text style={[styles.sectionTitle, { marginTop: spacing.xl }]}>ALL ARCHETYPES</Text>
-        {IDENTITIES.filter((i) => i.id !== matchedArchetype).map((i) => (
-          <ArchetypeCard
-            key={i.id}
-            archetype={i.id}
-            isMatched={false}
-            isSelected={selectedOverride === i.id}
-            onPress={() => handleSelectArchetype(i.id)}
-            screenWidth={screenWidth}
-          />
-        ))}
+        <Text style={styles.sectionSubtitle}>Want a different path? Explore all options.</Text>
+
+        {IDENTITIES.filter((i) => i.id !== matchedArchetype).map((i) => {
+          const locked = i.id === "titan" && !earnedTitan;
+          return (
+            <GalleryCard
+              key={i.id}
+              archetype={i.id}
+              isMatched={false}
+              isSelected={selectedOverride === i.id}
+              isLocked={locked}
+              onPress={() => handleSelectArchetype(i.id)}
+            />
+          );
+        })}
 
         <View style={{ height: 120 }} />
       </ScrollView>
 
       <View style={styles.bottomBar}>
-        <Pressable
-          style={styles.btn}
-          onPress={handleContinue}
-          onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)}
-        >
+        <Pressable style={styles.btn} onPress={handleConfirm}>
           <Text style={styles.btnText}>
-            {selectedOverride
-              ? `CHOOSE ${IDENTITY_LABELS[selectedOverride].toUpperCase()}`
-              : `KEEP ${IDENTITY_LABELS[matchedArchetype].toUpperCase()}`}
+            CONFIRM {IDENTITY_LABELS[currentSelection].toUpperCase()}
           </Text>
         </Pressable>
       </View>
@@ -179,42 +223,60 @@ export function StepReveal({ onNext, onBack }: Props) {
   );
 }
 
-function ArchetypeCard({
-  archetype, isMatched, isSelected, onPress, screenWidth,
+function GalleryCard({
+  archetype, isMatched, isSelected, isLocked, onPress,
 }: {
   archetype: IdentityArchetype;
   isMatched: boolean;
   isSelected: boolean;
+  isLocked: boolean;
   onPress: () => void;
-  screenWidth: number;
 }) {
   const meta = IDENTITIES.find((i) => i.id === archetype);
   if (!meta) return null;
 
+  const isTitanCard = archetype === "titan";
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={isLocked ? undefined : onPress}
       style={[
         styles.galleryCard,
         isSelected && styles.galleryCardSelected,
         isMatched && styles.galleryCardMatched,
+        isLocked && styles.galleryCardLocked,
       ]}
     >
       <View style={styles.galleryCardHeader}>
-        <Text style={styles.galleryIcon}>{ARCHETYPE_ICONS[archetype] ?? "?"}</Text>
+        <Text style={[styles.galleryIcon, isLocked && { opacity: 0.3 }]}>
+          {ARCHETYPE_ICONS[archetype] ?? "?"}
+        </Text>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.galleryName, isSelected && { color: colors.primary }]}>
+          <Text style={[
+            styles.galleryName,
+            isSelected && { color: colors.primary },
+            isMatched && isTitanCard && { color: titanColors.accent },
+            isLocked && { color: colors.textMuted },
+          ]}>
             {meta.name}
           </Text>
-          <Text style={styles.galleryTagline}>{meta.tagline}</Text>
+          <Text style={styles.galleryTagline} numberOfLines={1}>{meta.tagline}</Text>
         </View>
-        {isSelected && (
+        {isMatched && (
+          <View style={[styles.matchBadge, isTitanCard && { backgroundColor: titanColors.accent }]}>
+            <Text style={styles.matchBadgeText}>MATCHED</Text>
+          </View>
+        )}
+        {isSelected && !isMatched && (
           <View style={styles.galleryCheck}>
             <Text style={styles.galleryCheckText}>{"\u2713"}</Text>
           </View>
         )}
       </View>
-      <Text style={styles.galleryFocus}>{meta.engineFocus}</Text>
+      <Text style={[styles.galleryFocus, isLocked && { opacity: 0.3 }]}>{meta.engineFocus}</Text>
+      {isLocked && (
+        <Text style={styles.lockedText}>Score 4+ mastery answers in the quiz to unlock</Text>
+      )}
     </Pressable>
   );
 }
@@ -222,40 +284,47 @@ function ArchetypeCard({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
 
-  // Reveal phase
+  // Reveal
   revealCenter: {
     flex: 1, justifyContent: "center", alignItems: "center",
     paddingHorizontal: spacing.xl, paddingBottom: spacing["3xl"],
   },
   revealName: {
-    fontSize: 32, fontWeight: "700", letterSpacing: 1,
-    textAlign: "center", marginBottom: spacing.md,
+    fontSize: 28, fontWeight: "700", color: colors.text,
+    letterSpacing: 2, textAlign: "center", marginBottom: spacing.md,
   },
   revealTagline: {
-    fontSize: 14, color: colors.textSecondary, textAlign: "center",
-    lineHeight: 20, marginBottom: spacing.xl,
+    fontSize: 14, fontWeight: "400", color: colors.textSecondary,
+    textAlign: "center", lineHeight: 20, marginBottom: spacing.xl,
   },
   revealDesc: {
-    fontSize: 13, color: colors.textMuted, textAlign: "center",
-    lineHeight: 20, marginBottom: spacing.xl, paddingHorizontal: spacing.md,
+    fontSize: 13, fontWeight: "400", color: colors.textMuted,
+    textAlign: "center", lineHeight: 20, marginBottom: spacing.xl,
+    paddingHorizontal: spacing.md, maxWidth: 300,
   },
   weightBars: { width: "100%", gap: spacing.sm, marginBottom: spacing.xl },
   weightRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  weightLabel: { ...fonts.kicker, fontSize: 9, width: 60, letterSpacing: 1 },
+  weightLabel: { ...fonts.kicker, fontSize: 11, width: 68, letterSpacing: 1 },
   weightTrack: {
-    flex: 1, height: 6, backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 3, overflow: "hidden",
+    flex: 1, height: 4, backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 2, overflow: "hidden",
   },
-  weightFill: { height: "100%", borderRadius: 3 },
+  weightFill: { height: "100%", borderRadius: 2 },
   weightPct: { ...fonts.mono, fontSize: 11, color: colors.textMuted, width: 32, textAlign: "right" },
   thisIsYou: {
-    ...fonts.kicker, fontSize: 10, color: colors.textMuted,
-    letterSpacing: 2, marginBottom: spacing.xl, textAlign: "center",
+    fontSize: 12, color: colors.textMuted, fontStyle: "italic",
+    letterSpacing: 1, marginBottom: spacing.lg, textAlign: "center",
   },
+  continueBtn: {
+    borderRadius: radius.md, borderWidth: 1.5,
+    borderColor: colors.primary, paddingVertical: spacing.lg, alignItems: "center",
+  },
+  continueBtnText: { ...fonts.kicker, fontSize: 13, color: colors.primary, letterSpacing: 2 },
 
-  // Gallery phase
+  // Gallery
   galleryScroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl },
-  sectionTitle: { ...fonts.kicker, fontSize: 10, color: colors.textMuted, letterSpacing: 2, marginBottom: spacing.md },
+  sectionTitle: { ...fonts.kicker, fontSize: 10, color: colors.textMuted, letterSpacing: 2, marginBottom: spacing.xs },
+  sectionSubtitle: { fontSize: 12, color: colors.textMuted, marginBottom: spacing.md },
   galleryCard: {
     backgroundColor: "rgba(255,255,255,0.03)",
     borderRadius: radius.md, borderWidth: 1,
@@ -264,16 +333,23 @@ const styles = StyleSheet.create({
   },
   galleryCardSelected: { borderColor: colors.primary, backgroundColor: "rgba(255,255,255,0.06)" },
   galleryCardMatched: { borderColor: "rgba(255, 215, 0, 0.40)" },
+  galleryCardLocked: { opacity: 0.5 },
   galleryCardHeader: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: 6 },
   galleryIcon: { fontSize: 28 },
   galleryName: { fontSize: 16, fontWeight: "600", color: colors.text },
   galleryTagline: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   galleryFocus: { ...fonts.kicker, fontSize: 8, color: colors.textSecondary, letterSpacing: 0.5 },
+  matchBadge: {
+    backgroundColor: colors.primary, borderRadius: 6,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  matchBadgeText: { ...fonts.kicker, fontSize: 8, color: "#000", letterSpacing: 1 },
   galleryCheck: {
     width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary,
     alignItems: "center", justifyContent: "center",
   },
   galleryCheckText: { fontSize: 13, fontWeight: "700", color: "#000" },
+  lockedText: { ...fonts.kicker, fontSize: 8, color: colors.textMuted, marginTop: 4, letterSpacing: 0.5 },
 
   // Bottom bar
   bottomBar: {
@@ -281,8 +357,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg, paddingBottom: spacing["3xl"], paddingTop: spacing.md,
     backgroundColor: colors.bg,
   },
-
-  // Button
   btn: {
     backgroundColor: colors.primary, borderRadius: radius.md,
     paddingVertical: spacing.lg, alignItems: "center",
