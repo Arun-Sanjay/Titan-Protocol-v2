@@ -29,6 +29,7 @@ import { getTodayKey } from "../../src/lib/date";
 import { getDailyRank } from "../../src/db/gamification";
 import { getCurrentChapter, getDayNumber } from "../../src/data/chapters";
 import { evaluateAllTrees, initializeAllTrees } from "../../src/lib/skill-tree-evaluator";
+import { getStoryForDay, addEntry } from "../../src/lib/narrative-engine";
 import type { EngineKey } from "../../src/db/schema";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -168,6 +169,12 @@ export default function HQScreen() {
     setDevDay(newDay);
     // Store the simulated day offset
     setJSON("dev_day_offset", newDay);
+    // Inject archetype story for the simulated day
+    const simulatedDayNumber = (dayNumber ?? 1) + newDay;
+    const story = getStoryForDay(archetype ?? identity, simulatedDayNumber);
+    if (story) {
+      addEntry({ date: today, text: story.text, type: "story" });
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 

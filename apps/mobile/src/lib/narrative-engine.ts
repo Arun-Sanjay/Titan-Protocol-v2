@@ -15,7 +15,7 @@ import { ARCHETYPE_STORIES, type StoryEntry } from "../data/archetype-stories";
 export type NarrativeEntry = {
   date: string;
   text: string;
-  type: "protocol" | "streak" | "neglect" | "perfect" | "level_up" | "skill_node" | "phase" | "milestone" | "day_one";
+  type: "protocol" | "streak" | "neglect" | "perfect" | "level_up" | "skill_node" | "phase" | "milestone" | "day_one" | "story";
 };
 
 const STORAGE_KEY = "narrative_entries";
@@ -32,7 +32,7 @@ export function getLatestNarrative(): NarrativeEntry | null {
   return entries.length > 0 ? entries[entries.length - 1] : null;
 }
 
-function addEntry(entry: NarrativeEntry): void {
+export function addEntry(entry: NarrativeEntry): void {
   const entries = getNarrativeEntries();
   entries.push(entry);
   // Keep only the latest MAX_ENTRIES

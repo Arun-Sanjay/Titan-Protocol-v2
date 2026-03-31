@@ -17,6 +17,11 @@ import {
   DailyBriefing,
   isBriefingSeenToday,
 } from "../src/components/v2/story/DailyBriefing";
+import { getStoryForDay, addEntry } from "../src/lib/narrative-engine";
+import { useIdentityStore } from "../src/stores/useIdentityStore";
+import { getJSON } from "../src/db/storage";
+import { getDayNumber } from "../src/data/chapters";
+import { getTodayKey } from "../src/lib/date";
 
 import "../src/db/database";
 
@@ -26,6 +31,7 @@ export default function RootLayout() {
   const [showBriefing, setShowBriefing] = useState(false);
   const onboardingCompleted = useOnboardingStore((s) => s.completed);
   const walkthroughCompleted = useWalkthroughStore((s) => s.completed);
+  const archetype = useIdentityStore((s) => s.archetype);
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg);
@@ -37,10 +43,17 @@ export default function RootLayout() {
       if (!isFirstLaunchSeen()) {
         setShowCinematic(true);
       } else if (!isBriefingSeenToday()) {
+        // Inject archetype story for today if available
+        const firstActiveDate = getJSON<string | null>("first_active_date", null);
+        const dayNum = getDayNumber(firstActiveDate);
+        const story = getStoryForDay(archetype, dayNum);
+        if (story) {
+          addEntry({ date: getTodayKey(), text: story.text, type: "story" });
+        }
         setShowBriefing(true);
       }
     }
-  }, [showSplash, onboardingCompleted, walkthroughCompleted]);
+  }, [showSplash, onboardingCompleted, walkthroughCompleted, archetype]);
 
   const handleCinematicComplete = () => {
     setShowCinematic(false);

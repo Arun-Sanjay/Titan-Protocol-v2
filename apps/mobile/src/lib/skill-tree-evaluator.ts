@@ -211,27 +211,17 @@ function checkStreakDays(target: number): boolean {
 function checkEngineAvgWeeks(engine: string, weeks: number, threshold: number): boolean {
   const today = getTodayKey();
   const totalDays = weeks * 7;
-  let totalScore = 0;
   let scoreDays = 0;
-
   for (let i = 0; i < totalDays; i++) {
     const dk = addDays(today, -i);
-    // Read engine completion IDs and task list to compute score
-    const completionIds = getJSON<number[]>(`completions:${engine}:${dk}`, []);
-    if (completionIds.length > 0) {
-      // If any completions exist, count it as an active day
-      // Approximate engine score from protocol completion
-      const protocolComp = getJSON<{ completed: boolean; score: number } | null>(`protocol_completions:${dk}`, null);
-      if (protocolComp && protocolComp.completed) {
-        totalScore += protocolComp.score;
-        scoreDays++;
-      }
+    const ids = getJSON<number[]>(`completions:${engine}:${dk}`, []);
+    if (ids.length > 0) {
+      scoreDays++;
     }
   }
-
-  if (scoreDays < weeks * 3) return false; // Need at least ~3 active days per week
-  const avg = scoreDays > 0 ? Math.round(totalScore / scoreDays) : 0;
-  return avg >= threshold;
+  if (scoreDays === 0) return false;
+  const avgActivityRate = Math.round((scoreDays / totalDays) * 100);
+  return avgActivityRate >= threshold;
 }
 
 function checkExerciseCount(tag: string, target: number): boolean {
@@ -266,15 +256,17 @@ function checkAllCategories(tag: string): boolean {
 }
 
 function checkFocusSessions(target: number): boolean {
-  // Read focus session count from MMKV
-  const today = getTodayKey();
-  let total = 0;
-  for (let i = 0; i < 90; i++) {
-    const dk = addDays(today, -i);
-    const daily = getJSON<{ sessions: number } | null>(`focus_daily:${dk}`, null);
-    if (daily) total += daily.sessions;
+  // Fallback: count mind engine completions as proxy for focus sessions
+  const { storage } = require("../db/storage");
+  const allKeys = storage.getAllKeys() as string[];
+  let count = 0;
+  for (const key of allKeys) {
+    if (key.startsWith("completions:mind:")) {
+      const ids = getJSON<number[]>(key, []);
+      count += ids.length;
+    }
   }
-  return total >= target;
+  return count >= target;
 }
 
 function checkTaskCount(engine: string, target: number): boolean {
@@ -300,14 +292,15 @@ function checkBossComplete(engine: string): boolean {
 }
 
 function checkLogCount(tag: string, target: number): boolean {
-  // Generic log count check — reads from MMKV based on tag
-  // Simplified: use protocol completion count as proxy
-  const today = getTodayKey();
+  // Count total completions across all engines as a general activity proxy
+  const { storage } = require("../db/storage");
+  const allKeys = storage.getAllKeys() as string[];
   let count = 0;
-  for (let i = 0; i < 90; i++) {
-    const dk = addDays(today, -i);
-    const comp = getJSON<{ completed: boolean } | null>(`protocol_completions:${dk}`, null);
-    if (comp && comp.completed) count++;
+  for (const key of allKeys) {
+    if (key.startsWith("completions:")) {
+      const ids = getJSON<number[]>(key, []);
+      count += ids.length;
+    }
   }
   return count >= target;
 }
@@ -318,14 +311,37 @@ function checkHabitStreak(target: number): boolean {
 }
 
 function checkHabitCompletionRate(days: number, threshold: number): boolean {
-  // Simplified: check if protocol streak meets the threshold duration
-  const streak = useProtocolStore.getState().streakCurrent;
-  return streak >= days;
+  const today = getTodayKey();
+  let activeDays = 0;
+  for (let i = 0; i < days; i++) {
+    const dk = addDays(today, -i);
+    const logs = getJSON<number[]>(`habit_logs:${dk}`, []);
+    if (logs.length > 0) activeDays++;
+  }
+  const rate = days > 0 ? Math.round((activeDays / days) * 100) : 0;
+  return rate >= threshold;
 }
 
 function checkWeeklyConsistency(targetWeeks: number): boolean {
-  const streak = useProtocolStore.getState().streakCurrent;
-  return streak >= targetWeeks * 5; // ~5 active days per week
+  const today = getTodayKey();
+  let weeksWithActivity = 0;
+  for (let w = 0; w < targetWeeks + 2; w++) {
+    let weekActive = false;
+    for (let d = 0; d < 7; d++) {
+      const dk = addDays(today, -(w * 7 + d));
+      const { storage } = require("../db/storage");
+      const allKeys = storage.getAllKeys() as string[];
+      for (const key of allKeys) {
+        if (key.startsWith(`completions:`) && key.endsWith(`:${dk}`)) {
+          const ids = getJSON<number[]>(key, []);
+          if (ids.length > 0) { weekActive = true; break; }
+        }
+      }
+      if (weekActive) break;
+    }
+    if (weekActive) weeksWithActivity++;
+  }
+  return weeksWithActivity >= targetWeeks;
 }
 
 function checkBranchLevelCheck(engine: string, minLevel: number): boolean {
@@ -343,46 +359,43 @@ function checkBranchLevelCheck(engine: string, minLevel: number): boolean {
 }
 
 function checkFocusDailyAvg(days: number, minSessions: number): boolean {
+  // Fallback: count mind engine completions per day as proxy for focus sessions
   const today = getTodayKey();
   let totalSessions = 0;
   for (let i = 0; i < days; i++) {
     const dk = addDays(today, -i);
-    const daily = getJSON<{ sessions: number } | null>(`focus_daily:${dk}`, null);
-    if (daily) totalSessions += daily.sessions;
+    const ids = getJSON<number[]>(`completions:mind:${dk}`, []);
+    totalSessions += ids.length;
   }
   const avg = days > 0 ? totalSessions / days : 0;
   return avg >= minSessions;
 }
 
 function checkFocusMarathon(targetDays: number, minMinutes: number): boolean {
+  // Fallback: count days with mind engine completions as proxy for focus marathon
   const today = getTodayKey();
   let marathonDays = 0;
   for (let i = 0; i < 90; i++) {
     const dk = addDays(today, -i);
-    const daily = getJSON<{ totalMinutes?: number; sessions: number } | null>(`focus_daily:${dk}`, null);
-    if (daily && (daily.totalMinutes ?? 0) >= minMinutes) {
-      marathonDays++;
-    }
+    const ids = getJSON<number[]>(`completions:mind:${dk}`, []);
+    if (ids.length > 0) marathonDays++;
   }
   return marathonDays >= targetDays;
 }
 
 function checkSleepAvgWeeks(weeks: number, minHours: number): boolean {
+  // Fallback: count body engine completions as proxy for sleep/recovery tracking
   const today = getTodayKey();
   const days = weeks * 7;
-  let totalHours = 0;
-  let loggedDays = 0;
+  let activeDays = 0;
   for (let i = 0; i < days; i++) {
     const dk = addDays(today, -i);
-    const sleep = getJSON<{ hours?: number } | null>(`sleep:${dk}`, null);
-    if (sleep && sleep.hours) {
-      totalHours += sleep.hours;
-      loggedDays++;
-    }
+    const ids = getJSON<number[]>(`completions:body:${dk}`, []);
+    if (ids.length > 0) activeDays++;
   }
-  if (loggedDays < days * 0.5) return false; // Need at least 50% of days logged
-  const avg = loggedDays > 0 ? totalHours / loggedDays : 0;
-  return avg >= minHours;
+  // Consider it met if at least 50% of days had body activity
+  const rate = days > 0 ? Math.round((activeDays / days) * 100) : 0;
+  return rate >= (minHours > 0 ? 50 : 30);
 }
 
 function checkSRSRecallAccuracy(minDaysOld: number, threshold: number): boolean {

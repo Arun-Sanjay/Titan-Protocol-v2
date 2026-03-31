@@ -18,7 +18,7 @@ import { useHabitStore } from "../../../stores/useHabitStore";
 import { getDailyRank } from "../../../db/gamification";
 import { getTodayKey } from "../../../lib/date";
 import { getCurrentChapter, getDayNumber } from "../../../data/chapters";
-import { getLatestNarrative } from "../../../lib/narrative-engine";
+import { getLatestNarrative, getStoryForDay } from "../../../lib/narrative-engine";
 
 const ARCHETYPE_ICONS: Record<string, string> = {
   titan: "\u26A1", athlete: "\uD83D\uDCAA", scholar: "\uD83D\uDCDA", hustler: "\uD83D\uDCB0",
@@ -93,6 +93,20 @@ export function DailyBriefing({ onEnter }: Props) {
     [tasks, completions, today],
   );
 
+  // Archetype story for today
+  const archetypeStory = getStoryForDay(archetype ?? identity, dayNumber);
+
+  // Engine accent color for the archetype's primary engine
+  const storyAccentColor = archetypeStory
+    ? ENGINE_COLORS[
+        (archetype ?? identity) === "athlete" ? "body"
+        : (archetype ?? identity) === "scholar" ? "mind"
+        : (archetype ?? identity) === "hustler" || (archetype ?? identity) === "founder" ? "money"
+        : (archetype ?? identity) === "showman" || (archetype ?? identity) === "charmer" ? "charisma"
+        : "body" // titan/warrior default
+      ] ?? accentColor
+    : accentColor;
+
   // Latest narrative
   const narrative = getLatestNarrative();
 
@@ -157,9 +171,18 @@ export function DailyBriefing({ onEnter }: Props) {
         )}
       </Animated.View>
 
+      {/* Archetype Story */}
+      {archetypeStory && (
+        <Animated.View entering={FadeInDown.delay(1000).duration(500)}>
+          <Text style={[styles.archetypeStory, { color: storyAccentColor }]}>
+            {archetypeStory.text}
+          </Text>
+        </Animated.View>
+      )}
+
       {/* Narrative */}
       {narrative && (
-        <Animated.View entering={FadeInDown.delay(1100).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(archetypeStory ? 1300 : 1100).duration(400)}>
           <Text style={styles.narrative} numberOfLines={2}>
             {narrative.text}
           </Text>
@@ -238,6 +261,11 @@ const styles = StyleSheet.create({
   },
   yesterdayLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.xs },
   yesterdayScore: { fontSize: 14, color: colors.textSecondary, textAlign: "center" },
+  archetypeStory: {
+    fontSize: 15, fontStyle: "italic", fontWeight: "500",
+    textAlign: "center", lineHeight: 22, marginBottom: spacing.md,
+    paddingHorizontal: spacing.sm,
+  },
   narrative: {
     fontSize: 13, fontStyle: "italic", color: colors.textMuted,
     textAlign: "center", lineHeight: 20, marginBottom: spacing.lg,
