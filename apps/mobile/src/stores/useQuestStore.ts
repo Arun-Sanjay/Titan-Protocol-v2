@@ -269,7 +269,7 @@ export const useQuestStore = create<QuestState>()((set, get) => ({
     const def = BOSS_DEFS.find((d) => d.id === bossChallenge.id);
     if (!def) return false;
 
-    const engines = ["body", "mind", "money", "general"];
+    const engines = ["body", "mind", "money", "charisma"];
 
     switch (def.evaluator) {
       case "all_engines_rank":

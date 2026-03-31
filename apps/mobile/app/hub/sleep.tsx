@@ -73,7 +73,7 @@ function scoreGradeColor(grade: SleepScore["grade"]): string {
   switch (grade) {
     case "S": return colors.body;
     case "A": return colors.success;
-    case "B": return colors.general;
+    case "B": return colors.charisma;
     case "C": return colors.warning;
     case "D": return "#F97316";
     case "F": return colors.danger;
@@ -236,7 +236,7 @@ const ScoreBreakdown = React.memo(function ScoreBreakdown({
   const items = [
     { label: "Duration", score: sleepScore.durationScore, max: 40, color: colors.body },
     { label: "Quality", score: sleepScore.qualityScore, max: 30, color: colors.mind },
-    { label: "Consistency", score: sleepScore.consistencyScore, max: 30, color: colors.general },
+    { label: "Consistency", score: sleepScore.consistencyScore, max: 30, color: colors.charisma },
   ];
 
   return (
@@ -797,12 +797,12 @@ export default function SleepScreen() {
           <View style={styles.statsGrid}>
             {consistency && (
               <Panel style={styles.statCard} delay={300}>
-                <Ionicons name="analytics-outline" size={18} color={colors.general} />
+                <Ionicons name="analytics-outline" size={18} color={colors.charisma} />
                 <MetricValue
                   label="Consistency"
                   value={`${consistency.score}%`}
                   size="sm"
-                  color={colors.general}
+                  color={colors.charisma}
                 />
                 <Text style={styles.trendBadge}>
                   {consistency.trend === "improving"

@@ -14,7 +14,7 @@ import { useEngineStore, selectTotalScore, selectAllTasksForDate } from "../../s
 import { useModeStore, selectActiveEngines } from "../../src/stores/useModeStore";
 import type { EngineKey } from "../../src/db/schema";
 
-const ALL_ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
+const ALL_ENGINES: EngineKey[] = ["body", "mind", "money", "charisma"];
 
 export default function EnginesScreen() {
   const router = useRouter();

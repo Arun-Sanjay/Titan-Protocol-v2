@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     overflow: "hidden",
   },
-  scenarioBorder: { width: 3, backgroundColor: colors.general, borderRadius: 2, marginRight: spacing.md },
+  scenarioBorder: { width: 3, backgroundColor: colors.charisma, borderRadius: 2, marginRight: spacing.md },
   scenarioText: { flex: 1, fontSize: 14, fontWeight: "400", color: colors.text, lineHeight: 22 },
   question: { fontSize: 15, fontWeight: "600", color: colors.text, marginBottom: spacing.lg },
   option: {

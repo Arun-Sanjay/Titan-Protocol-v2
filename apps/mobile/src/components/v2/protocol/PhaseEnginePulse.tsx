@@ -10,14 +10,14 @@ const ENGINE_COLORS: Record<string, string> = {
   body: colors.body,
   mind: colors.mind,
   money: colors.money,
-  general: colors.general,
+  charisma: colors.charisma,
 };
 
 const ENGINE_LABELS: Record<string, string> = {
   body: "BODY",
   mind: "MIND",
   money: "MONEY",
-  general: "GENERAL",
+  charisma: "CHARISMA",
 };
 
 const ENGINE_OPTIONS: Record<string, { label: string; icon: string }[]> = {
@@ -39,11 +39,11 @@ const ENGINE_OPTIONS: Record<string, { label: string; icon: string }[]> = {
     { label: "Save", icon: "wallet-outline" },
     { label: "Earn", icon: "trending-up-outline" },
   ],
-  general: [
-    { label: "Organization", icon: "grid-outline" },
-    { label: "Relationships", icon: "people-outline" },
-    { label: "Self-care", icon: "heart-outline" },
-    { label: "Growth", icon: "rocket-outline" },
+  charisma: [
+    { label: "Confidence", icon: "happy-outline" },
+    { label: "Public Speaking", icon: "mic-outline" },
+    { label: "Networking", icon: "people-outline" },
+    { label: "Presence", icon: "star-outline" },
   ],
 };
 
@@ -61,7 +61,7 @@ function getPrimaryEngine(archetype: string | null): string {
     // Rotate through engines daily
     const today = getTodayKey();
     const dayNum = parseInt(today.replace(/-/g, ""), 10);
-    const engines = ["body", "mind", "money", "general"];
+    const engines = ["body", "mind", "money", "charisma"];
     return engines[dayNum % 4];
   }
   return IDENTITY_PRIMARY[archetype] ?? "body";

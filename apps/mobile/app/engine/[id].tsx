@@ -26,7 +26,7 @@ const ENGINE_META: Record<EngineKey, { icon: string; label: string; color: strin
   body:    { icon: "⚡", label: "Body Engine",    color: colors.body,    dimColor: colors.bodyDim },
   mind:    { icon: "🧠", label: "Mind Engine",    color: colors.mind,    dimColor: colors.mindDim },
   money:   { icon: "💰", label: "Money Engine",   color: colors.money,   dimColor: colors.moneyDim },
-  general: { icon: "⚙️", label: "General Engine", color: colors.general, dimColor: colors.generalDim },
+  charisma: { icon: "🎤", label: "Charisma Engine", color: colors.charisma, dimColor: colors.charismaDim },
 };
 
 // ─── Suggestions pool (engine-scoped) ────────────────────────────────────────
@@ -55,12 +55,12 @@ const ALL_SUGGESTIONS: Record<EngineKey, Suggestion[]> = {
     { id: "money_invoice",   title: "Follow up on an invoice",          type: "side_quest" },
     { id: "money_research",  title: "Research one investment option",   type: "side_quest" },
   ],
-  general: [
-    { id: "general_plan",    title: "Plan tomorrow's tasks",       type: "mission" },
-    { id: "general_tidy",    title: "Tidy your workspace",         type: "side_quest" },
-    { id: "general_learn",   title: "Learn something new today",   type: "side_quest" },
-    { id: "general_call",    title: "Reach out to someone today",  type: "side_quest" },
-    { id: "general_review",  title: "Weekly review: what worked?", type: "mission" },
+  charisma: [
+    { id: "charisma_plan",    title: "Start a conversation with someone new",       type: "mission" },
+    { id: "charisma_tidy",    title: "Practice your elevator pitch",         type: "side_quest" },
+    { id: "charisma_learn",   title: "Give a genuine compliment to a stranger",   type: "side_quest" },
+    { id: "charisma_call",    title: "Record yourself speaking for 2 minutes",  type: "side_quest" },
+    { id: "charisma_review",  title: "Lead or contribute to a group discussion", type: "mission" },
   ],
 };
 
@@ -147,7 +147,7 @@ const sStyles = StyleSheet.create({
 export default function EngineScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const engine = id as EngineKey;
-  const meta = ENGINE_META[engine] ?? ENGINE_META.general;
+  const meta = ENGINE_META[engine] ?? ENGINE_META.charisma;
   const router = useRouter();
 
   // AppState listener for midnight crossing

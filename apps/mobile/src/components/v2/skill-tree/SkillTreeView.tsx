@@ -9,14 +9,14 @@ const ENGINE_COLORS: Record<string, string> = {
   body: colors.body,
   mind: colors.mind,
   money: colors.money,
-  general: colors.general,
+  charisma: colors.charisma,
 };
 
 const ENGINE_LABELS: Record<string, string> = {
   body: "BODY",
   mind: "MIND",
   money: "MONEY",
-  general: "GENERAL",
+  charisma: "CHARISMA",
 };
 
 type Props = {

@@ -1,5 +1,5 @@
 // ─── Types (mirrored from web for data compat) ────────────────────────────
-export type EngineKey = "body" | "mind" | "money" | "general";
+export type EngineKey = "body" | "mind" | "money" | "charisma";
 
 export type Task = {
   id?: number;

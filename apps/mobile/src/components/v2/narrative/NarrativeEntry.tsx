@@ -7,7 +7,7 @@ import { formatDateShort } from "../../../lib/date";
 
 const TYPE_CONFIG: Record<NarrativeEntryType, { icon: string; color: string }> = {
   milestone: { icon: "flag", color: colors.warning },
-  phase: { icon: "rocket", color: colors.general },
+  phase: { icon: "rocket", color: colors.charisma },
   boss: { icon: "trophy", color: colors.warning },
   achievement: { icon: "ribbon", color: colors.mind },
   identity: { icon: "person", color: colors.primary },

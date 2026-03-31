@@ -19,7 +19,7 @@ const ENGINE_COLORS: Record<EngineKey, string> = {
   body: colors.body,
   mind: colors.mind,
   money: colors.money,
-  general: colors.general,
+  charisma: colors.charisma,
 };
 
 const GOAL_OPTIONS: GoalOption[] = [
@@ -30,9 +30,9 @@ const GOAL_OPTIONS: GoalOption[] = [
   { id: "skills",      label: "Learn new skills",         engine: "mind" },
   { id: "income",      label: "Grow my income",           engine: "money" },
   { id: "money_mgmt",  label: "Manage money better",      engine: "money" },
-  { id: "habits",      label: "Build better habits",      engine: "general" },
-  { id: "discipline",  label: "Become more disciplined",  engine: "general" },
-  { id: "organized",   label: "Be more organized",        engine: "general" },
+  { id: "habits",      label: "Build better habits",      engine: "charisma" },
+  { id: "discipline",  label: "Become more disciplined",  engine: "charisma" },
+  { id: "organized",   label: "Be more organized",        engine: "charisma" },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────

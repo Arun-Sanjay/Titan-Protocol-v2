@@ -227,7 +227,7 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
                   h.engine === "body" ? colors.body :
                   h.engine === "mind" ? colors.mind :
                   h.engine === "money" ? colors.money :
-                  h.engine === "general" ? colors.general :
+                  h.engine === "charisma" ? colors.charisma :
                   colors.success
                 }
               />
@@ -588,7 +588,7 @@ function GoalsTab({ dateKey }: { dateKey: string }) {
     if (!newTitle.trim()) return;
     addGoal({
       title: newTitle.trim(),
-      engine: "general",
+      engine: "charisma",
       type: "count",
       target: 1,
       unit: "tasks",

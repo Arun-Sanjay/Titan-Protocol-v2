@@ -48,9 +48,9 @@ const PHASE_MISSIONS: Record<Phase, Record<string, SuggestedMission[]>> = {
       { id: "fm_$1", engine: "money", title: "Track today's spending", points: 2, type: "mission" },
       { id: "fm_$2", engine: "money", title: "Review your budget", points: 1, type: "side_quest" },
     ],
-    general: [
-      { id: "fm_g1", engine: "general", title: "Plan tomorrow's tasks", points: 2, type: "mission" },
-      { id: "fm_g2", engine: "general", title: "Connect with someone", points: 1, type: "side_quest" },
+    charisma: [
+      { id: "fm_c1", engine: "charisma", title: "Start a conversation with someone new", points: 2, type: "mission" },
+      { id: "fm_c2", engine: "charisma", title: "Give a genuine compliment to a stranger", points: 1, type: "side_quest" },
     ],
   },
   building: {
@@ -69,10 +69,10 @@ const PHASE_MISSIONS: Record<Phase, Record<string, SuggestedMission[]>> = {
       { id: "bm_$2", engine: "money", title: "Research one investment", points: 1, type: "side_quest" },
       { id: "bm_$3", engine: "money", title: "Track all expenses", points: 1, type: "side_quest" },
     ],
-    general: [
-      { id: "bm_g1", engine: "general", title: "Complete all planned tasks", points: 2, type: "mission" },
-      { id: "bm_g2", engine: "general", title: "Organize one area", points: 1, type: "side_quest" },
-      { id: "bm_g3", engine: "general", title: "Help someone today", points: 1, type: "side_quest" },
+    charisma: [
+      { id: "bm_c1", engine: "charisma", title: "Practice a 2-minute speech", points: 2, type: "mission" },
+      { id: "bm_c2", engine: "charisma", title: "Have a meaningful conversation", points: 1, type: "side_quest" },
+      { id: "bm_c3", engine: "charisma", title: "Practice active listening all day", points: 1, type: "side_quest" },
     ],
   },
   intensify: {
@@ -91,10 +91,10 @@ const PHASE_MISSIONS: Record<Phase, Record<string, SuggestedMission[]>> = {
       { id: "im_$2", engine: "money", title: "Audit subscriptions", points: 2, type: "mission" },
       { id: "im_$3", engine: "money", title: "Read financial news", points: 1, type: "side_quest" },
     ],
-    general: [
-      { id: "im_g1", engine: "general", title: "Zero inbox + zero tasks", points: 2, type: "mission" },
-      { id: "im_g2", engine: "general", title: "Strengthen key relationship", points: 2, type: "mission" },
-      { id: "im_g3", engine: "general", title: "Learn a new skill", points: 1, type: "side_quest" },
+    charisma: [
+      { id: "im_c1", engine: "charisma", title: "Record and review a 2-minute speech", points: 2, type: "mission" },
+      { id: "im_c2", engine: "charisma", title: "Lead a group discussion", points: 2, type: "mission" },
+      { id: "im_c3", engine: "charisma", title: "Introduce yourself to 3 new people", points: 1, type: "side_quest" },
     ],
   },
   sustain: {
@@ -110,9 +110,9 @@ const PHASE_MISSIONS: Record<Phase, Record<string, SuggestedMission[]>> = {
       { id: "sm_$1", engine: "money", title: "Weekly financial review", points: 2, type: "mission" },
       { id: "sm_$2", engine: "money", title: "Optimize one expense", points: 1, type: "side_quest" },
     ],
-    general: [
-      { id: "sm_g1", engine: "general", title: "Weekly review & plan", points: 2, type: "mission" },
-      { id: "sm_g2", engine: "general", title: "Invest in relationships", points: 1, type: "side_quest" },
+    charisma: [
+      { id: "sm_c1", engine: "charisma", title: "Maintain your networking habit", points: 2, type: "mission" },
+      { id: "sm_c2", engine: "charisma", title: "Practice confident body language", points: 1, type: "side_quest" },
     ],
   },
 };
@@ -128,7 +128,7 @@ const PHASE_MISSIONS: Record<Phase, Record<string, SuggestedMission[]>> = {
 export function getSuggestedMissions(
   identity: string,
   phase: Phase,
-  enginePriority: string[] = ["body", "mind", "money", "general"],
+  enginePriority: string[] = ["body", "mind", "money", "charisma"],
   weekInPhase: number = 1,
 ): SuggestedMission[] {
   const phaseMissions = PHASE_MISSIONS[phase] ?? PHASE_MISSIONS.foundation;

@@ -69,7 +69,7 @@ function getAccentColor(type: ShareCardType, rarity?: string): string {
       case "legendary": return "#FFD700";
       case "epic": return colors.mind;
       case "rare": return colors.warning;
-      case "uncommon": return colors.general;
+      case "uncommon": return colors.charisma;
       default: return colors.textSecondary;
     }
   }

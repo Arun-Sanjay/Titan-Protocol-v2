@@ -210,7 +210,7 @@ const SKILL_ENGINES = [
   { id: "body", label: "Body", color: colors.body },
   { id: "mind", label: "Mind", color: colors.mind },
   { id: "money", label: "Money", color: colors.money },
-  { id: "general", label: "General", color: colors.general },
+  { id: "charisma", label: "Charisma", color: colors.charisma },
 ];
 
 function SkillTreesOverview() {

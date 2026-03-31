@@ -11,15 +11,17 @@ import type { Archetype } from "../stores/useIdentityStore";
 // ─── Weight lookup (duplicated from store to keep lib pure) ─────────────────
 
 const ENGINE_WEIGHTS: Record<Archetype, Record<string, number>> = {
-  operator:  { body: 0.25, mind: 0.25, money: 0.25, general: 0.25 },
-  monk:      { body: 0.30, mind: 0.35, money: 0.15, general: 0.20 },
-  titan:     { body: 0.25, mind: 0.25, money: 0.25, general: 0.25 },
-  architect: { body: 0.15, mind: 0.30, money: 0.35, general: 0.20 },
-  warrior:   { body: 0.40, mind: 0.20, money: 0.15, general: 0.25 },
-  scholar:   { body: 0.20, mind: 0.40, money: 0.15, general: 0.25 },
+  titan:    { body: 0.25, mind: 0.25, money: 0.25, charisma: 0.25 },
+  athlete:  { body: 0.40, mind: 0.20, money: 0.15, charisma: 0.25 },
+  scholar:  { body: 0.15, mind: 0.45, money: 0.15, charisma: 0.25 },
+  hustler:  { body: 0.15, mind: 0.25, money: 0.40, charisma: 0.20 },
+  showman:  { body: 0.15, mind: 0.20, money: 0.20, charisma: 0.45 },
+  warrior:  { body: 0.30, mind: 0.35, money: 0.15, charisma: 0.20 },
+  founder:  { body: 0.10, mind: 0.30, money: 0.40, charisma: 0.20 },
+  charmer:  { body: 0.30, mind: 0.10, money: 0.15, charisma: 0.45 },
 };
 
-const EQUAL_WEIGHTS: Record<string, number> = { body: 0.25, mind: 0.25, money: 0.25, general: 0.25 };
+const EQUAL_WEIGHTS: Record<string, number> = { body: 0.25, mind: 0.25, money: 0.25, charisma: 0.25 };
 
 // ─── Rank thresholds (same as v1) ──────────────────────────────────────────
 

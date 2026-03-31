@@ -218,7 +218,7 @@ function checkAllEnginesConsecutive(days: number): boolean {
   const today = getTodayKey();
   for (let i = 0; i < days; i++) {
     const dk = addDays(today, -i);
-    const engines = ["body", "mind", "money", "general"];
+    const engines = ["body", "mind", "money", "charisma"];
     const allScored = engines.every((e) => {
       const ids = getJSON<number[]>(`completions:${e}:${dk}`, []);
       return ids.length > 0;
@@ -324,7 +324,7 @@ function checkJournalEntries(target: number): boolean {
 
 function checkSkillBranchComplete(): boolean {
   const progress = useSkillTreeStore.getState().progress;
-  for (const engine of ["body", "mind", "money", "general"]) {
+  for (const engine of ["body", "mind", "money", "charisma"]) {
     const nodes = progress[engine] ?? [];
     const branchMap = new Map<string, { total: number; completed: number }>();
     for (const n of nodes) {

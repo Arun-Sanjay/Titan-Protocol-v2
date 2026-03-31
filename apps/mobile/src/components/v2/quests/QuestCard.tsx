@@ -8,7 +8,7 @@ import type { Quest } from "../../../stores/useQuestStore";
 
 const TYPE_ICONS: Record<string, { icon: string; color: string }> = {
   engine: { icon: "speedometer-outline", color: colors.body },
-  cross_engine: { icon: "git-merge-outline", color: colors.general },
+  cross_engine: { icon: "git-merge-outline", color: colors.charisma },
   wildcard: { icon: "star-outline", color: colors.warning },
 };
 

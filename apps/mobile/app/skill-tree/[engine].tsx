@@ -13,13 +13,13 @@ import type { EngineKey } from "../../src/db/schema";
 // ─── Engine meta ──────────────────────────────────────────────────────────────
 
 const ENGINE_LABELS: Record<EngineKey, string> = {
-  body: "BODY", mind: "MIND", money: "MONEY", general: "GENERAL",
+  body: "BODY", mind: "MIND", money: "MONEY", charisma: "CHARISMA",
 };
 const ENGINE_COLORS: Record<EngineKey, string> = {
-  body: colors.body, mind: colors.mind, money: colors.money, general: colors.general,
+  body: colors.body, mind: colors.mind, money: colors.money, charisma: colors.charisma,
 };
 const ENGINE_DIM: Record<EngineKey, string> = {
-  body: colors.bodyDim, mind: colors.mindDim, money: colors.moneyDim, general: colors.generalDim,
+  body: colors.bodyDim, mind: colors.mindDim, money: colors.moneyDim, charisma: colors.charismaDim,
 };
 
 // ─── Node Card ────────────────────────────────────────────────────────────────

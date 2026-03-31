@@ -20,7 +20,7 @@
       { "title": "Deep work block", "trigger": "After morning coffee", "duration": "90 min", "frequency": "daily", "engine": "mind", "icon": "🎯" },
       { "title": "Review finances", "trigger": "After lunch", "duration": "15 min", "frequency": "daily", "engine": "money", "icon": "💰" },
       { "title": "Learn something new", "trigger": "After dinner", "duration": "30 min", "frequency": "daily", "engine": "mind", "icon": "📖" },
-      { "title": "Plan tomorrow", "trigger": "Before bed", "duration": "10 min", "frequency": "daily", "engine": "general", "icon": "📋" },
+      { "title": "Plan tomorrow", "trigger": "Before bed", "duration": "10 min", "frequency": "daily", "engine": "charisma", "icon": "📋" },
       { "title": "Cold shower", "trigger": "After morning workout", "duration": "3 min", "frequency": "daily", "engine": "body", "icon": "🚿" }
     ],
     "architect": [
@@ -28,13 +28,13 @@
       { "title": "Track all spending", "trigger": "Throughout the day", "duration": "ongoing", "frequency": "daily", "engine": "money", "icon": "🧾" },
       { "title": "Invest/save action", "trigger": "After lunch", "duration": "10 min", "frequency": "daily", "engine": "money", "icon": "📈" },
       { "title": "Read business/finance", "trigger": "After dinner", "duration": "30 min", "frequency": "daily", "engine": "mind", "icon": "📚" },
-      { "title": "System optimization", "trigger": "Before bed", "duration": "15 min", "frequency": "daily", "engine": "general", "icon": "⚙️" }
+      { "title": "System optimization", "trigger": "Before bed", "duration": "15 min", "frequency": "daily", "engine": "charisma", "icon": "⚙️" }
     ],
     "scholar": [
       { "title": "Read for 30 min", "trigger": "After morning coffee", "duration": "30 min", "frequency": "daily", "engine": "mind", "icon": "📚" },
       { "title": "Learn a concept", "trigger": "After lunch", "duration": "20 min", "frequency": "daily", "engine": "mind", "icon": "💡" },
       { "title": "Write/reflect", "trigger": "Before bed", "duration": "15 min", "frequency": "daily", "engine": "mind", "icon": "✍️" },
-      { "title": "Teach someone", "trigger": "Throughout the day", "duration": "varies", "frequency": "daily", "engine": "general", "icon": "🗣️" },
+      { "title": "Teach someone", "trigger": "Throughout the day", "duration": "varies", "frequency": "daily", "engine": "charisma", "icon": "🗣️" },
       { "title": "Practice a skill", "trigger": "After dinner", "duration": "30 min", "frequency": "daily", "engine": "mind", "icon": "🎯" },
       { "title": "Review notes", "trigger": "After waking up", "duration": "10 min", "frequency": "daily", "engine": "mind", "icon": "📝" }
     ],
@@ -42,8 +42,8 @@
       { "title": "Morning exercise", "trigger": "After waking up", "duration": "30 min", "frequency": "daily", "engine": "body", "icon": "🏃" },
       { "title": "Read or learn", "trigger": "After morning coffee", "duration": "20 min", "frequency": "daily", "engine": "mind", "icon": "📖" },
       { "title": "Track spending", "trigger": "After lunch", "duration": "5 min", "frequency": "daily", "engine": "money", "icon": "💳" },
-      { "title": "Plan & organize", "trigger": "Before bed", "duration": "10 min", "frequency": "daily", "engine": "general", "icon": "📋" },
-      { "title": "Connect with someone", "trigger": "Throughout the day", "duration": "varies", "frequency": "daily", "engine": "general", "icon": "👥" }
+      { "title": "Plan & organize", "trigger": "Before bed", "duration": "10 min", "frequency": "daily", "engine": "charisma", "icon": "📋" },
+      { "title": "Connect with someone", "trigger": "Throughout the day", "duration": "varies", "frequency": "daily", "engine": "charisma", "icon": "👥" }
     ]
   }
 }

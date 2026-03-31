@@ -17,12 +17,12 @@ import { useModeStore } from "../../src/stores/useModeStore";
 import type { EngineKey } from "../../src/db/schema";
 import { getTodayKey, addDays } from "../../src/lib/date";
 
-const ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
+const ENGINES: EngineKey[] = ["body", "mind", "money", "charisma"];
 const ENGINE_COLORS: Record<EngineKey, string> = {
   body: colors.body,
   mind: colors.mind,
   money: colors.money,
-  general: colors.general,
+  charisma: colors.charisma,
 };
 
 type Range = 7 | 30 | 90;
@@ -247,8 +247,8 @@ export default function AnalyticsScreen() {
             <MetricValue label="Best" value={bestStreak} size="sm" color={colors.body} animated />
           </Panel>
           <Panel style={styles.streakCard} delay={400}>
-            <Ionicons name="checkmark-done" size={18} color={colors.general} />
-            <MetricValue label="60%+ Days" value={consistentDays} size="sm" color={colors.general} animated />
+            <Ionicons name="checkmark-done" size={18} color={colors.charisma} />
+            <MetricValue label="60%+ Days" value={consistentDays} size="sm" color={colors.charisma} animated />
           </Panel>
         </View>
 

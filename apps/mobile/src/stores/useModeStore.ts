@@ -9,20 +9,24 @@ export type AppMode = "full_protocol" | "structured" | "tracker" | "focus" | "ze
 export type ExperienceMode = AppMode;
 
 export type IdentityArchetype =
+  | "titan"
   | "athlete"
   | "scholar"
-  | "builder"
+  | "hustler"
+  | "showman"
   | "warrior"
-  | "creator"
-  | "strategist";
+  | "founder"
+  | "charmer";
 
 export const IDENTITY_LABELS: Record<IdentityArchetype, string> = {
+  titan: "The Titan",
   athlete: "The Athlete",
   scholar: "The Scholar",
-  builder: "The Builder",
+  hustler: "The Hustler",
+  showman: "The Showman",
   warrior: "The Warrior",
-  creator: "The Creator",
-  strategist: "The Strategist",
+  founder: "The Founder",
+  charmer: "The Charmer",
 };
 
 // Which dashboard features each mode shows
@@ -105,7 +109,7 @@ export function checkFeatureVisible(mode: AppMode, feature: string): boolean {
 
 /** Returns the list of engines that should be visible for a given mode + focusEngines selection. */
 export function selectActiveEngines(mode: AppMode, focusEngines: string[]): string[] {
-  const all = ["body", "mind", "money", "general"];
+  const all = ["body", "mind", "money", "charisma"];
   if (mode === "focus" && focusEngines.length > 0) return focusEngines;
   return all;
 }

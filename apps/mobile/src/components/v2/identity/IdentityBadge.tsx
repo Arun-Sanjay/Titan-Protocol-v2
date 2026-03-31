@@ -22,7 +22,7 @@ const ENGINE_COLOR_MAP: Record<string, string> = {
   body: colors.body,
   mind: colors.mind,
   money: colors.money,
-  general: colors.general,
+  charisma: colors.charisma,
   all: colors.primary,
 };
 

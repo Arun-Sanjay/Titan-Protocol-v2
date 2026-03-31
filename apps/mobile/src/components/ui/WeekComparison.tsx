@@ -10,7 +10,7 @@ const ENGINE_LABELS: Record<EngineKey, string> = {
   body: "BODY",
   mind: "MIND",
   money: "MONEY",
-  general: "GENERAL",
+  charisma: "CHARISMA",
 };
 
 type Props = {

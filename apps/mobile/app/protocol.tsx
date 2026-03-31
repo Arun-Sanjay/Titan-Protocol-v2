@@ -376,12 +376,14 @@ const habitStyles = StyleSheet.create({
 // ─── Phase 4 — Score Reveal ───────────────────────────────────────────────────
 
 const IDENTITY_ICONS: Record<IdentityArchetype, string> = {
+  titan: "⚡",
   athlete: "🏆",
   scholar: "📚",
-  builder: "🔨",
+  hustler: "💰",
+  showman: "🎤",
   warrior: "⚔️",
-  creator: "🎨",
-  strategist: "♟️",
+  founder: "🚀",
+  charmer: "✨",
 };
 
 function ScoreRevealPhase({
@@ -400,7 +402,7 @@ function ScoreRevealPhase({
   const [voted, setVoted] = useState<IdentityArchetype | null>(identity);
 
   const ARCHETYPES: IdentityArchetype[] = [
-    "athlete", "scholar", "builder", "warrior", "creator", "strategist",
+    "titan", "athlete", "scholar", "hustler", "showman", "warrior", "founder", "charmer",
   ];
 
   const handleVote = (id: IdentityArchetype) => {

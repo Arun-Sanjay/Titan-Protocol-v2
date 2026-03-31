@@ -1,14 +1,15 @@
 import { create } from "zustand";
 import { getJSON, setJSON } from "../db/storage";
-import type { AppMode } from "./useModeStore";
-import type { IdentityArchetype } from "./useModeStore";
+import type { AppMode, IdentityArchetype } from "./useModeStore";
 import type { EngineKey } from "../db/schema";
+import { scoreQuiz, type QuizResult } from "../lib/quiz-scoring";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type OnboardingStepId =
   | "welcome"
   | "identity"
+  | "reveal"
   | "goals"
   | "mode"
   | "engines"
@@ -21,6 +22,7 @@ export type SchedulePreference = "early_morning" | "morning" | "midday" | "eveni
 export const ONBOARDING_STEPS: OnboardingStepId[] = [
   "welcome",
   "identity",
+  "reveal",
   "goals",
   "mode",
   "engines",
@@ -46,6 +48,8 @@ type OnboardingState = {
 
   // User selections (in-progress)
   identity: IdentityArchetype | null;
+  quizAnswers: number[];
+  quizResult: QuizResult | null;
   goals: string[];
   mode: AppMode | null;
   enginePriority: EngineKey[];
@@ -58,6 +62,8 @@ type OnboardingState = {
   next: () => void;
   back: () => void;
   setIdentity: (id: IdentityArchetype) => void;
+  setQuizAnswer: (questionIndex: number, optionIndex: number) => void;
+  computeQuizResult: () => QuizResult;
   setGoals: (goals: string[]) => void;
   setMode: (mode: AppMode) => void;
   setEnginePriority: (engines: EngineKey[]) => void;
@@ -78,9 +84,11 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   get currentStep() { return get().stepIndex; },
 
   identity: null,
+  quizAnswers: [-1, -1, -1, -1, -1, -1, -1],
+  quizResult: null,
   goals: [],
   mode: null,
-  enginePriority: ["body", "mind", "money", "general"],
+  enginePriority: ["body", "mind", "money", "charisma"],
   schedule: DEFAULT_SCHEDULE,
   schedulePreference: getJSON<SchedulePreference | null>(SCHEDULE_PREF_KEY, null),
   tutorialCompleted: getJSON<boolean>(TUTORIAL_COMPLETED_KEY, false),
@@ -104,6 +112,17 @@ export const useOnboardingStore = create<OnboardingState>()((set, get) => ({
   }),
 
   setIdentity: (identity) => set({ identity }),
+  setQuizAnswer: (questionIndex, optionIndex) => set((s) => {
+    const answers = [...s.quizAnswers];
+    answers[questionIndex] = optionIndex;
+    return { quizAnswers: answers };
+  }),
+  computeQuizResult: () => {
+    const { quizAnswers } = get();
+    const result = scoreQuiz(quizAnswers);
+    set({ quizResult: result, identity: result.archetype });
+    return result;
+  },
   setGoals: (goals) => set({ goals }),
   setMode: (mode) => set({ mode }),
   setEnginePriority: (enginePriority) => set({ enginePriority }),

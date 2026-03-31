@@ -42,7 +42,7 @@ export function addTask(
 }
 
 export function updateTaskKind(taskId: number, kind: "main" | "secondary"): void {
-  const engines: EngineKey[] = ["body", "mind", "money", "general"];
+  const engines: EngineKey[] = ["body", "mind", "money", "charisma"];
   for (const engine of engines) {
     const tasks = getJSON<Task[]>(tasksKey(engine), []);
     const idx = tasks.findIndex((t) => t.id === taskId);
@@ -55,7 +55,7 @@ export function updateTaskKind(taskId: number, kind: "main" | "secondary"): void
 }
 
 export function deleteTask(taskId: number): void {
-  const engines: EngineKey[] = ["body", "mind", "money", "general"];
+  const engines: EngineKey[] = ["body", "mind", "money", "charisma"];
   for (const engine of engines) {
     const tasks = getJSON<Task[]>(tasksKey(engine), []);
     const filtered = tasks.filter((t) => t.id !== taskId);
@@ -114,7 +114,7 @@ export function getAllEngineScores(dateKey: string): Record<EngineKey, number> {
     body: getEngineScore("body", dateKey),
     mind: getEngineScore("mind", dateKey),
     money: getEngineScore("money", dateKey),
-    general: getEngineScore("general", dateKey),
+    charisma: getEngineScore("charisma", dateKey),
   };
 }
 
@@ -130,7 +130,7 @@ export function getTotalScore(dateKey: string): number {
 export type TaskWithStatus = Task & { completed: boolean };
 
 export function getAllTasksForDate(dateKey: string): TaskWithStatus[] {
-  const engines: EngineKey[] = ["body", "mind", "money", "general"];
+  const engines: EngineKey[] = ["body", "mind", "money", "charisma"];
   const allTasks: TaskWithStatus[] = [];
 
   for (const engine of engines) {

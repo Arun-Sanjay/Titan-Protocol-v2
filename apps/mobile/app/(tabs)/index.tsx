@@ -41,13 +41,13 @@ import type { EngineKey } from "../../src/db/schema";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ENGINE_LABELS: Record<EngineKey, string> = {
-  body: "BODY", mind: "MIND", money: "MONEY", general: "GENERAL",
+  body: "BODY", mind: "MIND", money: "MONEY", charisma: "CHARISMA",
 };
 const ENGINE_COLORS: Record<EngineKey, string> = {
-  body: colors.body, mind: colors.mind, money: colors.money, general: colors.general,
+  body: colors.body, mind: colors.mind, money: colors.money, charisma: colors.charisma,
 };
 const ENGINE_BORDER_COLORS: Record<EngineKey, string> = {
-  body: "#00FF88", mind: "#A78BFA", money: "#FBBF24", general: "#60A5FA",
+  body: "#00FF88", mind: "#A78BFA", money: "#FBBF24", charisma: "#60A5FA",
 };
 
 // ─── Suggested Missions ───────────────────────────────────────────────────────
@@ -71,9 +71,9 @@ const SUGGESTION_POOL: SuggestedMission[] = [
   { id: "money_review", engine: "money", title: "Review expenses and budget", type: "mission" },
   { id: "money_deepwork",engine:"money", title: "Complete a deep work session",type:"mission" },
   { id: "money_save",   engine: "money", title: "Log your savings progress",  type: "side_quest" },
-  { id: "general_plan", engine: "general", title: "Plan tomorrow's tasks",    type: "mission" },
-  { id: "general_tidy", engine: "general", title: "Tidy your workspace",      type: "side_quest" },
-  { id: "general_learn",engine: "general", title: "Learn something new today",type: "side_quest" },
+  { id: "charisma_plan", engine: "charisma", title: "Start a conversation with someone new",    type: "mission" },
+  { id: "charisma_tidy", engine: "charisma", title: "Practice your elevator pitch",      type: "side_quest" },
+  { id: "charisma_learn",engine: "charisma", title: "Give a genuine compliment to a stranger",type: "side_quest" },
 ];
 
 const DISMISSED_KEY = "dismissed_suggestions";

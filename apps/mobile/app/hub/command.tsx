@@ -35,7 +35,7 @@ const ENGINE_META: Record<EngineKey, { label: string; color: string; dimColor: s
   body: { label: "BODY", color: colors.body, dimColor: colors.bodyDim },
   mind: { label: "MIND", color: colors.mind, dimColor: colors.mindDim },
   money: { label: "MONEY", color: colors.money, dimColor: colors.moneyDim },
-  general: { label: "GENERAL", color: colors.general, dimColor: colors.generalDim },
+  charisma: { label: "CHARISMA", color: colors.charisma, dimColor: colors.charismaDim },
 };
 
 type FilterKey = "all" | EngineKey;
@@ -45,7 +45,7 @@ const FILTER_OPTIONS: { key: FilterKey; label: string; color: string }[] = [
   { key: "body", label: "Body", color: colors.body },
   { key: "mind", label: "Mind", color: colors.mind },
   { key: "money", label: "Money", color: colors.money },
-  { key: "general", label: "General", color: colors.general },
+  { key: "charisma", label: "Charisma", color: colors.charisma },
 ];
 
 // ─── Filter Chip ──────────────────────────────────────────────────────────────
@@ -327,7 +327,7 @@ export default function CommandCentreScreen() {
 
         {/* Summary Stats */}
         <View style={styles.statsRow}>
-          <StatCard label="Total" value={totalTasks} delay={150} icon="list" color={colors.general} />
+          <StatCard label="Total" value={totalTasks} delay={150} icon="list" color={colors.charisma} />
           <StatCard label="Done" value={completedCount} delay={200} icon="checkmark-done" color={colors.body} />
           <StatCard label="Score" value={`${totalScore}%`} delay={250} icon="analytics" color={colors.mind} />
           <StatCard label="Streak" value={streak} delay={300} icon="flame" color={colors.warning} />

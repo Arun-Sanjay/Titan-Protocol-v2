@@ -108,7 +108,7 @@ export function initializeEngineTree(engine: string): void {
  * Initialize all 4 engine skill trees.
  */
 export function initializeAllTrees(): void {
-  for (const engine of ["body", "mind", "money", "general"]) {
+  for (const engine of ["body", "mind", "money", "charisma"]) {
     initializeEngineTree(engine);
   }
 }
@@ -119,7 +119,7 @@ export function initializeAllTrees(): void {
 export function evaluateAllTrees(): { nodeId: string; name: string; branch: string; level: number; engine: string }[] {
   const results: { nodeId: string; name: string; branch: string; level: number; engine: string }[] = [];
 
-  for (const engine of ["body", "mind", "money", "general"]) {
+  for (const engine of ["body", "mind", "money", "charisma"]) {
     const eligible = evaluateSkillTree(engine);
     for (const node of eligible) {
       // Unlock the node

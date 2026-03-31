@@ -42,7 +42,7 @@ type Props = Record<string, never>;
 // ---------------------------------------------------------------------------
 
 const MENU_ITEMS: MenuItem[] = [
-  { label: "Add Task", icon: "\u2713", route: "/(modals)/add-task", color: colors.general },
+  { label: "Add Task", icon: "\u2713", route: "/(modals)/add-task", color: colors.charisma },
   { label: "Log Workout", icon: "\u26A1", route: "/hub/workouts", color: colors.body },
   { label: "Log Sleep", icon: "\u263E", route: "/hub/sleep", color: colors.mind },
   { label: "Log Weight", icon: "\u2696", route: "/hub/weight", color: colors.body },

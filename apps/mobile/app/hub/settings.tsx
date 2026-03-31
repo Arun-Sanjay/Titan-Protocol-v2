@@ -291,7 +291,7 @@ function V2SettingsSection() {
             useOnboardingStore.getState().resetTutorial();
             router.push("/tutorial");
           }}
-          color={colors.general}
+          color={colors.charisma}
         />
       </Panel>
     </>
@@ -468,7 +468,7 @@ export default function SettingsScreen() {
             label="Export Data"
             description={`Backup all ${dataPointCount} data points as JSON`}
             onPress={handleExportData}
-            color={colors.general}
+            color={colors.charisma}
           />
           <View style={styles.settingDivider} />
           <SettingRow

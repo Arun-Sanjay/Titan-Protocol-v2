@@ -16,14 +16,14 @@ const ENGINE_LABELS: Record<EngineKey, string> = {
   body: "BODY",
   mind: "MIND",
   money: "MONEY",
-  general: "GENERAL",
+  charisma: "CHARISMA",
 };
 
 const ENGINE_COLORS: Record<EngineKey, string> = {
   body: colors.body,
   mind: colors.mind,
   money: colors.money,
-  general: colors.general,
+  charisma: colors.charisma,
 };
 
 export default function AddTaskModal() {

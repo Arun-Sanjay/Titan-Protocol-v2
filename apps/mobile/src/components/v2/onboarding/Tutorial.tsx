@@ -26,7 +26,7 @@ const ENGINE_DOTS = [
   { label: "Body", color: "#00FF88" },
   { label: "Mind", color: "#A78BFA" },
   { label: "Money", color: "#FBBF24" },
-  { label: "General", color: "#60A5FA" },
+  { label: "Charisma", color: "#60A5FA" },
 ];
 
 function getAllSlides(identityName: string, primaryEngine: string): TutorialSlide[] {
@@ -42,9 +42,9 @@ function getAllSlides(identityName: string, primaryEngine: string): TutorialSlid
     {
       id: "engines",
       title: "Four Areas. One System.",
-      description: `Body, Mind, Money, and General \u2014 these are your four engines. Each one tracks different tasks. Your identity (${identityName}) weights ${primaryEngine === "all" ? "all engines equally" : primaryEngine + " as your top priority"}.`,
+      description: `Body, Mind, Money, and Charisma \u2014 these are your four engines. Each one tracks different tasks. Your identity (${identityName}) weights ${primaryEngine === "all" ? "all engines equally" : primaryEngine + " as your top priority"}.`,
       icon: "grid-outline",
-      iconColor: colors.general,
+      iconColor: colors.charisma,
       modes: ["full_protocol", "structured", "tracker", "focus", "zen", "titan"],
     },
     {
@@ -96,7 +96,7 @@ function getAllSlides(identityName: string, primaryEngine: string): TutorialSlid
       title: "Only Your Engines",
       description: "You've chosen Focus mode. Only the engines you selected are visible \u2014 everything else is completely hidden. You can change which engines are active anytime in Settings.",
       icon: "eye-outline",
-      iconColor: colors.general,
+      iconColor: colors.charisma,
       modes: ["focus"],
     },
     {

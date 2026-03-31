@@ -304,7 +304,7 @@ const WaterRing = React.memo(function WaterRing({
             cx={WATER_RING_SIZE / 2}
             cy={WATER_RING_SIZE / 2}
             r={WATER_RADIUS}
-            stroke={colors.general}
+            stroke={colors.charisma}
             strokeWidth={WATER_STROKE}
             fill="none"
             strokeLinecap="round"
@@ -314,7 +314,7 @@ const WaterRing = React.memo(function WaterRing({
           />
         </Svg>
         <View style={styles.waterCenter}>
-          <Ionicons name="water" size={16} color={colors.general} />
+          <Ionicons name="water" size={16} color={colors.charisma} />
           <Text style={styles.waterValue}>{glasses}</Text>
         </View>
       </View>
@@ -332,7 +332,7 @@ const WaterRing = React.memo(function WaterRing({
             onPress={() => { onAdd(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
             style={[styles.waterBtn, styles.waterBtnActive]}
           >
-            <Ionicons name="add" size={18} color={colors.general} />
+            <Ionicons name="add" size={18} color={colors.charisma} />
           </Pressable>
         </View>
       </View>
@@ -366,7 +366,7 @@ const QuickMealCard = React.memo(function QuickMealCard({
       <Text style={styles.quickMealCal}>{meal.calories} cal</Text>
       <View style={styles.quickMealMacros}>
         <Text style={[styles.quickMealMacro, { color: colors.mind }]}>P{meal.protein_g}</Text>
-        <Text style={[styles.quickMealMacro, { color: colors.general }]}>C{meal.carbs_g}</Text>
+        <Text style={[styles.quickMealMacro, { color: colors.charisma }]}>C{meal.carbs_g}</Text>
         <Text style={[styles.quickMealMacro, { color: colors.warning }]}>F{meal.fat_g}</Text>
       </View>
     </Pressable>
@@ -587,7 +587,7 @@ export default function NutritionScreen() {
                       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     }}
                   >
-                    <Ionicons name="sync-outline" size={16} color={colors.general} />
+                    <Ionicons name="sync-outline" size={16} color={colors.charisma} />
                     <Text style={styles.syncBannerText}>
                       Weight tracker shows {latest.weightKg}kg (profile: {profile.weight_kg}kg). Tap to sync.
                     </Text>
@@ -685,7 +685,7 @@ export default function NutritionScreen() {
                     current={dayMacros.carbs}
                     target={macroTargets.carbs}
                     unit="g"
-                    color={colors.general}
+                    color={colors.charisma}
                   />
                   <MacroBar
                     label="Fat"
@@ -889,7 +889,7 @@ export default function NutritionScreen() {
                       <Text style={[styles.mealMacro, { color: colors.mind }]}>
                         P {meal.protein_g}g
                       </Text>
-                      <Text style={[styles.mealMacro, { color: colors.general }]}>
+                      <Text style={[styles.mealMacro, { color: colors.charisma }]}>
                         C {meal.carbs_g}g
                       </Text>
                       <Text style={[styles.mealMacro, { color: colors.warning }]}>
@@ -1045,9 +1045,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    backgroundColor: colors.generalDim,
+    backgroundColor: colors.charismaDim,
     borderWidth: 1,
-    borderColor: colors.general + "30",
+    borderColor: colors.charisma + "30",
     borderRadius: radius.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -1056,7 +1056,7 @@ const styles = StyleSheet.create({
   syncBannerText: {
     flex: 1,
     fontSize: 13,
-    color: colors.general,
+    color: colors.charisma,
     fontWeight: "500",
   },
 
@@ -1169,7 +1169,7 @@ const styles = StyleSheet.create({
     fontFamily: MONO_FONT,
     fontSize: 18,
     fontWeight: "700",
-    color: colors.general,
+    color: colors.charisma,
   },
   waterTarget: { fontSize: 12, color: colors.textMuted },
   waterBtns: {
@@ -1188,8 +1188,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   waterBtnActive: {
-    borderColor: colors.general + "40",
-    backgroundColor: colors.generalDim,
+    borderColor: colors.charisma + "40",
+    backgroundColor: colors.charismaDim,
   },
 
   // Quick meals

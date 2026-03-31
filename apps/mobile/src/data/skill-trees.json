@@ -133,47 +133,47 @@
       }
     ]
   },
-  "general": {
+  "charisma": {
     "branches": [
       {
         "id": "consistency",
         "name": "Consistency",
         "levels": [
-          { "nodeId": "general_consistency_1", "level": 1, "name": "Showing Up", "description": "Complete tasks for 7 days", "requirementType": "streak_days", "requirementEngine": "general", "targetValue": 7 },
-          { "nodeId": "general_consistency_2", "level": 2, "name": "Reliable", "description": "14-day streak", "requirementType": "streak_days", "requirementEngine": "general", "targetValue": 14 },
-          { "nodeId": "general_consistency_3", "level": 3, "name": "Consistent", "description": "30-day streak", "requirementType": "streak_days", "requirementEngine": "general", "targetValue": 30 },
-          { "nodeId": "general_consistency_4", "level": 4, "name": "Unbreakable", "description": "60-day streak", "requirementType": "streak_days", "requirementEngine": "general", "targetValue": 60 },
-          { "nodeId": "general_consistency_5", "level": 5, "name": "Legendary", "description": "100-day streak", "requirementType": "streak_days", "requirementEngine": "general", "targetValue": 100 }
+          { "nodeId": "charisma_consistency_1", "level": 1, "name": "Showing Up", "description": "Complete charisma tasks for 7 days", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 7 },
+          { "nodeId": "charisma_consistency_2", "level": 2, "name": "Reliable", "description": "14-day charisma streak", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 14 },
+          { "nodeId": "charisma_consistency_3", "level": 3, "name": "Consistent", "description": "30-day charisma streak", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 30 },
+          { "nodeId": "charisma_consistency_4", "level": 4, "name": "Unbreakable", "description": "60-day charisma streak", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 60 },
+          { "nodeId": "charisma_consistency_5", "level": 5, "name": "Legendary", "description": "100-day charisma streak", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 100 }
         ]
       },
       {
-        "id": "organization",
-        "name": "Organization",
+        "id": "public_speaking",
+        "name": "Public Speaking",
         "levels": [
-          { "nodeId": "general_org_1", "level": 1, "name": "Planned", "description": "Use 'plan tomorrow' task 5 times", "requirementType": "task_count", "requirementEngine": "general", "requirementTag": "planning", "targetValue": 5 },
-          { "nodeId": "general_org_2", "level": 2, "name": "Organized", "description": "Weekly review habit for 3 weeks", "requirementType": "weekly_consistency", "requirementEngine": "general", "requirementTag": "review", "targetValue": 3 },
-          { "nodeId": "general_org_3", "level": 3, "name": "Systematic", "description": "Daily planning + weekly review for 30 days", "requirementType": "streak_days", "requirementEngine": "general", "targetValue": 30 },
-          { "nodeId": "general_org_4", "level": 4, "name": "Architect of Days", "description": "Planning habits at 90%+ for 60 days", "requirementType": "habit_completion_rate", "requirementEngine": "general", "targetValue": 60, "threshold": 90 }
+          { "nodeId": "charisma_speaking_1", "level": 1, "name": "Voice Found", "description": "Complete 5 speaking practice tasks", "requirementType": "task_count", "requirementEngine": "charisma", "requirementTag": "speaking", "targetValue": 5 },
+          { "nodeId": "charisma_speaking_2", "level": 2, "name": "Articulate", "description": "Weekly speaking practice for 3 weeks", "requirementType": "weekly_consistency", "requirementEngine": "charisma", "requirementTag": "speaking", "targetValue": 3 },
+          { "nodeId": "charisma_speaking_3", "level": 3, "name": "Compelling", "description": "Daily speaking practice for 30 days", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 30 },
+          { "nodeId": "charisma_speaking_4", "level": 4, "name": "Orator", "description": "Speaking habits at 90%+ for 60 days", "requirementType": "habit_completion_rate", "requirementEngine": "charisma", "targetValue": 60, "threshold": 90 }
         ]
       },
       {
-        "id": "relationships",
-        "name": "Relationships",
+        "id": "networking",
+        "name": "Networking",
         "levels": [
-          { "nodeId": "general_rel_1", "level": 1, "name": "Connected", "description": "Complete 10 social/family tasks", "requirementType": "task_count", "requirementEngine": "general", "requirementTag": "social", "targetValue": 10 },
-          { "nodeId": "general_rel_2", "level": 2, "name": "Present", "description": "Consistent relationship-related tasks for 3 weeks", "requirementType": "weekly_consistency", "requirementEngine": "general", "requirementTag": "social", "targetValue": 3 },
-          { "nodeId": "general_rel_3", "level": 3, "name": "Invested", "description": "30 days of relationship-focused activity", "requirementType": "streak_days", "requirementEngine": "general", "targetValue": 30 },
-          { "nodeId": "general_rel_4", "level": 4, "name": "Pillar", "description": "60 days of consistent relationship investment", "requirementType": "streak_days", "requirementEngine": "general", "targetValue": 60 }
+          { "nodeId": "charisma_networking_1", "level": 1, "name": "Connected", "description": "Complete 10 outreach/connection tasks", "requirementType": "task_count", "requirementEngine": "charisma", "requirementTag": "networking", "targetValue": 10 },
+          { "nodeId": "charisma_networking_2", "level": 2, "name": "Present", "description": "Consistent networking tasks for 3 weeks", "requirementType": "weekly_consistency", "requirementEngine": "charisma", "requirementTag": "networking", "targetValue": 3 },
+          { "nodeId": "charisma_networking_3", "level": 3, "name": "Invested", "description": "30 days of networking activity", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 30 },
+          { "nodeId": "charisma_networking_4", "level": 4, "name": "Connector", "description": "60 days of consistent networking", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 60 }
         ]
       },
       {
-        "id": "growth",
-        "name": "Growth",
+        "id": "confidence",
+        "name": "Confidence",
         "levels": [
-          { "nodeId": "general_growth_1", "level": 1, "name": "Growing", "description": "Complete 10 personal development tasks", "requirementType": "task_count", "requirementEngine": "general", "requirementTag": "growth", "targetValue": 10 },
-          { "nodeId": "general_growth_2", "level": 2, "name": "Developing", "description": "Learning/growth tasks 3x/week for 4 weeks", "requirementType": "weekly_consistency", "requirementEngine": "general", "requirementTag": "growth", "targetValue": 4 },
-          { "nodeId": "general_growth_3", "level": 3, "name": "Evolving", "description": "Consistent growth activities for 60 days", "requirementType": "streak_days", "requirementEngine": "general", "targetValue": 60 },
-          { "nodeId": "general_growth_4", "level": 4, "name": "Transformed", "description": "All 4 General branches at Lv3+", "requirementType": "branch_level_check", "requirementEngine": "general", "targetValue": 3 }
+          { "nodeId": "charisma_confidence_1", "level": 1, "name": "Stepping Up", "description": "Complete 10 social courage tasks", "requirementType": "task_count", "requirementEngine": "charisma", "requirementTag": "confidence", "targetValue": 10 },
+          { "nodeId": "charisma_confidence_2", "level": 2, "name": "Bold", "description": "Confidence-building tasks 3x/week for 4 weeks", "requirementType": "weekly_consistency", "requirementEngine": "charisma", "requirementTag": "confidence", "targetValue": 4 },
+          { "nodeId": "charisma_confidence_3", "level": 3, "name": "Fearless", "description": "Consistent confidence activities for 60 days", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 60 },
+          { "nodeId": "charisma_confidence_4", "level": 4, "name": "Magnetic", "description": "All 4 Charisma branches at Lv3+", "requirementType": "branch_level_check", "requirementEngine": "charisma", "targetValue": 3 }
         ]
       }
     ]

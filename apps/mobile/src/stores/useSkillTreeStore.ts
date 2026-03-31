@@ -164,45 +164,45 @@ export const SKILL_TREES: Record<EngineKey, SkillBranch[]> = {
     },
   ],
 
-  general: [
+  charisma: [
     {
-      id: "gen_productivity",
-      name: "Productivity",
+      id: "cha_confidence",
+      name: "Confidence",
       nodes: [
-        { id: "gen_prd_1", name: "Starting",   description: "You've taken the first step.",                conditionText: "Add first general task" },
-        { id: "gen_prd_2", name: "Consistent", description: "Showing up is your superpower.",              conditionText: "7-day general streak" },
-        { id: "gen_prd_3", name: "Systematic", description: "You have systems for everything.",            conditionText: "14-day general streak" },
-        { id: "gen_prd_4", name: "Machine",    description: "Peak productivity is your normal.",           conditionText: "30-day general streak" },
+        { id: "cha_con_1", name: "Warming Up", description: "You're stepping outside your comfort zone.",  conditionText: "Complete first charisma task" },
+        { id: "cha_con_2", name: "Brave",      description: "Social courage is becoming natural.",         conditionText: "Complete 10 charisma tasks" },
+        { id: "cha_con_3", name: "Bold",       description: "You walk into any room with presence.",       conditionText: "Complete 30 charisma tasks" },
+        { id: "cha_con_4", name: "Fearless",   description: "Nothing intimidates you socially.",           conditionText: "Complete 60 charisma tasks" },
       ],
     },
     {
-      id: "gen_organization",
-      name: "Organization",
+      id: "cha_speaking",
+      name: "Public Speaking",
       nodes: [
-        { id: "gen_org_1", name: "Aware",      description: "You see the chaos clearly.",                  conditionText: "Complete 1 general task" },
-        { id: "gen_org_2", name: "Organized",  description: "Everything has its place.",                   conditionText: "Complete 10 general tasks" },
-        { id: "gen_org_3", name: "Optimized",  description: "Your environment fuels performance.",         conditionText: "Complete 30 general tasks" },
-        { id: "gen_org_4", name: "Masterful",  description: "Organizational mastery achieved.",            conditionText: "Complete 60 general tasks" },
+        { id: "cha_spk_1", name: "Voice Found",  description: "You've started speaking up.",               conditionText: "Record yourself speaking once" },
+        { id: "cha_spk_2", name: "Presenter",    description: "You can hold a room's attention.",           conditionText: "Complete 7 speaking practices" },
+        { id: "cha_spk_3", name: "Speaker",      description: "People listen when you talk.",               conditionText: "Complete 21 speaking practices" },
+        { id: "cha_spk_4", name: "Keynote",      description: "Your voice commands any audience.",          conditionText: "Complete 50 speaking practices" },
       ],
     },
     {
-      id: "gen_planning",
-      name: "Planning",
+      id: "cha_networking",
+      name: "Networking",
       nodes: [
-        { id: "gen_pln_1", name: "Reactive",  description: "You've recognized the need to plan.",         conditionText: "Add first planning task" },
-        { id: "gen_pln_2", name: "Planning",  description: "Tomorrow is never a surprise.",               conditionText: "Complete 7 planning sessions" },
-        { id: "gen_pln_3", name: "Strategic", description: "You think weeks ahead.",                      conditionText: "Complete 21 planning sessions" },
-        { id: "gen_pln_4", name: "Visionary", description: "You operate from a clear future.",            conditionText: "Complete 50 planning sessions" },
+        { id: "cha_net_1", name: "Connector",    description: "You've started reaching out.",               conditionText: "Reach out to someone new" },
+        { id: "cha_net_2", name: "Networker",    description: "Your circle is expanding.",                  conditionText: "Complete 10 networking tasks" },
+        { id: "cha_net_3", name: "Influencer",   description: "People want to be in your orbit.",           conditionText: "Complete 30 networking tasks" },
+        { id: "cha_net_4", name: "Network Hub",  description: "You're the person everyone knows.",          conditionText: "Complete 60 networking tasks" },
       ],
     },
     {
-      id: "gen_habits",
-      name: "Habits",
+      id: "cha_presence",
+      name: "Presence",
       nodes: [
-        { id: "gen_hab_1", name: "Building",  description: "You're aware of your habits.",                conditionText: "Add first habit" },
-        { id: "gen_hab_2", name: "Forming",   description: "Patterns are beginning to emerge.",           conditionText: "Complete 14 habit checks" },
-        { id: "gen_hab_3", name: "Solid",     description: "Your habits are dependable.",                 conditionText: "Complete 42 habit checks" },
-        { id: "gen_hab_4", name: "Automatic", description: "Your habits run your excellence.",            conditionText: "Complete 90 habit checks" },
+        { id: "cha_pre_1", name: "Noticed",     description: "People remember meeting you.",               conditionText: "7-day charisma streak" },
+        { id: "cha_pre_2", name: "Engaging",    description: "Conversations light up around you.",          conditionText: "14-day charisma streak" },
+        { id: "cha_pre_3", name: "Commanding",  description: "You set the energy of any room.",            conditionText: "21-day charisma streak" },
+        { id: "cha_pre_4", name: "Magnetic",    description: "Your presence is unforgettable.",            conditionText: "30-day charisma streak" },
       ],
     },
   ],
@@ -315,7 +315,7 @@ export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
 
   getOverview: () => {
     const { progress } = get();
-    const engines = ["body", "mind", "money", "general"];
+    const engines = ["body", "mind", "money", "charisma"];
     return engines.map((engine) => {
       const nodes = progress[engine] ?? [];
       return {

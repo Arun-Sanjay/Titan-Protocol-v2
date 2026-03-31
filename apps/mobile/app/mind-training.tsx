@@ -136,7 +136,7 @@ export default function MindTrainingScreen() {
           <Panel style={styles.sectionCard} onPress={() => startPractice("decision_drill")}>
             <View style={styles.sectionRow}>
               <View style={[styles.sectionIcon, { backgroundColor: "rgba(96, 165, 250, 0.12)" }]}>
-                <Ionicons name="git-branch-outline" size={24} color={colors.general} />
+                <Ionicons name="git-branch-outline" size={24} color={colors.charisma} />
               </View>
               <View style={styles.sectionText}>
                 <Text style={styles.sectionTitle}>Decision Drill</Text>

@@ -11,6 +11,7 @@ import { StepMode } from "./StepMode";
 import { StepEngines } from "./StepEngines";
 import { StepSchedule } from "./StepSchedule";
 import { StepPreview } from "./StepPreview";
+import { StepReveal } from "./StepReveal";
 import { StepComplete } from "./StepComplete";
 
 // ─── Progress Dots ────────────────────────────────────────────────────────────
@@ -58,6 +59,8 @@ export function OnboardingShell() {
         return <StepWelcome onNext={next} />;
       case "identity":
         return <StepIdentity onNext={next} onBack={back} />;
+      case "reveal":
+        return <StepReveal onNext={next} onBack={back} />;
       case "goals":
         return <StepGoals onNext={next} onBack={back} />;
       case "mode":

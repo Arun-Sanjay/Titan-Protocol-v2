@@ -17,7 +17,7 @@ const ENGINE_META: Record<EngineKey, { icon: string; label: string; color: strin
   body: { icon: "⚡", label: "Body", color: colors.body },
   mind: { icon: "🧠", label: "Mind", color: colors.mind },
   money: { icon: "💰", label: "Money", color: colors.money },
-  general: { icon: "⚙️", label: "General", color: colors.general },
+  charisma: { icon: "🎤", label: "Charisma", color: colors.charisma },
 };
 
 type Props = {

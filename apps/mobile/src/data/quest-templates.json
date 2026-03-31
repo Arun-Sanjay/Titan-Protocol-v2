@@ -6,7 +6,7 @@
   {"id":"qt_f05","type":"cross_engine","phase":"foundation","identity_tags":[],"title":"Double Engine Day","description":"Score 60%+ in any 2 engines on the same day","target_type":"rank","target_engine":null,"target_value":2,"xp_reward":45},
   {"id":"qt_f06","type":"wildcard","phase":"foundation","identity_tags":[],"title":"Show Up","description":"Complete your protocol 4 days this week","target_type":"streak","target_engine":null,"target_value":4,"xp_reward":50},
   {"id":"qt_f07","type":"wildcard","phase":"foundation","identity_tags":[],"title":"Habit Builder","description":"Complete all habits for 3 days this week","target_type":"completion","target_engine":null,"target_value":3,"xp_reward":45},
-  {"id":"qt_f08","type":"engine","phase":"foundation","identity_tags":[],"title":"General Progress","description":"Score 60%+ in General engine for 3 days","target_type":"score","target_engine":"general","target_value":3,"xp_reward":40},
+  {"id":"qt_f08","type":"engine","phase":"foundation","identity_tags":[],"title":"Charisma Progress","description":"Score 60%+ in Charisma engine for 3 days","target_type":"score","target_engine":"charisma","target_value":3,"xp_reward":40},
   {"id":"qt_f09","type":"wildcard","phase":"foundation","identity_tags":[],"title":"Journal Week","description":"Write journal entries 4 out of 7 days","target_type":"completion","target_engine":null,"target_value":4,"xp_reward":40},
   {"id":"qt_f10","type":"cross_engine","phase":"foundation","identity_tags":[],"title":"Balanced Start","description":"No engine below 40% for 3 days this week","target_type":"rank","target_engine":null,"target_value":3,"xp_reward":55},
 

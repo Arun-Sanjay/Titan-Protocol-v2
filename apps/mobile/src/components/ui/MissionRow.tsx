@@ -15,7 +15,7 @@ const ENGINE_BORDER_COLORS: Record<EngineKey, string> = {
   body: "#00FF88",
   mind: "#A78BFA",
   money: "#FBBF24",
-  general: "#60A5FA",
+  charisma: "#60A5FA",
 };
 
 type Props = {

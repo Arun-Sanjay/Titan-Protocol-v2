@@ -15,16 +15,16 @@ type Props = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const ENGINE_COLORS: Record<EngineKey, string> = {
-  body: colors.body, mind: colors.mind, money: colors.money, general: colors.general,
+  body: colors.body, mind: colors.mind, money: colors.money, charisma: colors.charisma,
 };
 
 const ENGINE_LABELS: Record<EngineKey, string> = {
-  body: "Body", mind: "Mind", money: "Money", general: "General",
+  body: "Body", mind: "Mind", money: "Money", charisma: "Charisma",
 };
 
 const IDENTITY_ICONS: Record<string, string> = {
-  athlete: "💪", scholar: "📚", builder: "🔨",
-  warrior: "⚔️", creator: "🎨", strategist: "♟️",
+  titan: "⚡", athlete: "💪", scholar: "📚", hustler: "💰",
+  showman: "🎤", warrior: "⚔️", founder: "🚀", charmer: "✨",
 };
 
 const MODE_LABELS: Record<string, string> = {
