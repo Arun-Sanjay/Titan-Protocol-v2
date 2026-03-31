@@ -4,7 +4,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
-import { useModeStore, type AppMode } from "../../src/stores/useModeStore";
 import { colors } from "../../src/theme";
 
 // ---------------------------------------------------------------------------
@@ -53,119 +52,9 @@ const TABS: TabDef[] = [
 const TAB_BAR_HEIGHT = 56;
 
 // ---------------------------------------------------------------------------
-// Game modes that use the command bar style
-// ---------------------------------------------------------------------------
-
-const GAME_MODES: Set<AppMode> = new Set([
-  "full_protocol",
-  "structured",
-  "titan",
-]);
 
 // ---------------------------------------------------------------------------
-// Command Bar (Game Mode) — slim, dark, glow dot
-// ---------------------------------------------------------------------------
-
-function CommandBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View
-      style={[
-        cmdStyles.bar,
-        { height: TAB_BAR_HEIGHT + insets.bottom, paddingBottom: insets.bottom },
-      ]}
-    >
-      {state.routes.map((route, index) => {
-        const tab = TABS.find((t) => t.key === route.name);
-        if (!tab) return null;
-
-        const focused = state.index === index;
-        const { options } = descriptors[route.key];
-
-        const onPress = () => {
-          const event = navigation.emit({
-            type: "tabPress",
-            target: route.key,
-            canPreventDefault: true,
-          });
-          if (!focused && !event.defaultPrevented) {
-            navigation.navigate(route.name, route.params);
-          }
-        };
-
-        return (
-          <Pressable
-            key={route.key}
-            onPress={onPress}
-            style={cmdStyles.item}
-            accessibilityRole="button"
-            accessibilityState={focused ? { selected: true } : {}}
-            accessibilityLabel={options.tabBarAccessibilityLabel ?? tab.gameLabel ?? tab.label}
-            hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
-          >
-            {/* Glow dot above active icon */}
-            <View style={[cmdStyles.glowDot, focused && cmdStyles.glowDotActive]} />
-
-            <Ionicons
-              name={focused ? (tab.gameIconFocused ?? tab.iconFocused) : (tab.gameIcon ?? tab.icon)}
-              size={22}
-              color={focused ? "#FFFFFF" : "rgba(255,255,255,0.35)"}
-            />
-
-            <Text
-              style={[
-                cmdStyles.label,
-                { color: focused ? "#FFFFFF" : "rgba(255,255,255,0.35)" },
-              ]}
-              numberOfLines={1}
-            >
-              {tab.gameLabel ?? tab.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-const cmdStyles = StyleSheet.create({
-  bar: {
-    flexDirection: "row",
-    backgroundColor: "#050607",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.06)",
-    paddingTop: 4,
-  },
-  item: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-  },
-  glowDot: {
-    width: 4, height: 4, borderRadius: 2,
-    backgroundColor: "transparent",
-    marginBottom: 2,
-  },
-  glowDotActive: {
-    backgroundColor: "#FFFFFF",
-    shadowColor: "#FFFFFF",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  label: {
-    fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Standard Tab Bar (Tracker / Zen modes)
+// Custom Tab Bar
 // ---------------------------------------------------------------------------
 
 function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
@@ -235,12 +124,9 @@ function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 // ---------------------------------------------------------------------------
 
 export default function TabLayout() {
-  const mode = useModeStore((s) => s.mode);
-  const isGameMode = GAME_MODES.has(mode);
-
   return (
     <Tabs
-      tabBar={(props) => (isGameMode ? <CommandBar {...props} /> : <TitanTabBar {...props} />)}
+      tabBar={(props) => <TitanTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         animation: "fade",

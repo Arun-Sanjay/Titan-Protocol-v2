@@ -115,14 +115,21 @@ export function initializeAllTrees(): void {
 
 /**
  * Run evaluation across all engines. Returns all newly unlocked nodes.
+ * Auto-initializes trees if they haven't been initialized yet.
  */
 export function evaluateAllTrees(): { nodeId: string; name: string; branch: string; level: number; engine: string }[] {
   const results: { nodeId: string; name: string; branch: string; level: number; engine: string }[] = [];
 
   for (const engine of ["body", "mind", "money", "charisma"]) {
+    // Auto-initialize tree if progress is empty for this engine
+    const progress = useSkillTreeStore.getState().progress[engine];
+    if (!progress || progress.length === 0) {
+      initializeEngineTree(engine);
+    }
+
     const eligible = evaluateSkillTree(engine);
     for (const node of eligible) {
-      // Unlock the node
+      // Unlock the node (sets to "ready" — user must claim it)
       useSkillTreeStore.getState().unlockNode(engine, node.nodeId);
       results.push({ ...node, engine });
     }
@@ -271,9 +278,18 @@ function checkFocusSessions(target: number): boolean {
 }
 
 function checkTaskCount(engine: string, target: number): boolean {
-  // Simplified: check protocol streak as a proxy for consistent task completion
-  const streak = useProtocolStore.getState().streakCurrent;
-  return streak >= target;
+  // Count total completed tasks for this engine across all dates
+  const { storage } = require("../db/storage");
+  const allKeys = storage.getAllKeys() as string[];
+  let count = 0;
+  const prefix = `completions:${engine}:`;
+  for (const key of allKeys) {
+    if (key.startsWith(prefix)) {
+      const ids = getJSON<number[]>(key, []);
+      count += ids.length;
+    }
+  }
+  return count >= target;
 }
 
 function checkBossComplete(engine: string): boolean {

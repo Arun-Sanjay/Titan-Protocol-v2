@@ -340,6 +340,9 @@ export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
 
   initializeTree: (engine, nodes) => {
     const { unlockedNodes, progress } = get();
+    // Skip if already initialized with nodes for this engine
+    if (progress[engine] && progress[engine].length > 0) return;
+
     const engineProgress: SkillNodeProgress[] = nodes.map((n) => ({
       nodeId: n.nodeId,
       engine: n.engine,

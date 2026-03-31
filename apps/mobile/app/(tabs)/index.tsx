@@ -10,7 +10,7 @@ import Animated, {
   withRepeat, withSequence, withTiming, Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { getJSON } from "../../src/db/storage";
+import { getJSON, setJSON } from "../../src/db/storage";
 import { colors, spacing, fonts, radius } from "../../src/theme";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
@@ -28,7 +28,7 @@ import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdenti
 import { getTodayKey } from "../../src/lib/date";
 import { getDailyRank } from "../../src/db/gamification";
 import { getCurrentChapter, getDayNumber } from "../../src/data/chapters";
-import { evaluateAllTrees } from "../../src/lib/skill-tree-evaluator";
+import { evaluateAllTrees, initializeAllTrees } from "../../src/lib/skill-tree-evaluator";
 import type { EngineKey } from "../../src/db/schema";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -59,6 +59,12 @@ export default function HQScreen() {
   }, []);
 
   const analytics = useAnalyticsData();
+
+  // Initialize skill trees on first load
+  useEffect(() => {
+    initializeAllTrees();
+    evaluateAllTrees();
+  }, []);
 
   // Stores
   const storeTasks = useEngineStore((s) => s.tasks);
@@ -155,9 +161,28 @@ export default function HQScreen() {
   // Mission expand state
   const [missionsExpanded, setMissionsExpanded] = useState(false);
 
+  // ── DEV ONLY: Skip day for story testing ──
+  const [devDay, setDevDay] = useState(0);
+  const handleDevSkipDay = () => {
+    const newDay = devDay + 1;
+    setDevDay(newDay);
+    // Store the simulated day offset
+    setJSON("dev_day_offset", newDay);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <HUDBackground />
+
+      {/* DEV ONLY: Skip day button for story testing */}
+      <View style={styles.devBar}>
+        <Pressable onPress={handleDevSkipDay} style={styles.devBtn}>
+          <Text style={styles.devBtnText}>DEV: Skip Day (+{devDay})</Text>
+        </Pressable>
+        <Text style={styles.devDayText}>Simulated Day {(dayNumber ?? 1) + devDay}</Text>
+      </View>
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -432,6 +457,20 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
+
+  // DEV ONLY
+  devBar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.xs,
+    backgroundColor: "rgba(248,113,113,0.1)", borderBottomWidth: 1,
+    borderBottomColor: "rgba(248,113,113,0.2)",
+  },
+  devBtn: {
+    backgroundColor: "rgba(248,113,113,0.2)", borderRadius: 6,
+    paddingHorizontal: spacing.sm, paddingVertical: 4,
+  },
+  devBtnText: { fontSize: 10, fontWeight: "700", color: "#f87171", letterSpacing: 1 },
+  devDayText: { fontSize: 10, color: "#f87171", opacity: 0.7 },
 
   // HUD
   hud: { paddingTop: spacing.md, marginBottom: spacing.lg },

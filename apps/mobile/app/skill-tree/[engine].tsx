@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
 } from "react-native";
@@ -12,6 +12,7 @@ import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../src/theme";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { useSkillTreeStore, SKILL_TREES, type SkillBranch } from "../../src/stores/useSkillTreeStore";
+import { initializeAllTrees, evaluateAllTrees } from "../../src/lib/skill-tree-evaluator";
 import type { EngineKey } from "../../src/db/schema";
 
 // Stable empty array to prevent Zustand getSnapshot infinite loop
@@ -265,6 +266,12 @@ export default function SkillTreePage() {
   const claimNode = useSkillTreeStore((s) => s.claimNode);
   const getProgress = useSkillTreeStore((s) => s.getProgress);
   const progress = useSkillTreeStore((s) => s.progress);
+
+  // Initialize and evaluate skill trees on mount
+  useEffect(() => {
+    initializeAllTrees();
+    evaluateAllTrees();
+  }, []);
 
   const branches = SKILL_TREES[engine] ?? [];
   const engineColor = ENGINE_COLORS[engine] ?? colors.text;
