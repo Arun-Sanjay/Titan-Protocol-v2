@@ -33,23 +33,34 @@ export type SkillNodeProgress = {
 
 // ─── Tree Definitions (auto-generated from JSON) ─────────────────────────────
 
-// Auto-generate SKILL_TREES from JSON so nodeIds are always in sync
-type SkillBranchDef = { id: string; name: string; nodes: SkillNode[] };
-const SKILL_TREES: Record<string, SkillBranchDef[]> = {};
-for (const [engine, data] of Object.entries(skillTreeData)) {
-  const engineData = data as { branches: { id: string; name: string; levels: { nodeId: string; level: number; name: string; description: string; requirementType: string; targetValue: number }[] }[] };
-  SKILL_TREES[engine] = engineData.branches.map((b) => ({
-    id: b.id,
-    name: b.name,
-    nodes: b.levels.map((l) => ({
-      id: l.nodeId,
-      name: l.name,
-      description: l.description,
-      conditionText: l.description,
-    })),
-  }));
+function buildSkillTrees(): Record<string, SkillBranch[]> {
+  const trees: Record<string, SkillBranch[]> = {};
+  const engines = ["body", "mind", "money", "charisma"];
+  for (let i = 0; i < engines.length; i++) {
+    const engine = engines[i];
+    const raw = (skillTreeData as any)[engine];
+    if (!raw || !raw.branches) { trees[engine] = []; continue; }
+    const branches: SkillBranch[] = [];
+    for (let b = 0; b < raw.branches.length; b++) {
+      const branch = raw.branches[b];
+      const nodes: SkillNode[] = [];
+      for (let l = 0; l < branch.levels.length; l++) {
+        const lv = branch.levels[l];
+        nodes.push({
+          id: lv.nodeId,
+          name: lv.name,
+          description: lv.description,
+          conditionText: lv.description,
+        });
+      }
+      branches.push({ id: branch.id, name: branch.name, nodes: nodes });
+    }
+    trees[engine] = branches;
+  }
+  return trees;
 }
-export { SKILL_TREES };
+
+export const SKILL_TREES = buildSkillTrees();
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
