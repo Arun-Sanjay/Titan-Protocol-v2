@@ -18,6 +18,7 @@ import { getTodayKey } from "../../src/lib/date";
 import { getJSON, setJSON } from "../../src/db/storage";
 import { useEngineStore } from "../../src/stores/useEngineStore";
 import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
+import { evaluateAllTrees } from "../../src/lib/skill-tree-evaluator";
 import type { EngineKey, Task } from "../../src/db/schema";
 
 // ─── Engine metadata ──────────────────────────────────────────────────────────
@@ -259,6 +260,7 @@ export default function EngineScreen() {
     if (completed) {
       awardXP(dateKey, "task_complete", xp);
       updateStreak(dateKey);
+      evaluateAllTrees();
     } else {
       awardXP(dateKey, "task_uncomplete", -xp);
     }

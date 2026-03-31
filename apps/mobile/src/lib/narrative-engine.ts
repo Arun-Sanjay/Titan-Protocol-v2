@@ -8,6 +8,7 @@
 import { getJSON, setJSON } from "../db/storage";
 import { selectIdentityMeta, type Archetype } from "../stores/useIdentityStore";
 import { getCurrentChapter, type Chapter } from "../data/chapters";
+import { ARCHETYPE_STORIES, type StoryEntry } from "../data/archetype-stories";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -182,6 +183,15 @@ export function narrativeDayOne(
     text: `Day 1: You chose ${name}. Your identity is set. Your engines are loaded. Chapter 1: The Awakening begins now.`,
     type: "day_one",
   });
+}
+
+// ─── Archetype Story Arcs ──────────────────────────────────────────────────
+
+export function getStoryForDay(archetype: string | null, dayNumber: number): StoryEntry | null {
+  if (!archetype) return null;
+  const stories = ARCHETYPE_STORIES[archetype];
+  if (!stories) return null;
+  return stories.find((s) => s.day === dayNumber) ?? null;
 }
 
 // ─── Chapter Narratives ─────────────────────────────────────────────────────

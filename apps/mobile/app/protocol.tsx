@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform,
@@ -6,374 +6,29 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Animated, {
-  useSharedValue, useAnimatedStyle,
-  withTiming, withSpring, FadeInDown, FadeInUp,
+  FadeIn, FadeInDown, FadeInUp,
+  useSharedValue, useAnimatedStyle, withTiming,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+
 import { colors, spacing, fonts, radius } from "../src/theme";
-import { Panel } from "../src/components/ui/Panel";
+import { HUDBackground } from "../src/components/ui/AnimatedBackground";
 import { getTodayKey } from "../src/lib/date";
-import { useHabitStore } from "../src/stores/useHabitStore";
+import { getJSON } from "../src/db/storage";
+import { getDailyRank } from "../src/db/gamification";
+import { getCurrentChapter, getDayNumber } from "../src/data/chapters";
+import { getLatestNarrative } from "../src/lib/narrative-engine";
+import { evaluateAllTrees } from "../src/lib/skill-tree-evaluator";
+
 import { useProtocolStore } from "../src/stores/useProtocolStore";
-import { useModeStore, type IdentityArchetype, IDENTITY_LABELS } from "../src/stores/useModeStore";
+import { useEngineStore, selectTotalScore, selectAllTasksForDate, ENGINES } from "../src/stores/useEngineStore";
 import { useProfileStore, XP_REWARDS } from "../src/stores/useProfileStore";
-import { useEngineStore, selectTotalScore } from "../src/stores/useEngineStore";
+import { useModeStore, type IdentityArchetype, IDENTITY_LABELS } from "../src/stores/useModeStore";
+import { useIdentityStore, selectIdentityMeta, IDENTITIES } from "../src/stores/useIdentityStore";
+import { useHabitStore } from "../src/stores/useHabitStore";
+import type { EngineKey } from "../src/db/schema";
 
-// ─── Hardcoded Bias Check Exercises ──────────────────────────────────────────
-
-type BiasExercise = {
-  id: string;
-  bias: string;
-  question: string;
-  options: string[];
-  correctIndex: number;
-  explanation: string;
-};
-
-const BIAS_EXERCISES: BiasExercise[] = [
-  {
-    id: "confirmation_bias",
-    bias: "Confirmation Bias",
-    question: "You read a news article that confirms your existing view on a topic. What should you do?",
-    options: [
-      "Share it immediately — it proves your point",
-      "Seek out a credible source with the opposing view",
-      "Assume you're right and move on",
-    ],
-    correctIndex: 1,
-    explanation: "Confirmation bias makes us seek info that confirms what we already believe. Actively seeking the counter-argument strengthens your thinking.",
-  },
-  {
-    id: "sunk_cost",
-    bias: "Sunk Cost Fallacy",
-    question: "You've spent 2 hours on a project that clearly won't work. What's the rational move?",
-    options: [
-      "Keep going — you've already invested so much",
-      "Stop now and redirect effort to something better",
-      "Finish it out of respect for the time spent",
-    ],
-    correctIndex: 1,
-    explanation: "Time already spent can't be recovered. The only thing that matters is future value. Stopping is rational, not wasteful.",
-  },
-  {
-    id: "availability_heuristic",
-    bias: "Availability Heuristic",
-    question: "After seeing several plane crash news stories, you think flying is very dangerous. What's actually true?",
-    options: [
-      "You're right — if it's in the news, it must be common",
-      "Flying is statistically far safer than driving",
-      "News doesn't affect how we perceive risk",
-    ],
-    correctIndex: 1,
-    explanation: "We overestimate the likelihood of vivid, memorable events. Plane crashes get news coverage precisely because they're rare.",
-  },
-  {
-    id: "dunning_kruger",
-    bias: "Dunning-Kruger Effect",
-    question: "You've just started learning a new skill. When are you most likely to overestimate your ability?",
-    options: [
-      "After years of deep practice",
-      "Right at the beginning, with just a little knowledge",
-      "Never — more knowledge always means more confidence",
-    ],
-    correctIndex: 1,
-    explanation: "Beginners often overestimate their competence because they don't yet know what they don't know. Experts are usually more humble.",
-  },
-  {
-    id: "anchoring",
-    bias: "Anchoring Bias",
-    question: "A product is listed at $500, then 'discounted' to $300. You feel like you're getting a great deal. Why might this be misleading?",
-    options: [
-      "Because the original price anchors your perception of value",
-      "Because $300 is always a good price",
-      "Because discounts are never real",
-    ],
-    correctIndex: 0,
-    explanation: "The anchor ($500) sets a reference point that makes $300 seem like a bargain — even if the real market value is $250.",
-  },
-];
-
-function pickDailyExercise(dateKey: string): BiasExercise {
-  // Deterministic pick based on date so it's consistent within a day
-  const idx = dateKey.split("-").reduce((acc, p) => acc + parseInt(p, 10), 0) % BIAS_EXERCISES.length;
-  return BIAS_EXERCISES[idx];
-}
-
-// ─── Phase types ──────────────────────────────────────────────────────────────
-
-type Phase = "intention" | "mind_check" | "habit_check" | "score_reveal";
-
-const PHASE_ORDER: Phase[] = ["intention", "mind_check", "habit_check", "score_reveal"];
-
-// ─── ProgressDots ─────────────────────────────────────────────────────────────
-
-function ProgressDots({ current }: { current: number }) {
-  return (
-    <View style={dotStyles.row}>
-      {PHASE_ORDER.map((_, i) => (
-        <View
-          key={i}
-          style={[
-            dotStyles.dot,
-            i < current && dotStyles.done,
-            i === current && dotStyles.active,
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
-const dotStyles = StyleSheet.create({
-  row: { flexDirection: "row", gap: spacing.sm, justifyContent: "center", marginBottom: spacing.xl },
-  dot: {
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: "rgba(255,255,255,0.15)",
-  },
-  done: { backgroundColor: colors.success },
-  active: { backgroundColor: colors.text, width: 20 },
-});
-
-// ─── Phase 1 — Intention ──────────────────────────────────────────────────────
-
-function IntentionPhase({
-  value,
-  onChange,
-  onNext,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onNext: () => void;
-}) {
-  return (
-    <Animated.View entering={FadeInDown.duration(400)} style={{ flex: 1 }}>
-      <Text style={phaseStyles.kicker}>PHASE 1 OF 4</Text>
-      <Text style={phaseStyles.title}>Set Your{"\n"}Intention</Text>
-      <Text style={phaseStyles.subtitle}>
-        One sentence. What is your single most important focus today?
-      </Text>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder="e.g. Ship the feature without cutting corners"
-        placeholderTextColor={colors.textMuted}
-        style={phaseStyles.input}
-        multiline
-        autoFocus
-        returnKeyType="done"
-        onSubmitEditing={value.trim().length > 3 ? onNext : undefined}
-      />
-      <Pressable
-        style={[phaseStyles.nextBtn, value.trim().length < 3 && phaseStyles.nextBtnDisabled]}
-        onPress={onNext}
-        disabled={value.trim().length < 3}
-      >
-        <Text style={phaseStyles.nextBtnText}>NEXT →</Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-// ─── Phase 2 — Mind Check ─────────────────────────────────────────────────────
-
-function MindCheckPhase({
-  exercise,
-  onNext,
-}: {
-  exercise: BiasExercise;
-  onNext: (correct: boolean) => void;
-}) {
-  const [selected, setSelected] = useState<number | null>(null);
-  const answered = selected !== null;
-  const correct = selected === exercise.correctIndex;
-
-  const handleSelect = (idx: number) => {
-    if (answered) return;
-    setSelected(idx);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
-  return (
-    <Animated.View entering={FadeInDown.duration(400)}>
-      <Text style={phaseStyles.kicker}>PHASE 2 OF 4 · MIND CHECK</Text>
-      <Text style={phaseStyles.title}>Bias{"\n"}Training</Text>
-      <View style={mindStyles.biasTag}>
-        <Text style={mindStyles.biasLabel}>{exercise.bias}</Text>
-      </View>
-      <Text style={mindStyles.question}>{exercise.question}</Text>
-
-      <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
-        {exercise.options.map((opt, idx) => {
-          let bg = "rgba(255,255,255,0.04)";
-          let border = "rgba(255,255,255,0.12)";
-          if (answered) {
-            if (idx === exercise.correctIndex) {
-              bg = colors.successDim;
-              border = colors.success;
-            } else if (idx === selected) {
-              bg = colors.dangerDim;
-              border = colors.danger;
-            }
-          }
-          return (
-            <Pressable
-              key={idx}
-              style={[mindStyles.option, { backgroundColor: bg, borderColor: border }]}
-              onPress={() => handleSelect(idx)}
-            >
-              <Text style={mindStyles.optionText}>{opt}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {answered && (
-        <Animated.View entering={FadeInUp.duration(300)} style={mindStyles.explanation}>
-          <Text style={mindStyles.explanationTitle}>{correct ? "✓ Correct" : "Not quite"}</Text>
-          <Text style={mindStyles.explanationText}>{exercise.explanation}</Text>
-        </Animated.View>
-      )}
-
-      {answered && (
-        <Animated.View entering={FadeInUp.delay(200).duration(300)}>
-          <Pressable style={phaseStyles.nextBtn} onPress={() => onNext(correct)}>
-            <Text style={phaseStyles.nextBtnText}>NEXT →</Text>
-          </Pressable>
-        </Animated.View>
-      )}
-    </Animated.View>
-  );
-}
-
-const mindStyles = StyleSheet.create({
-  biasTag: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.primaryDim,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.surfaceBorderStrong,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    marginBottom: spacing.md,
-  },
-  biasLabel: { ...fonts.kicker, fontSize: 9, color: colors.textSecondary },
-  question: { fontSize: 16, color: colors.text, lineHeight: 24, fontWeight: "500" },
-  option: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  optionText: { fontSize: 14, color: colors.text, lineHeight: 20 },
-  explanation: {
-    marginTop: spacing.lg,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    padding: spacing.lg,
-  },
-  explanationTitle: { ...fonts.kicker, fontSize: 10, color: colors.success, marginBottom: spacing.sm },
-  explanationText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
-});
-
-// ─── Phase 3 — Habit Check ────────────────────────────────────────────────────
-
-function HabitCheckPhase({
-  habits,
-  checked,
-  onToggle,
-  onNext,
-  dateKey,
-}: {
-  habits: { id: number; title: string; icon: string }[];
-  checked: Record<number, boolean>;
-  onToggle: (id: number) => void;
-  onNext: () => void;
-  dateKey: string;
-}) {
-  const checkedCount = Object.values(checked).filter(Boolean).length;
-
-  return (
-    <Animated.View entering={FadeInDown.duration(400)}>
-      <Text style={phaseStyles.kicker}>PHASE 3 OF 4</Text>
-      <Text style={phaseStyles.title}>Habit{"\n"}Check-In</Text>
-      <Text style={phaseStyles.subtitle}>
-        Which habits did you complete yesterday? Check them off.
-      </Text>
-
-      {habits.length === 0 ? (
-        <View style={habitStyles.empty}>
-          <Text style={habitStyles.emptyText}>No habits yet</Text>
-          <Text style={habitStyles.emptyHint}>Add habits in the Track tab to see them here</Text>
-        </View>
-      ) : (
-        <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
-          {habits.map((h) => {
-            const done = !!checked[h.id];
-            return (
-              <Pressable
-                key={h.id}
-                style={[habitStyles.row, done && habitStyles.rowDone]}
-                onPress={() => onToggle(h.id)}
-              >
-                <View style={[habitStyles.check, done && habitStyles.checkDone]}>
-                  {done && <Text style={habitStyles.checkMark}>✓</Text>}
-                </View>
-                <Text style={habitStyles.icon}>{h.icon}</Text>
-                <Text style={[habitStyles.title, done && habitStyles.titleDone]}>
-                  {h.title}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
-      <Text style={habitStyles.count}>
-        {checkedCount}/{habits.length} habits checked
-      </Text>
-
-      <Pressable style={phaseStyles.nextBtn} onPress={onNext}>
-        <Text style={phaseStyles.nextBtnText}>SEE SCORE →</Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-const habitStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  rowDone: {
-    backgroundColor: colors.successDim,
-    borderColor: colors.success + "30",
-  },
-  check: {
-    width: 22, height: 22, borderRadius: 6,
-    borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)",
-    alignItems: "center", justifyContent: "center",
-  },
-  checkDone: { backgroundColor: colors.success, borderColor: colors.success },
-  checkMark: { fontSize: 13, color: "#000", fontWeight: "700" },
-  icon: { fontSize: 18 },
-  title: { flex: 1, fontSize: 15, fontWeight: "500", color: colors.text },
-  titleDone: { color: colors.textMuted },
-  empty: { alignItems: "center", paddingVertical: spacing["3xl"] },
-  emptyText: { fontSize: 16, fontWeight: "600", color: colors.text },
-  emptyHint: { fontSize: 13, color: colors.textSecondary, marginTop: spacing.xs, textAlign: "center" },
-  count: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginTop: spacing.lg, textAlign: "right" },
-});
-
-// ─── Phase 4 — Score Reveal ───────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const IDENTITY_ICONS: Record<IdentityArchetype, string> = {
   titan: "⚡",
@@ -386,30 +41,219 @@ const IDENTITY_ICONS: Record<IdentityArchetype, string> = {
   charmer: "✨",
 };
 
-function ScoreRevealPhase({
-  score,
-  intention,
+const ENGINE_LABELS: Record<EngineKey, string> = {
+  body: "Body",
+  mind: "Mind",
+  money: "Money",
+  charisma: "Charisma",
+};
+
+// ─── Morning Phases ──────────────────────────────────────────────────────────
+
+function MorningIntentionPhase({
+  value,
+  onChange,
+  onNext,
   identity,
-  onVote,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onNext: () => void;
+  identity: IdentityArchetype | null;
+}) {
+  const meta = identity ? selectIdentityMeta(identity) : null;
+
+  return (
+    <Animated.View entering={FadeInDown.duration(400)} style={{ flex: 1 }}>
+      {meta && (
+        <Animated.View entering={FadeIn.duration(300)} style={phaseStyles.identityBadge}>
+          <Text style={phaseStyles.identityIcon}>
+            {identity ? IDENTITY_ICONS[identity] : ""}
+          </Text>
+          <Text style={phaseStyles.identityName}>{meta.name}</Text>
+        </Animated.View>
+      )}
+
+      <Text style={phaseStyles.kicker}>PHASE 1 OF 3 · MORNING</Text>
+      <Text style={phaseStyles.title}>{"What's your\n#1 focus today?"}</Text>
+      <Text style={phaseStyles.subtitle}>
+        One sentence. Your single most important intention for today.
+      </Text>
+
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        placeholder="e.g. Ship the feature without cutting corners"
+        placeholderTextColor={colors.textMuted}
+        style={phaseStyles.input}
+        multiline
+        autoFocus
+        returnKeyType="done"
+        onSubmitEditing={value.trim().length >= 3 ? onNext : undefined}
+      />
+
+      <Pressable
+        style={[phaseStyles.nextBtn, value.trim().length < 3 && phaseStyles.nextBtnDisabled]}
+        onPress={onNext}
+        disabled={value.trim().length < 3}
+      >
+        <Text style={phaseStyles.nextBtnText}>NEXT</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+function MorningMissionPreviewPhase({
+  dateKey,
+  onNext,
+}: {
+  dateKey: string;
+  onNext: () => void;
+}) {
+  const tasks = useEngineStore((s) => s.tasks);
+  const completions = useEngineStore((s) => s.completions);
+
+  const allTasks = useMemo(
+    () => selectAllTasksForDate(tasks, completions, dateKey),
+    [tasks, completions, dateKey],
+  );
+
+  // Group tasks by engine
+  const grouped = useMemo(() => {
+    const map: Record<EngineKey, typeof allTasks> = {
+      body: [], mind: [], money: [], charisma: [],
+    };
+    for (const t of allTasks) {
+      map[t.engine].push(t);
+    }
+    return map;
+  }, [allTasks]);
+
+  const engineCount = ENGINES.filter((e) => grouped[e].length > 0).length;
+
+  return (
+    <Animated.View entering={FadeInDown.duration(400)}>
+      <Text style={phaseStyles.kicker}>PHASE 2 OF 3 · MORNING</Text>
+      <Text style={phaseStyles.title}>{"Today's\nMissions"}</Text>
+      <Text style={phaseStyles.subtitle}>
+        {allTasks.length} mission{allTasks.length !== 1 ? "s" : ""} loaded across{" "}
+        {engineCount} engine{engineCount !== 1 ? "s" : ""}
+      </Text>
+
+      <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+        {ENGINES.map((engine) => {
+          const engineTasks = grouped[engine];
+          if (engineTasks.length === 0) return null;
+          return (
+            <Animated.View
+              key={engine}
+              entering={FadeInDown.delay(ENGINES.indexOf(engine) * 80).duration(300)}
+              style={missionStyles.engineGroup}
+            >
+              <View style={missionStyles.engineHeader}>
+                <View style={[missionStyles.engineDot, { backgroundColor: colors[engine] }]} />
+                <Text style={missionStyles.engineLabel}>{ENGINE_LABELS[engine]}</Text>
+              </View>
+              {engineTasks.map((t) => (
+                <View key={t.id} style={missionStyles.taskRow}>
+                  <Text style={missionStyles.taskTitle}>{t.title}</Text>
+                  <View
+                    style={[
+                      missionStyles.kindBadge,
+                      t.kind === "main" ? missionStyles.kindMain : missionStyles.kindSecondary,
+                    ]}
+                  >
+                    <Text style={missionStyles.kindText}>
+                      {t.kind === "main" ? "MAIN" : "SIDE"}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </Animated.View>
+          );
+        })}
+      </View>
+
+      <Pressable style={[phaseStyles.nextBtn, { marginTop: spacing.xl }]} onPress={onNext}>
+        <Text style={phaseStyles.nextBtnText}>NEXT</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+function MorningMotivationalPhase({
+  identity,
   onFinish,
 }: {
-  score: number;
-  intention: string;
   identity: IdentityArchetype | null;
-  onVote: (id: IdentityArchetype) => void;
   onFinish: () => void;
 }) {
-  const [voted, setVoted] = useState<IdentityArchetype | null>(identity);
+  const firstActiveDate = getJSON<string | null>("first_active_date", null);
+  const dayNumber = getDayNumber(firstActiveDate);
+  const chapter = getCurrentChapter(dayNumber);
+  const meta = identity ? selectIdentityMeta(identity) : null;
 
-  const ARCHETYPES: IdentityArchetype[] = [
-    "titan", "athlete", "scholar", "hustler", "showman", "warrior", "founder", "charmer",
-  ];
+  return (
+    <Animated.View entering={FadeInDown.duration(400)} style={{ alignItems: "center", flex: 1 }}>
+      <Text style={phaseStyles.kicker}>PHASE 3 OF 3 · MORNING</Text>
 
-  const handleVote = (id: IdentityArchetype) => {
-    setVoted(id);
-    onVote(id);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
+      <Animated.View entering={FadeIn.delay(200).duration(400)} style={motivStyles.chapterCard}>
+        <Text style={motivStyles.chapterNumber}>CHAPTER {chapter.number}</Text>
+        <Text style={motivStyles.chapterName}>{chapter.name}</Text>
+        <Text style={motivStyles.chapterSubtitle}>{chapter.subtitle}</Text>
+      </Animated.View>
+
+      {meta && (
+        <Animated.View entering={FadeIn.delay(400).duration(400)} style={motivStyles.taglineWrap}>
+          <Text style={motivStyles.tagline}>{meta.tagline}</Text>
+        </Animated.View>
+      )}
+
+      <Animated.View entering={FadeInUp.delay(600).duration(400)} style={{ width: "100%", marginTop: spacing["2xl"] }}>
+        <Pressable style={motivStyles.beginBtn} onPress={onFinish}>
+          <Text style={motivStyles.beginBtnText}>BEGIN YOUR DAY</Text>
+        </Pressable>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+// ─── Evening Phases ──────────────────────────────────────────────────────────
+
+function EveningScoreRevealPhase({
+  score,
+  dateKey,
+  onNext,
+}: {
+  score: number;
+  dateKey: string;
+  onNext: () => void;
+}) {
+  const scores = useEngineStore((s) => s.scores);
+  const rank = getDailyRank(score);
+
+  // Animated counter
+  const animatedScore = useSharedValue(0);
+  const animStyle = useAnimatedStyle(() => ({
+    // This style is applied to a wrapper; actual text is rendered separately
+    opacity: 1,
+  }));
+
+  const [displayScore, setDisplayScore] = useState(0);
+
+  useEffect(() => {
+    animatedScore.value = withTiming(score, { duration: 1000 });
+    // JS-side counter for display
+    const start = Date.now();
+    const duration = 1000;
+    const tick = () => {
+      const elapsed = Date.now() - start;
+      const progress = Math.min(elapsed / duration, 1);
+      setDisplayScore(Math.round(progress * score));
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [score]);
 
   const scoreColor =
     score >= 85 ? colors.rankS :
@@ -418,88 +262,398 @@ function ScoreRevealPhase({
     score >= 30 ? colors.rankC : colors.rankD;
 
   return (
-    <Animated.View entering={FadeInDown.duration(400)}>
-      <Text style={phaseStyles.kicker}>PROTOCOL COMPLETE</Text>
-      <Text style={phaseStyles.title}>Today's{"\n"}Score</Text>
+    <Animated.View entering={FadeInDown.duration(400)} style={{ alignItems: "center" }}>
+      <Text style={phaseStyles.kicker}>PHASE 1 OF 4 · EVENING</Text>
+      <Text style={[phaseStyles.title, { textAlign: "center" }]}>{"Today's\nScore"}</Text>
 
-      {/* Score ring */}
-      <Animated.View entering={FadeInUp.delay(200).duration(500)} style={scoreStyles.ring}>
-        <Text style={[scoreStyles.scoreValue, { color: scoreColor }]}>
-          {score}
-        </Text>
-        <Text style={scoreStyles.scorePct}>%</Text>
+      {/* Large score */}
+      <Animated.View entering={FadeInUp.delay(200).duration(500)} style={animStyle}>
+        <View style={scoreRevealStyles.ring}>
+          <Text style={[scoreRevealStyles.scoreValue, { color: scoreColor }]}>
+            {displayScore}
+          </Text>
+          <Text style={scoreRevealStyles.scorePct}>%</Text>
+        </View>
       </Animated.View>
 
-      {/* Intention echo */}
-      <View style={scoreStyles.intentionWrap}>
-        <Text style={scoreStyles.intentionLabel}>TODAY'S FOCUS</Text>
-        <Text style={scoreStyles.intentionText}>"{intention}"</Text>
+      {/* Rank badge */}
+      <Animated.View entering={FadeIn.delay(800).duration(400)} style={scoreRevealStyles.rankBadge}>
+        <Text style={[scoreRevealStyles.rankLetter, { color: rank.color }]}>{rank.letter}</Text>
+        <Text style={scoreRevealStyles.rankLabel}>RANK</Text>
+      </Animated.View>
+
+      {/* Engine scores */}
+      <View style={scoreRevealStyles.enginesWrap}>
+        {ENGINES.map((engine, idx) => {
+          const engineScore = scores[`${engine}:${dateKey}`] ?? 0;
+          return (
+            <Animated.View
+              key={engine}
+              entering={FadeInDown.delay(1000 + idx * 100).duration(300)}
+              style={scoreRevealStyles.engineRow}
+            >
+              <View style={scoreRevealStyles.engineLabelRow}>
+                <View style={[scoreRevealStyles.engineDot, { backgroundColor: colors[engine] }]} />
+                <Text style={scoreRevealStyles.engineName}>{ENGINE_LABELS[engine]}</Text>
+                <Text style={scoreRevealStyles.enginePct}>{engineScore}%</Text>
+              </View>
+              <View style={scoreRevealStyles.barBg}>
+                <View
+                  style={[
+                    scoreRevealStyles.barFill,
+                    { width: `${engineScore}%`, backgroundColor: colors[engine] },
+                  ]}
+                />
+              </View>
+            </Animated.View>
+          );
+        })}
       </View>
 
-      {/* Identity vote */}
-      <Text style={scoreStyles.voteLabel}>I TRAINED AS</Text>
-      <View style={scoreStyles.voteGrid}>
-        {ARCHETYPES.map((id) => (
-          <Pressable
-            key={id}
-            style={[
-              scoreStyles.voteBtn,
-              voted === id && { borderColor: colors.primary, backgroundColor: colors.primaryDim },
-            ]}
-            onPress={() => handleVote(id)}
-          >
-            <Text style={scoreStyles.voteIcon}>{IDENTITY_ICONS[id]}</Text>
-            <Text style={[scoreStyles.voteName, voted === id && { color: colors.primary }]}>
-              {id.toUpperCase()}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Pressable style={[phaseStyles.nextBtn, { marginTop: spacing.xl }]} onPress={onFinish}>
-        <Text style={phaseStyles.nextBtnText}>DONE ✓</Text>
+      <Pressable style={[phaseStyles.nextBtn, { width: "100%", marginTop: spacing.xl }]} onPress={onNext}>
+        <Text style={phaseStyles.nextBtnText}>NEXT</Text>
       </Pressable>
     </Animated.View>
   );
 }
 
-const scoreStyles = StyleSheet.create({
-  ring: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "center",
-    paddingVertical: spacing["2xl"],
-  },
-  scoreValue: { fontSize: 80, fontWeight: "200", fontFamily: "monospace", lineHeight: 84 },
-  scorePct: { fontSize: 28, fontWeight: "300", color: colors.textSecondary, marginBottom: 12, marginLeft: 2 },
-  intentionWrap: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-  },
-  intentionLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.xs },
-  intentionText: { fontSize: 15, color: colors.textSecondary, fontStyle: "italic", lineHeight: 22 },
-  voteLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.md },
-  voteGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  voteBtn: {
-    flex: 1,
-    minWidth: "28%",
-    alignItems: "center",
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    gap: 4,
-  },
-  voteIcon: { fontSize: 20 },
-  voteName: { ...fonts.kicker, fontSize: 8, color: colors.textMuted },
-});
+function EveningReflectionPhase({
+  morningIntention,
+  wentWell,
+  onChangeWentWell,
+  differently,
+  onChangeDifferently,
+  onNext,
+}: {
+  morningIntention: string;
+  wentWell: string;
+  onChangeWentWell: (v: string) => void;
+  differently: string;
+  onChangeDifferently: (v: string) => void;
+  onNext: () => void;
+}) {
+  const canProceed = wentWell.trim().length >= 3 && differently.trim().length >= 3;
 
-// ─── Shared phase styles ──────────────────────────────────────────────────────
+  return (
+    <Animated.View entering={FadeInDown.duration(400)}>
+      <Text style={phaseStyles.kicker}>PHASE 2 OF 4 · EVENING</Text>
+      <Text style={phaseStyles.title}>Reflect</Text>
+
+      {morningIntention.length > 0 && (
+        <View style={reflectStyles.intentionReminder}>
+          <Text style={reflectStyles.reminderLabel}>THIS MORNING YOU SET</Text>
+          <Text style={reflectStyles.reminderText}>"{morningIntention}"</Text>
+        </View>
+      )}
+
+      <Text style={reflectStyles.questionLabel}>What went well today?</Text>
+      <TextInput
+        value={wentWell}
+        onChangeText={onChangeWentWell}
+        placeholder="Something I'm proud of..."
+        placeholderTextColor={colors.textMuted}
+        style={phaseStyles.input}
+        multiline
+        autoFocus
+      />
+
+      <Text style={reflectStyles.questionLabel}>What will you do differently tomorrow?</Text>
+      <TextInput
+        value={differently}
+        onChangeText={onChangeDifferently}
+        placeholder="Tomorrow I will..."
+        placeholderTextColor={colors.textMuted}
+        style={phaseStyles.input}
+        multiline
+      />
+
+      <Pressable
+        style={[phaseStyles.nextBtn, !canProceed && phaseStyles.nextBtnDisabled]}
+        onPress={onNext}
+        disabled={!canProceed}
+      >
+        <Text style={phaseStyles.nextBtnText}>NEXT</Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+function EveningIdentityVotePhase({
+  identity,
+  onVoteYes,
+  onVoteNo,
+}: {
+  identity: IdentityArchetype | null;
+  onVoteYes: () => void;
+  onVoteNo: () => void;
+}) {
+  const meta = identity ? selectIdentityMeta(identity) : null;
+  const label = identity ? IDENTITY_LABELS[identity] : "your archetype";
+
+  return (
+    <Animated.View entering={FadeInDown.duration(400)} style={{ alignItems: "center", flex: 1 }}>
+      <Text style={phaseStyles.kicker}>PHASE 3 OF 4 · EVENING</Text>
+      <Text style={[phaseStyles.title, { textAlign: "center" }]}>
+        {"Did you show up as\n"}{label}{" today?"}
+      </Text>
+
+      {meta && (
+        <Animated.View entering={FadeIn.delay(200).duration(400)} style={voteStyles.iconWrap}>
+          <Text style={voteStyles.bigIcon}>
+            {identity ? IDENTITY_ICONS[identity] : ""}
+          </Text>
+          <Text style={voteStyles.archetypeName}>{meta.name}</Text>
+        </Animated.View>
+      )}
+
+      <View style={voteStyles.buttonRow}>
+        <Pressable style={voteStyles.yesBtn} onPress={onVoteYes}>
+          <Text style={voteStyles.yesBtnText}>YES, I DID</Text>
+        </Pressable>
+        <Pressable style={voteStyles.noBtn} onPress={onVoteNo}>
+          <Text style={voteStyles.noBtnText}>I'LL DO BETTER TOMORROW</Text>
+        </Pressable>
+      </View>
+    </Animated.View>
+  );
+}
+
+function EveningNarrativePhase({
+  onFinish,
+}: {
+  onFinish: () => void;
+}) {
+  const narrative = getLatestNarrative();
+  const firstActiveDate = getJSON<string | null>("first_active_date", null);
+  const dayNumber = getDayNumber(firstActiveDate);
+  const chapter = getCurrentChapter(dayNumber);
+
+  return (
+    <Animated.View entering={FadeInDown.duration(400)} style={{ alignItems: "center", flex: 1 }}>
+      <Text style={phaseStyles.kicker}>PHASE 4 OF 4 · EVENING</Text>
+      <Text style={[phaseStyles.title, { textAlign: "center" }]}>{"Your Story\nContinues"}</Text>
+
+      <Animated.View entering={FadeIn.delay(200).duration(400)} style={narrativeStyles.card}>
+        <Text style={narrativeStyles.dayLabel}>DAY {dayNumber} · {chapter.name.toUpperCase()}</Text>
+        <Text style={narrativeStyles.storyText}>
+          {narrative?.text ?? "Your journey is being written. Every action adds a line to your legend."}
+        </Text>
+      </Animated.View>
+
+      <Animated.View entering={FadeInUp.delay(500).duration(400)} style={{ width: "100%", marginTop: spacing["2xl"] }}>
+        <Pressable style={motivStyles.beginBtn} onPress={onFinish}>
+          <Text style={motivStyles.beginBtnText}>END YOUR DAY</Text>
+        </Pressable>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+// ─── Phase Counter ───────────────────────────────────────────────────────────
+
+function PhaseCounter({ current, total }: { current: number; total: number }) {
+  return (
+    <View style={counterStyles.row}>
+      {Array.from({ length: total }).map((_, i) => (
+        <View
+          key={i}
+          style={[
+            counterStyles.dot,
+            i < current && counterStyles.done,
+            i === current && counterStyles.active,
+          ]}
+        />
+      ))}
+      <Text style={counterStyles.label}>{current + 1} / {total}</Text>
+    </View>
+  );
+}
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
+
+export default function ProtocolScreen() {
+  const router = useRouter();
+  const today = getTodayKey();
+
+  // Store selectors
+  const morningDone = useProtocolStore((s) => s.isMorningDone(today));
+  const eveningDone = useProtocolStore((s) => s.isEveningDone(today));
+  const completeMorning = useProtocolStore((s) => s.completeMorning);
+  const completeEvening = useProtocolStore((s) => s.completeEvening);
+  const morningIntention = useProtocolStore((s) => s.morningIntention);
+
+  const identity = useModeStore((s) => s.identity);
+  const castVote = useIdentityStore((s) => s.castVote);
+  const awardXP = useProfileStore((s) => s.awardXP);
+  const updateStreak = useProfileStore((s) => s.updateStreak);
+  const scores = useEngineStore((s) => s.scores);
+  const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
+
+  // Load engine data on mount
+  useEffect(() => {
+    loadAllEngines(today);
+  }, [today]);
+
+  // Auto-detect mode
+  const mode: "morning" | "evening" = !morningDone ? "morning" : "evening";
+  const totalPhases = mode === "morning" ? 3 : 4;
+
+  const [phaseIdx, setPhaseIdx] = useState(0);
+
+  // Morning state
+  const [intention, setIntention] = useState("");
+
+  // Evening state
+  const titanScore = useMemo(() => selectTotalScore(scores, today), [scores, today]);
+  const [wentWell, setWentWell] = useState("");
+  const [differently, setDifferently] = useState("");
+
+  // Navigation helpers
+  const goNext = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setPhaseIdx((p) => Math.min(p + 1, totalPhases - 1));
+  }, [totalPhases]);
+
+  const goBack = useCallback(() => {
+    if (phaseIdx === 0) {
+      router.back();
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setPhaseIdx((p) => p - 1);
+    }
+  }, [phaseIdx, router]);
+
+  // ─── Morning finish ──────────────────────────────────────────────────────
+
+  const handleMorningFinish = useCallback(() => {
+    completeMorning(intention.trim());
+    awardXP(today, "morning_protocol", 15);
+    updateStreak(today);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.back();
+  }, [intention, completeMorning, awardXP, updateStreak, today, router]);
+
+  // ─── Evening finish ──────────────────────────────────────────────────────
+
+  const [identityVoted, setIdentityVoted] = useState(false);
+
+  const handleVoteYes = useCallback(() => {
+    setIdentityVoted(true);
+    castVote();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    goNext();
+  }, [castVote, goNext]);
+
+  const handleVoteNo = useCallback(() => {
+    setIdentityVoted(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    goNext();
+  }, [goNext]);
+
+  const handleEveningFinish = useCallback(() => {
+    const reflection = [wentWell.trim(), differently.trim()].filter(Boolean).join("\n\n");
+    completeEvening(reflection, identityVoted ? identity : null, titanScore);
+    awardXP(today, "evening_protocol", 15);
+    evaluateAllTrees();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.back();
+  }, [wentWell, differently, completeEvening, identityVoted, identity, titanScore, awardXP, today, router]);
+
+  // ─── Render ──────────────────────────────────────────────────────────────
+
+  return (
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+      <HUDBackground />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable onPress={goBack} hitSlop={12}>
+          <Text style={styles.closeBtn}>{phaseIdx === 0 ? "✕" : "←"}</Text>
+        </Pressable>
+        <Text style={styles.headerTitle}>
+          {mode === "morning" ? "MORNING PROTOCOL" : "EVENING PROTOCOL"}
+        </Text>
+        <View style={{ width: 32 }} />
+      </View>
+
+      <PhaseCounter current={phaseIdx} total={totalPhases} />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ─── MORNING ─── */}
+          {mode === "morning" && phaseIdx === 0 && (
+            <MorningIntentionPhase
+              value={intention}
+              onChange={setIntention}
+              onNext={goNext}
+              identity={identity}
+            />
+          )}
+          {mode === "morning" && phaseIdx === 1 && (
+            <MorningMissionPreviewPhase dateKey={today} onNext={goNext} />
+          )}
+          {mode === "morning" && phaseIdx === 2 && (
+            <MorningMotivationalPhase identity={identity} onFinish={handleMorningFinish} />
+          )}
+
+          {/* ─── EVENING ─── */}
+          {mode === "evening" && phaseIdx === 0 && (
+            <EveningScoreRevealPhase score={titanScore} dateKey={today} onNext={goNext} />
+          )}
+          {mode === "evening" && phaseIdx === 1 && (
+            <EveningReflectionPhase
+              morningIntention={morningIntention}
+              wentWell={wentWell}
+              onChangeWentWell={setWentWell}
+              differently={differently}
+              onChangeDifferently={setDifferently}
+              onNext={goNext}
+            />
+          )}
+          {mode === "evening" && phaseIdx === 2 && (
+            <EveningIdentityVotePhase
+              identity={identity}
+              onVoteYes={handleVoteYes}
+              onVoteNo={handleVoteNo}
+            />
+          )}
+          {mode === "evening" && phaseIdx === 3 && (
+            <EveningNarrativePhase onFinish={handleEveningFinish} />
+          )}
+
+          <View style={{ height: 60 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.bg },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.06)",
+  },
+  closeBtn: { fontSize: 18, color: colors.textMuted, fontWeight: "300", width: 32, textAlign: "center" },
+  headerTitle: { ...fonts.kicker, fontSize: 10, color: colors.textMuted },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
+});
 
 const phaseStyles = StyleSheet.create({
   kicker: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.sm },
@@ -528,165 +682,205 @@ const phaseStyles = StyleSheet.create({
   },
   nextBtnDisabled: { opacity: 0.3 },
   nextBtnText: { ...fonts.kicker, fontSize: 12, color: "#000", letterSpacing: 2 },
+  identityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  identityIcon: { fontSize: 16 },
+  identityName: { ...fonts.kicker, fontSize: 9, color: colors.textSecondary },
 });
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+const counterStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: spacing.xl,
+    paddingTop: spacing.sm,
+  },
+  dot: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+  done: { backgroundColor: colors.success },
+  active: { backgroundColor: colors.text, width: 20 },
+  label: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginLeft: spacing.sm },
+});
 
-export default function ProtocolScreen() {
-  const router = useRouter();
-  const today = getTodayKey();
-
-  const habits = useHabitStore((s) => s.habits);
-  const loadHabits = useHabitStore((s) => s.load);
-  const completeSession = useProtocolStore((s) => s.completeSession);
-  const identity = useModeStore((s) => s.identity);
-  const setIdentity = useModeStore((s) => s.setIdentity);
-  const awardXP = useProfileStore((s) => s.awardXP);
-  const updateStreak = useProfileStore((s) => s.updateStreak);
-  const scores = useEngineStore((s) => s.scores);
-
-  // Load habits on mount
-  React.useEffect(() => {
-    loadHabits(today);
-  }, [today]);
-
-  const [phaseIdx, setPhaseIdx] = useState(0);
-  const phase = PHASE_ORDER[phaseIdx];
-
-  // Phase 1
-  const [intention, setIntention] = useState("");
-
-  // Phase 2
-  const exercise = React.useMemo(() => pickDailyExercise(today), [today]);
-  const [mindCorrect, setMindCorrect] = useState(false);
-
-  // Phase 3
-  const [habitChecks, setHabitChecks] = useState<Record<number, boolean>>({});
-  const toggleHabitCheck = useCallback((id: number) => {
-    setHabitChecks((prev) => ({ ...prev, [id]: !prev[id] }));
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, []);
-
-  // Phase 4
-  const titanScore = React.useMemo(
-    () => selectTotalScore(scores, today),
-    [scores, today]
-  );
-
-  const [votedIdentity, setVotedIdentity] = useState<IdentityArchetype | null>(identity);
-
-  const goNext = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setPhaseIdx((p) => Math.min(p + 1, PHASE_ORDER.length - 1));
-  }, []);
-
-  const handleMindNext = useCallback((correct: boolean) => {
-    setMindCorrect(correct);
-    goNext();
-  }, [goNext]);
-
-  const handleVote = useCallback((id: IdentityArchetype) => {
-    setVotedIdentity(id);
-    setIdentity(id);
-  }, [setIdentity]);
-
-  const handleFinish = useCallback(() => {
-    // Save the session
-    completeSession({
-      dateKey: today,
-      completedAt: Date.now(),
-      intention: intention.trim(),
-      habitChecks,
-      titanScore,
-      identityVote: votedIdentity,
-    });
-
-    // Award XP for completing the protocol
-    awardXP(today, "protocol_complete", 30);
-    updateStreak(today);
-
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
-  }, [today, intention, habitChecks, titanScore, votedIdentity, completeSession, awardXP, updateStreak, router]);
-
-  return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
-          <Text style={styles.closeBtn}>✕</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>DAILY PROTOCOL</Text>
-        <View style={{ width: 32 }} />
-      </View>
-
-      <ProgressDots current={phaseIdx} />
-
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {phase === "intention" && (
-            <IntentionPhase
-              value={intention}
-              onChange={setIntention}
-              onNext={goNext}
-            />
-          )}
-
-          {phase === "mind_check" && (
-            <MindCheckPhase
-              exercise={exercise}
-              onNext={handleMindNext}
-            />
-          )}
-
-          {phase === "habit_check" && (
-            <HabitCheckPhase
-              habits={habits.map((h) => ({ id: h.id!, title: h.title, icon: h.icon }))}
-              checked={habitChecks}
-              onToggle={toggleHabitCheck}
-              onNext={goNext}
-              dateKey={today}
-            />
-          )}
-
-          {phase === "score_reveal" && (
-            <ScoreRevealPhase
-              score={titanScore}
-              intention={intention}
-              identity={votedIdentity}
-              onVote={handleVote}
-              onFinish={handleFinish}
-            />
-          )}
-
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  header: {
+const missionStyles = StyleSheet.create({
+  engineGroup: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    padding: spacing.md,
+  },
+  engineHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  engineDot: { width: 8, height: 8, borderRadius: 4 },
+  engineLabel: { ...fonts.kicker, fontSize: 9, color: colors.textSecondary },
+  taskRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
+    borderBottomColor: "rgba(255,255,255,0.04)",
   },
-  closeBtn: { fontSize: 18, color: colors.textMuted, fontWeight: "300", width: 32, textAlign: "center" },
-  headerTitle: { ...fonts.kicker, fontSize: 10, color: colors.textMuted },
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
+  taskTitle: { flex: 1, fontSize: 14, color: colors.text, fontWeight: "500" },
+  kindBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginLeft: spacing.sm,
+  },
+  kindMain: { backgroundColor: colors.successDim },
+  kindSecondary: { backgroundColor: "rgba(255,255,255,0.06)" },
+  kindText: { ...fonts.kicker, fontSize: 7, color: colors.textMuted },
+});
+
+const motivStyles = StyleSheet.create({
+  chapterCard: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    padding: spacing.xl,
+    alignItems: "center",
+    width: "100%",
+    marginTop: spacing.xl,
+  },
+  chapterNumber: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.xs },
+  chapterName: { fontSize: 28, fontWeight: "200", color: colors.text, textAlign: "center" },
+  chapterSubtitle: {
+    fontSize: 14, color: colors.textSecondary, textAlign: "center",
+    marginTop: spacing.sm, lineHeight: 20, fontStyle: "italic",
+  },
+  taglineWrap: {
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  tagline: {
+    fontSize: 15, color: colors.textSecondary, textAlign: "center",
+    lineHeight: 22, fontStyle: "italic",
+  },
+  beginBtn: {
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    paddingVertical: spacing.lg + 4,
+    alignItems: "center",
+  },
+  beginBtnText: { ...fonts.kicker, fontSize: 13, color: "#000", letterSpacing: 3 },
+});
+
+const scoreRevealStyles = StyleSheet.create({
+  ring: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    paddingVertical: spacing.xl,
+  },
+  scoreValue: { fontSize: 80, fontWeight: "200", fontFamily: "monospace", lineHeight: 84 },
+  scorePct: { fontSize: 28, fontWeight: "300", color: colors.textSecondary, marginBottom: 12, marginLeft: 2 },
+  rankBadge: {
+    alignItems: "center",
+    marginBottom: spacing.xl,
+  },
+  rankLetter: { fontSize: 32, fontWeight: "700" },
+  rankLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted },
+  enginesWrap: { gap: spacing.md, width: "100%" },
+  engineRow: { gap: 4 },
+  engineLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  engineDot: { width: 8, height: 8, borderRadius: 4 },
+  engineName: { ...fonts.kicker, fontSize: 9, color: colors.textSecondary, flex: 1 },
+  enginePct: { ...fonts.kicker, fontSize: 9, color: colors.textMuted },
+  barBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  barFill: { height: 6, borderRadius: 3 },
+});
+
+const reflectStyles = StyleSheet.create({
+  intentionReminder: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  reminderLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.xs },
+  reminderText: { fontSize: 14, color: colors.textSecondary, fontStyle: "italic", lineHeight: 20 },
+  questionLabel: {
+    ...fonts.kicker, fontSize: 10, color: colors.textSecondary,
+    marginBottom: spacing.sm, marginTop: spacing.sm,
+  },
+});
+
+const voteStyles = StyleSheet.create({
+  iconWrap: {
+    alignItems: "center",
+    marginVertical: spacing.xl,
+  },
+  bigIcon: { fontSize: 64 },
+  archetypeName: {
+    ...fonts.kicker, fontSize: 12, color: colors.textSecondary,
+    marginTop: spacing.sm,
+  },
+  buttonRow: { gap: spacing.md, width: "100%", marginTop: spacing.xl },
+  yesBtn: {
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    paddingVertical: spacing.lg + 2,
+    alignItems: "center",
+  },
+  yesBtnText: { ...fonts.kicker, fontSize: 13, color: "#000", letterSpacing: 2 },
+  noBtn: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    paddingVertical: spacing.lg,
+    alignItems: "center",
+  },
+  noBtnText: { ...fonts.kicker, fontSize: 11, color: colors.textMuted, letterSpacing: 1 },
+});
+
+const narrativeStyles = StyleSheet.create({
+  card: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    padding: spacing.xl,
+    width: "100%",
+    marginTop: spacing.xl,
+  },
+  dayLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.md },
+  storyText: {
+    fontSize: 15, color: colors.textSecondary, lineHeight: 24,
+    fontStyle: "italic",
+  },
 });

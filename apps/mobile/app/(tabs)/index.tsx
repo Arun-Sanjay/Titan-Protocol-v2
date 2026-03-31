@@ -28,6 +28,7 @@ import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdenti
 import { getTodayKey } from "../../src/lib/date";
 import { getDailyRank } from "../../src/db/gamification";
 import { getCurrentChapter, getDayNumber } from "../../src/data/chapters";
+import { evaluateAllTrees } from "../../src/lib/skill-tree-evaluator";
 import type { EngineKey } from "../../src/db/schema";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -74,7 +75,9 @@ export default function HQScreen() {
 
   const identity = useModeStore((s) => s.identity);
   const archetype = useIdentityStore((s) => s.archetype);
-  const protocolCompleted = useProtocolStore((s) => s.isCompletedToday(today));
+  const morningDone = useProtocolStore((s) => s.isMorningDone(today));
+  const eveningDone = useProtocolStore((s) => s.isEveningDone(today));
+  const protocolCompleted = morningDone && eveningDone;
   const protocolSession = useProtocolStore((s) => s.getSession(today));
   const skillProgress = useSkillTreeStore((s) => s.progress);
 
@@ -125,6 +128,8 @@ export default function HQScreen() {
     if (completed) {
       awardXP(analytics.today, "task_complete", xp);
       updateStreak(analytics.today);
+      // Re-evaluate skill trees after task completion
+      evaluateAllTrees();
     } else {
       awardXP(analytics.today, "task_uncomplete", -xp);
     }
@@ -236,11 +241,21 @@ export default function HQScreen() {
                   router.push("/protocol");
                 }}
               >
-                <Text style={styles.protocolKicker}>DAILY PROTOCOL</Text>
-                <Text style={styles.protocolTitle}>Begin Today's Protocol</Text>
-                <Text style={styles.protocolSub}>3-minute guided session \u2022 Set intention \u2022 Train your mind</Text>
+                <Text style={styles.protocolKicker}>
+                  {!morningDone ? "MORNING PROTOCOL" : "EVENING PROTOCOL"}
+                </Text>
+                <Text style={styles.protocolTitle}>
+                  {!morningDone ? "Start Your Day" : "End Your Day"}
+                </Text>
+                <Text style={styles.protocolSub}>
+                  {!morningDone
+                    ? "Set your intention \u2022 Preview missions \u2022 Lock in focus"
+                    : "Review score \u2022 Reflect \u2022 Cast identity vote"}
+                </Text>
                 <View style={styles.protocolBtn}>
-                  <Text style={styles.protocolBtnText}>START</Text>
+                  <Text style={styles.protocolBtnText}>
+                    {!morningDone ? "BEGIN MORNING" : "BEGIN EVENING"}
+                  </Text>
                 </View>
               </Pressable>
             </Animated.View>
@@ -300,45 +315,77 @@ export default function HQScreen() {
           </View>
         )}
 
-        {/* Card 3: Skill Trees */}
-        <Animated.View entering={FadeInDown.delay(240).duration(400)}>
-          <Pressable onPress={() => router.push("/skill-tree/body")}>
+        {/* Card 3: War Room */}
+        <Animated.View entering={FadeInDown.delay(220).duration(400)}>
+          <Pressable onPress={() => router.push("/war-room")}>
             <Panel style={styles.missionCard} delay={0}>
               <View style={styles.missionCardRow}>
-                <View style={[styles.missionIcon, { backgroundColor: "rgba(167,139,250,0.15)" }]}>
-                  <Text style={{ fontSize: 20 }}>{"\uD83C\uDF33"}</Text>
+                <View style={[styles.missionIcon, { backgroundColor: "rgba(248,113,113,0.15)" }]}>
+                  <Text style={{ fontSize: 20 }}>{"\u2694\uFE0F"}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.missionCardKicker}>SKILL TREES</Text>
-                  <Text style={styles.missionCardTitle}>
-                    {readyToClaimCount > 0
-                      ? `${readyToClaimCount} node${readyToClaimCount > 1 ? "s" : ""} ready to claim`
-                      : "Earn mastery through performance"}
+                  <Text style={styles.missionCardKicker}>WAR ROOM</Text>
+                  <Text style={styles.missionCardTitle}>Operations Board</Text>
+                  <Text style={styles.missionCardSub}>
+                    Missions {"\u00B7"} Side Quests {"\u00B7"} Boss Challenge
                   </Text>
                 </View>
                 <Text style={styles.expandArrow}>{"\u2192"}</Text>
               </View>
-
-              {/* 4 engine skill tree bars */}
-              <View style={styles.skillMiniRow}>
-                {ENGINES.map((e) => {
-                  const nodes = skillProgress[e] ?? [];
-                  const claimed = nodes.filter((n) => n.status === "claimed").length;
-                  const total = nodes.length || SKILL_TREES[e]?.reduce((s, b) => s + b.nodes.length, 0) || 0;
-                  const pct = total > 0 ? (claimed / total) * 100 : 0;
-                  return (
-                    <Pressable key={e} style={styles.skillMiniCol} onPress={() => router.push(`/skill-tree/${e}`)}>
-                      <View style={[styles.skillDot, { backgroundColor: ENGINE_COLORS[e] }]} />
-                      <View style={{ flex: 1 }}>
-                        <TitanProgress value={pct} color={ENGINE_COLORS[e]} height={3} />
-                      </View>
-                      <Text style={styles.skillMiniText}>{claimed}/{total}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
             </Panel>
           </Pressable>
+        </Animated.View>
+
+        {/* Card 4: Skill Trees */}
+        <Animated.View entering={FadeInDown.delay(240).duration(400)}>
+          <Panel style={styles.missionCard} delay={0}>
+            <View style={styles.missionCardRow}>
+              <View style={[styles.missionIcon, { backgroundColor: "rgba(167,139,250,0.15)" }]}>
+                <Text style={{ fontSize: 20 }}>{"\uD83C\uDF33"}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.missionCardKicker}>SKILL TREES</Text>
+                <Text style={styles.missionCardTitle}>
+                  {readyToClaimCount > 0
+                    ? `${readyToClaimCount} node${readyToClaimCount > 1 ? "s" : ""} ready to claim`
+                    : "Earn mastery through performance"}
+                </Text>
+              </View>
+            </View>
+
+            {/* 4 engine navigation rows — proper tap targets */}
+            <View style={styles.skillEngineList}>
+              {ENGINES.map((e) => {
+                const nodes = skillProgress[e] ?? [];
+                const claimed = nodes.filter((n) => n.status === "claimed").length;
+                const ready = nodes.filter((n) => n.status === "ready").length;
+                const total = nodes.length || SKILL_TREES[e]?.reduce((s, b) => s + b.nodes.length, 0) || 0;
+                const pct = total > 0 ? (claimed / total) * 100 : 0;
+                return (
+                  <Pressable
+                    key={e}
+                    style={styles.skillEngineRow}
+                    onPress={() => router.push(`/skill-tree/${e}`)}
+                  >
+                    <View style={[styles.skillEngineDot, { backgroundColor: ENGINE_COLORS[e] }]} />
+                    <Text style={[styles.skillEngineName, { color: ENGINE_COLORS[e] }]}>
+                      {ENGINE_LABELS[e]}
+                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <TitanProgress value={pct} color={ENGINE_COLORS[e]} height={3} />
+                    </View>
+                    <Text style={styles.skillEngineCount}>{claimed}/{total}</Text>
+                    {ready > 0 && (
+                      <View style={[styles.skillReadyBadge, { backgroundColor: ENGINE_COLORS[e] + "25", borderColor: ENGINE_COLORS[e] + "50" }]}>
+                        <Text style={[styles.skillReadyText, { color: ENGINE_COLORS[e] }]}>{ready}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.expandArrow}>{"\u2192"}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Panel>
         </Animated.View>
 
         {/* Card 4: Analytics */}
@@ -457,11 +504,22 @@ const styles = StyleSheet.create({
   },
   protocolBtnText: { ...fonts.kicker, fontSize: 12, color: "#000", letterSpacing: 2 },
 
-  // Skill tree mini
-  skillMiniRow: { marginTop: spacing.md, gap: 6 },
-  skillMiniCol: { flexDirection: "row", alignItems: "center", gap: 6 },
-  skillDot: { width: 6, height: 6, borderRadius: 3 },
-  skillMiniText: { ...fonts.mono, fontSize: 9, color: colors.textMuted, width: 30, textAlign: "right" },
+  // Skill tree engine list
+  skillEngineList: { marginTop: spacing.md, gap: spacing.sm },
+  skillEngineRow: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    paddingVertical: spacing.sm, paddingHorizontal: spacing.xs,
+    borderRadius: radius.sm,
+    minHeight: 40,
+  },
+  skillEngineDot: { width: 8, height: 8, borderRadius: 4 },
+  skillEngineName: { ...fonts.kicker, fontSize: 9, width: 60, letterSpacing: 1 },
+  skillEngineCount: { ...fonts.mono, fontSize: 11, color: colors.textMuted, width: 36, textAlign: "right" },
+  skillReadyBadge: {
+    borderRadius: 10, borderWidth: 1,
+    paddingHorizontal: 6, paddingVertical: 2, marginLeft: 2,
+  },
+  skillReadyText: { ...fonts.mono, fontSize: 9, fontWeight: "700" },
 
   // Story feed
   storyCard: {

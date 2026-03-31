@@ -46,6 +46,27 @@ const SESSIONS_KEY = "protocol_sessions";
 const STREAK_KEY = "protocol_streak";
 const STREAK_DATE_KEY = "protocol_streak_date";
 
+// ─── Morning / Evening MMKV keys ─────────────────────────────────────────────
+
+function morningKey(dateKey: string) {
+  return `morning_${dateKey}`;
+}
+function eveningKey(dateKey: string) {
+  return `evening_${dateKey}`;
+}
+
+export type MorningData = {
+  intention: string;
+  completedAt: number;
+};
+
+export type EveningData = {
+  reflection: string;
+  identityVote: IdentityArchetype | null;
+  titanScore: number;
+  completedAt: number;
+};
+
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 type ProtocolState = {
@@ -60,6 +81,12 @@ type ProtocolState = {
   streakLastDate: string | null;
   todayCompleted: boolean;
 
+  // Morning / Evening split
+  morningCompleted: boolean;
+  eveningCompleted: boolean;
+  morningIntention: string;
+  morningReflection: string;
+
   load: () => void;
   isCompletedToday: (dateKey: string) => boolean;
   completeSession: (session: ProtocolSession) => void;
@@ -70,6 +97,12 @@ type ProtocolState = {
   finishProtocol: (score: number) => void;
   checkTodayStatus: () => void;
   resetDaily: () => void;
+
+  // Morning / Evening methods
+  completeMorning: (intention: string) => void;
+  completeEvening: (reflection: string, identityVote: IdentityArchetype | null, titanScore: number) => void;
+  isMorningDone: (dateKey: string) => boolean;
+  isEveningDone: (dateKey: string) => boolean;
 };
 
 export const useProtocolStore = create<ProtocolState>()((set, get) => ({
@@ -82,16 +115,31 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
   streakLastDate: getJSON<string | null>(STREAK_DATE_KEY, null),
   todayCompleted: false,
 
+  // Morning / Evening defaults
+  morningCompleted: false,
+  eveningCompleted: false,
+  morningIntention: "",
+  morningReflection: "",
+
   load: () => {
     const sessions = getJSON<Record<string, ProtocolSession>>(SESSIONS_KEY, {});
     const streakCurrent = getJSON<number>(STREAK_KEY, 0);
     const streakLastDate = getJSON<string | null>(STREAK_DATE_KEY, null);
     const today = getTodayKey();
+
+    // Hydrate morning / evening status from MMKV
+    const mData = getJSON<MorningData | null>(morningKey(today), null);
+    const eData = getJSON<EveningData | null>(eveningKey(today), null);
+
     set({
       sessions,
       streakCurrent,
       streakLastDate,
       todayCompleted: !!sessions[today],
+      morningCompleted: !!mData,
+      eveningCompleted: !!eData,
+      morningIntention: mData?.intention ?? "",
+      morningReflection: eData?.reflection ?? "",
     });
   },
 
@@ -186,5 +234,69 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
       currentPhase: null,
       phaseResults: [],
     });
+  },
+
+  // ─── Morning / Evening ────────────────────────────────────────────────────
+
+  completeMorning: (intention: string) => {
+    const today = getTodayKey();
+    const data: MorningData = { intention, completedAt: Date.now() };
+    setJSON(morningKey(today), data);
+    set({ morningCompleted: true, morningIntention: intention });
+  },
+
+  completeEvening: (reflection: string, identityVote: IdentityArchetype | null, titanScore: number) => {
+    const today = getTodayKey();
+    const data: EveningData = { reflection, identityVote, titanScore, completedAt: Date.now() };
+    setJSON(eveningKey(today), data);
+    set({ eveningCompleted: true, morningReflection: reflection });
+
+    // Backward compat: also record a full ProtocolSession via completeSession logic
+    const { sessions, streakCurrent, streakLastDate } = get();
+
+    // Calculate new streak
+    let newStreak = 1;
+    if (streakLastDate) {
+      if (streakLastDate === today) {
+        newStreak = streakCurrent;
+      } else {
+        const yesterday = addDays(today, -1);
+        newStreak = streakLastDate === yesterday ? streakCurrent + 1 : 1;
+      }
+    }
+
+    setJSON(STREAK_KEY, newStreak);
+    setJSON(STREAK_DATE_KEY, today);
+
+    const session: ProtocolSession = {
+      dateKey: today,
+      completedAt: Date.now(),
+      intention: get().morningIntention,
+      habitChecks: {},
+      titanScore,
+      identityVote,
+    };
+    const updatedSessions = { ...sessions, [today]: session };
+    setJSON(SESSIONS_KEY, updatedSessions);
+    setJSON(`protocol_completions:${today}`, { completed: true, score: titanScore });
+
+    set({
+      sessions: updatedSessions,
+      streakCurrent: newStreak,
+      streakLastDate: today,
+      todayCompleted: true,
+      isActive: false,
+      startedAt: null,
+      currentPhase: null,
+      phaseResults: [],
+    });
+  },
+
+  isMorningDone: (dateKey: string) => {
+    return !!getJSON<MorningData | null>(morningKey(dateKey), null);
+  },
+
+  isEveningDone: (dateKey: string) => {
+    return !!getJSON<EveningData | null>(eveningKey(dateKey), null);
   },
 }));
