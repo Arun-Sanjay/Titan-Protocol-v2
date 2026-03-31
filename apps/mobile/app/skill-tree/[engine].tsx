@@ -4,10 +4,14 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Animated, {
+  useSharedValue, useAnimatedStyle,
+  withRepeat, withSequence, withTiming, Easing,
+} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../src/theme";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
-import { useSkillTreeStore, SKILL_TREES, type SkillNode, type SkillBranch } from "../../src/stores/useSkillTreeStore";
+import { useSkillTreeStore, SKILL_TREES, type SkillBranch } from "../../src/stores/useSkillTreeStore";
 import type { EngineKey } from "../../src/db/schema";
 
 // ─── Engine meta ──────────────────────────────────────────────────────────────
@@ -22,79 +26,110 @@ const ENGINE_DIM: Record<EngineKey, string> = {
   body: colors.bodyDim, mind: colors.mindDim, money: colors.moneyDim, charisma: colors.charismaDim,
 };
 
-// ─── Node Card ────────────────────────────────────────────────────────────────
+// ─── Node Card (3 states: locked / ready / claimed) ─────────────────────────
 
 function NodeCard({
-  node,
-  state,
+  nodeId,
+  name,
+  conditionText,
+  status,
   engineColor,
   engineDim,
-  onUnlock,
+  onClaim,
 }: {
-  node: SkillNode;
-  state: "unlocked" | "unlockable" | "locked";
+  nodeId: string;
+  name: string;
+  conditionText: string;
+  status: "locked" | "ready" | "claimed";
   engineColor: string;
   engineDim: string;
-  onUnlock: (nodeId: string) => void;
+  onClaim: (nodeId: string) => void;
 }) {
-  const isUnlocked = state === "unlocked";
-  const isUnlockable = state === "unlockable";
+  // Pulse animation for ready nodes
+  const pulse = useSharedValue(1);
+  React.useEffect(() => {
+    if (status === "ready") {
+      pulse.value = withRepeat(
+        withSequence(
+          withTiming(1.03, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        false,
+      );
+    }
+  }, [status]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: status === "ready" ? [{ scale: pulse.value }] : [],
+  }));
 
   return (
-    <View
-      style={[
-        nodeStyles.card,
-        isUnlocked && { borderColor: engineColor + "50", backgroundColor: engineDim },
-        isUnlockable && { borderColor: engineColor + "80" },
-        state === "locked" && nodeStyles.cardLocked,
-      ]}
-    >
-      {/* Status icon */}
-      <View style={[nodeStyles.iconWrap, isUnlocked && { backgroundColor: engineColor + "25" }]}>
-        <Text style={[nodeStyles.icon, isUnlocked && { color: engineColor }]}>
-          {isUnlocked ? "◆" : isUnlockable ? "◇" : "○"}
-        </Text>
-      </View>
-
-      {/* Name + description */}
-      <View style={{ flex: 1 }}>
-        <Text
-          style={[
-            nodeStyles.name,
-            isUnlocked && { color: engineColor },
-            state === "locked" && { color: colors.textMuted },
-          ]}
-          numberOfLines={1}
-        >
-          {node.name}
-        </Text>
-        <Text style={[nodeStyles.condition, state === "locked" && { color: "rgba(210,220,242,0.3)" }]} numberOfLines={1}>
-          {node.conditionText}
-        </Text>
-      </View>
-
-      {/* Unlock button or badge */}
-      {isUnlocked ? (
-        <View style={[nodeStyles.badge, { borderColor: engineColor + "40", backgroundColor: engineColor + "15" }]}>
-          <Text style={[nodeStyles.badgeText, { color: engineColor }]}>DONE</Text>
+    <Animated.View style={pulseStyle}>
+      <View
+        style={[
+          nodeStyles.card,
+          status === "claimed" && { borderColor: engineColor + "50", backgroundColor: engineDim },
+          status === "ready" && { borderColor: engineColor, borderWidth: 1.5 },
+          status === "locked" && nodeStyles.cardLocked,
+        ]}
+      >
+        {/* Status icon */}
+        <View style={[
+          nodeStyles.iconWrap,
+          status === "claimed" && { backgroundColor: engineColor + "25" },
+          status === "ready" && { backgroundColor: engineColor + "20", borderWidth: 1, borderColor: engineColor + "50" },
+        ]}>
+          <Text style={[
+            nodeStyles.icon,
+            status === "claimed" && { color: engineColor },
+            status === "ready" && { color: engineColor },
+          ]}>
+            {status === "claimed" ? "✓" : status === "ready" ? "★" : "🔒"}
+          </Text>
         </View>
-      ) : isUnlockable ? (
-        <Pressable
-          style={[nodeStyles.unlockBtn, { borderColor: engineColor, backgroundColor: engineColor + "15" }]}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            onUnlock(node.id);
-          }}
-          hitSlop={8}
-        >
-          <Text style={[nodeStyles.unlockBtnText, { color: engineColor }]}>UNLOCK</Text>
-        </Pressable>
-      ) : (
-        <View style={nodeStyles.lockIcon}>
-          <Text style={nodeStyles.lockIconText}>🔒</Text>
+
+        {/* Name + description */}
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[
+              nodeStyles.name,
+              status === "claimed" && { color: engineColor },
+              status === "ready" && { color: engineColor },
+              status === "locked" && { color: colors.textMuted },
+            ]}
+            numberOfLines={1}
+          >
+            {name}
+          </Text>
+          <Text style={[nodeStyles.condition, status === "locked" && { color: "rgba(210,220,242,0.3)" }]} numberOfLines={1}>
+            {conditionText}
+          </Text>
         </View>
-      )}
-    </View>
+
+        {/* Action button */}
+        {status === "claimed" ? (
+          <View style={[nodeStyles.badge, { borderColor: engineColor + "40", backgroundColor: engineColor + "15" }]}>
+            <Text style={[nodeStyles.badgeText, { color: engineColor }]}>CLAIMED</Text>
+          </View>
+        ) : status === "ready" ? (
+          <Pressable
+            style={[nodeStyles.claimBtn, { borderColor: engineColor, backgroundColor: engineColor + "15" }]}
+            onPress={() => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              onClaim(nodeId);
+            }}
+            hitSlop={8}
+          >
+            <Text style={[nodeStyles.claimBtnText, { color: engineColor }]}>CLAIM</Text>
+          </Pressable>
+        ) : (
+          <View style={nodeStyles.lockIcon}>
+            <Text style={nodeStyles.lockIconText}>🔒</Text>
+          </View>
+        )}
+      </View>
+    </Animated.View>
   );
 }
 
@@ -107,15 +142,13 @@ const nodeStyles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     marginBottom: spacing.xs,
   },
-  cardLocked: {
-    opacity: 0.45,
-  },
+  cardLocked: { opacity: 0.45 },
   iconWrap: {
-    width: 32, height: 32, borderRadius: radius.sm,
+    width: 36, height: 36, borderRadius: radius.sm,
     backgroundColor: "rgba(255,255,255,0.06)",
     alignItems: "center", justifyContent: "center",
   },
-  icon: { fontSize: 14, color: colors.textMuted },
+  icon: { fontSize: 16, color: colors.textMuted },
   name: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 2 },
   condition: { ...fonts.kicker, fontSize: 8, color: colors.textMuted },
   badge: {
@@ -123,12 +156,12 @@ const nodeStyles = StyleSheet.create({
     paddingHorizontal: 7, paddingVertical: 3,
   },
   badgeText: { ...fonts.kicker, fontSize: 8 },
-  unlockBtn: {
-    borderRadius: radius.sm, borderWidth: 1,
-    paddingHorizontal: 10, paddingVertical: 5,
-    minWidth: 60, alignItems: "center",
+  claimBtn: {
+    borderRadius: radius.sm, borderWidth: 1.5,
+    paddingHorizontal: 12, paddingVertical: 6,
+    minWidth: 64, alignItems: "center",
   },
-  unlockBtnText: { ...fonts.kicker, fontSize: 9 },
+  claimBtnText: { ...fonts.kicker, fontSize: 9, fontWeight: "700" },
   lockIcon: { width: 28, alignItems: "center" },
   lockIconText: { fontSize: 14 },
 });
@@ -137,65 +170,66 @@ const nodeStyles = StyleSheet.create({
 
 function BranchSection({
   branch,
-  unlockedNodes,
+  engine,
   engineColor,
   engineDim,
-  onUnlock,
+  onClaim,
 }: {
   branch: SkillBranch;
-  unlockedNodes: Set<string>;
+  engine: string;
   engineColor: string;
   engineDim: string;
-  onUnlock: (nodeId: string) => void;
+  onClaim: (nodeId: string) => void;
 }) {
-  const unlockedCount = branch.nodes.filter((n) => unlockedNodes.has(n.id)).length;
+  const progress = useSkillTreeStore((s) => s.progress[engine] ?? []);
+  const unlockedNodes = useSkillTreeStore((s) => s.unlockedNodes);
+
+  // Determine node status from the progress store
+  const getNodeStatus = (nodeId: string, index: number): "locked" | "ready" | "claimed" => {
+    const nodeProgress = progress.find((n) => n.nodeId === nodeId);
+    if (nodeProgress) {
+      if (nodeProgress.status === "claimed") return "claimed";
+      if (nodeProgress.status === "ready") return "ready";
+    }
+    // Fallback: check unlockedNodes set for backward compat
+    if (unlockedNodes.has(nodeId)) return "claimed";
+    return "locked";
+  };
+
+  const claimedCount = branch.nodes.filter((n) => getNodeStatus(n.id, 0) === "claimed").length;
 
   return (
     <View style={branchStyles.section}>
-      {/* Branch header */}
       <View style={branchStyles.header}>
         <View style={[branchStyles.dot, { backgroundColor: engineColor }]} />
         <Text style={branchStyles.branchName}>{branch.name}</Text>
         <Text style={branchStyles.branchProgress}>
-          {unlockedCount}/{branch.nodes.length}
+          {claimedCount}/{branch.nodes.length}
         </Text>
       </View>
 
-      {/* Progress bar */}
       <View style={branchStyles.progressTrack}>
         <View
           style={[
             branchStyles.progressFill,
-            {
-              width: `${(unlockedCount / branch.nodes.length) * 100}%` as any,
-              backgroundColor: engineColor,
-            },
+            { width: `${(claimedCount / branch.nodes.length) * 100}%` as any, backgroundColor: engineColor },
           ]}
         />
       </View>
 
-      {/* Nodes */}
       <View style={branchStyles.nodes}>
-        {branch.nodes.map((node, i) => {
-          let state: "unlocked" | "unlockable" | "locked";
-          if (unlockedNodes.has(node.id)) {
-            state = "unlocked";
-          } else if (i === 0 || unlockedNodes.has(branch.nodes[i - 1].id)) {
-            state = "unlockable";
-          } else {
-            state = "locked";
-          }
-          return (
-            <NodeCard
-              key={node.id}
-              node={node}
-              state={state}
-              engineColor={engineColor}
-              engineDim={engineDim}
-              onUnlock={onUnlock}
-            />
-          );
-        })}
+        {branch.nodes.map((node, i) => (
+          <NodeCard
+            key={node.id}
+            nodeId={node.id}
+            name={node.name}
+            conditionText={node.conditionText}
+            status={getNodeStatus(node.id, i)}
+            engineColor={engineColor}
+            engineDim={engineDim}
+            onClaim={onClaim}
+          />
+        ))}
       </View>
     </View>
   );
@@ -225,28 +259,26 @@ export default function SkillTreePage() {
   const { engine: engineParam } = useLocalSearchParams<{ engine: string }>();
   const engine = (engineParam ?? "body") as EngineKey;
 
-  const unlockedNodes = useSkillTreeStore((s) => s.unlockedNodes);
-  const unlockNode = useSkillTreeStore((s) => s.unlockNode);
+  const claimNode = useSkillTreeStore((s) => s.claimNode);
   const getProgress = useSkillTreeStore((s) => s.getProgress);
+  const progress = useSkillTreeStore((s) => s.progress);
 
   const branches = SKILL_TREES[engine] ?? [];
   const engineColor = ENGINE_COLORS[engine] ?? colors.text;
   const engineDim = ENGINE_DIM[engine] ?? colors.bodyDim;
-  const { unlocked, total } = useMemo(() => getProgress(engine), [unlockedNodes, engine]);
+  const { unlocked, total } = useMemo(() => getProgress(engine), [progress, engine]);
 
-  const handleUnlock = (nodeId: string) => {
-    unlockNode(nodeId);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const handleClaim = (nodeId: string) => {
+    claimNode(engine, nodeId);
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <HUDBackground />
 
-      {/* Header bar */}
       <View style={styles.header}>
         <Pressable style={styles.back} onPress={() => router.back()} hitSlop={12}>
-          <Text style={styles.backText}>← BACK</Text>
+          <Text style={styles.backText}>{"\u2190"} BACK</Text>
         </Pressable>
         <View style={{ flex: 1 }} />
         <View style={[styles.engineBadge, { borderColor: engineColor + "60" }]}>
@@ -261,16 +293,14 @@ export default function SkillTreePage() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Title + overall progress */}
         <Text style={styles.pageTitle}>SKILL TREE</Text>
         <Text style={[styles.engineTitle, { color: engineColor }]}>
           {ENGINE_LABELS[engine]} ENGINE
         </Text>
         <Text style={styles.subtitle}>
-          Unlock nodes by completing milestones. Each unlock reinforces your identity.
+          Earn nodes through real performance. Claim them when ready.
         </Text>
 
-        {/* Overall progress */}
         <View style={styles.overallProgress}>
           <View style={styles.overallTrack}>
             <View
@@ -281,19 +311,18 @@ export default function SkillTreePage() {
             />
           </View>
           <Text style={styles.overallText}>
-            {unlocked}/{total} nodes unlocked
+            {unlocked}/{total} nodes claimed
           </Text>
         </View>
 
-        {/* Branch sections */}
         {branches.map((branch) => (
           <BranchSection
             key={branch.id}
             branch={branch}
-            unlockedNodes={unlockedNodes}
+            engine={engine}
             engineColor={engineColor}
             engineDim={engineDim}
-            onUnlock={handleUnlock}
+            onClaim={handleClaim}
           />
         ))}
 
