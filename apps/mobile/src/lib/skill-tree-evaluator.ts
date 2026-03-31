@@ -8,7 +8,7 @@
 import { useProtocolStore } from "../stores/useProtocolStore";
 import { useMindTrainingStore } from "../stores/useMindTrainingStore";
 import { useSkillTreeStore } from "../stores/useSkillTreeStore";
-import { getJSON } from "../db/storage";
+import { getJSON, storage } from "../db/storage";
 import { getTodayKey, addDays } from "./date";
 import skillTreeData from "../data/skill-trees.json";
 
@@ -257,7 +257,6 @@ function checkAllCategories(tag: string): boolean {
 
 function checkFocusSessions(target: number): boolean {
   // Fallback: count mind engine completions as proxy for focus sessions
-  const { storage } = require("../db/storage");
   const allKeys = storage.getAllKeys() as string[];
   let count = 0;
   for (const key of allKeys) {
@@ -271,7 +270,6 @@ function checkFocusSessions(target: number): boolean {
 
 function checkTaskCount(engine: string, target: number): boolean {
   // Count total completed tasks for this engine across all dates
-  const { storage } = require("../db/storage");
   const allKeys = storage.getAllKeys() as string[];
   let count = 0;
   const prefix = `completions:${engine}:`;
@@ -293,7 +291,6 @@ function checkBossComplete(engine: string): boolean {
 
 function checkLogCount(tag: string, target: number): boolean {
   // Count total completions across all engines as a general activity proxy
-  const { storage } = require("../db/storage");
   const allKeys = storage.getAllKeys() as string[];
   let count = 0;
   for (const key of allKeys) {
@@ -329,7 +326,6 @@ function checkWeeklyConsistency(targetWeeks: number): boolean {
     let weekActive = false;
     for (let d = 0; d < 7; d++) {
       const dk = addDays(today, -(w * 7 + d));
-      const { storage } = require("../db/storage");
       const allKeys = storage.getAllKeys() as string[];
       for (const key of allKeys) {
         if (key.startsWith(`completions:`) && key.endsWith(`:${dk}`)) {
