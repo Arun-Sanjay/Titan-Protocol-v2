@@ -7,6 +7,7 @@
 
 import { getJSON, setJSON } from "../db/storage";
 import { selectIdentityMeta, type Archetype } from "../stores/useIdentityStore";
+import { getCurrentChapter, type Chapter } from "../data/chapters";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -178,7 +179,49 @@ export function narrativeDayOne(
   const name = getArchetypeName(archetype);
   addEntry({
     date: dateKey,
-    text: `Day 1: You chose ${name}. Your identity is set. Your engines are loaded. The protocol begins now.`,
+    text: `Day 1: You chose ${name}. Your identity is set. Your engines are loaded. Chapter 1: The Awakening begins now.`,
     type: "day_one",
+  });
+}
+
+// ─── Chapter Narratives ─────────────────────────────────────────────────────
+
+export function narrativeChapterStart(
+  archetype: Archetype | null,
+  chapter: Chapter,
+  dateKey: string,
+): void {
+  const day = getDayNumber();
+  const name = getArchetypeName(archetype);
+  addEntry({
+    date: dateKey,
+    text: `Day ${day}: Chapter ${chapter.number} begins — "${chapter.name}." ${chapter.subtitle} ${name} enters a new phase of the journey.`,
+    type: "phase",
+  });
+}
+
+export function narrativeBossUnlocked(
+  chapter: Chapter,
+  dateKey: string,
+): void {
+  const day = getDayNumber();
+  addEntry({
+    date: dateKey,
+    text: `Day ${day}: BOSS CHALLENGE UNLOCKED — "${chapter.bossName}." ${chapter.bossDescription} Complete this to finish Chapter ${chapter.number}.`,
+    type: "milestone",
+  });
+}
+
+export function narrativeBossComplete(
+  archetype: Archetype | null,
+  chapter: Chapter,
+  dateKey: string,
+): void {
+  const day = getDayNumber();
+  const name = getArchetypeName(archetype);
+  addEntry({
+    date: dateKey,
+    text: `Day ${day}: BOSS DEFEATED — "${chapter.bossName}." ${name} has conquered Chapter ${chapter.number}: ${chapter.name}. The next chapter awaits.`,
+    type: "milestone",
   });
 }

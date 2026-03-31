@@ -27,6 +27,7 @@ import { useSkillTreeStore, SKILL_TREES } from "../../src/stores/useSkillTreeSto
 import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdentityStore";
 import { getTodayKey } from "../../src/lib/date";
 import { getDailyRank } from "../../src/db/gamification";
+import { getCurrentChapter, getDayNumber } from "../../src/data/chapters";
 import type { EngineKey } from "../../src/db/schema";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -85,6 +86,11 @@ export default function HQScreen() {
   const completedCount = useMemo(() => tasks.filter((t) => t.completed).length, [tasks]);
   const identityMeta = useMemo(() => selectIdentityMeta(archetype), [archetype]);
   const rank = getDailyRank(analytics.titanScore);
+
+  // Chapter system
+  const firstActiveDate = getJSON<string | null>("first_active_date", null);
+  const dayNumber = getDayNumber(firstActiveDate);
+  const chapter = getCurrentChapter(dayNumber);
 
   // Skill tree ready count
   const readyToClaimCount = useMemo(() => {
@@ -166,7 +172,7 @@ export default function HQScreen() {
                 <Text style={styles.hudName}>
                   {identityMeta?.name ?? (identity ? IDENTITY_LABELS[identity] : "TITAN PROTOCOL")}
                 </Text>
-                <Text style={styles.hudLevel}>LEVEL {profileLevel}</Text>
+                <Text style={styles.hudLevel}>LEVEL {profileLevel} {"\u00B7"} DAY {dayNumber}</Text>
               </View>
             </View>
             <View style={styles.hudStreak}>
@@ -174,6 +180,13 @@ export default function HQScreen() {
               <Text style={styles.streakCount}>{profileStreak}</Text>
             </View>
           </View>
+          {/* Chapter badge */}
+          <View style={styles.chapterBadge}>
+            <Text style={styles.chapterText}>
+              CH.{chapter.number}: {chapter.name.toUpperCase()}
+            </Text>
+          </View>
+
           <XPBar xp={profileXp} level={profileLevel} />
 
           {/* Titan Score + Rank */}
@@ -383,6 +396,17 @@ const styles = StyleSheet.create({
   hudStreak: { flexDirection: "row", alignItems: "center", gap: 4 },
   streakFire: { fontSize: 18 },
   streakCount: { ...fonts.mono, fontSize: 18, fontWeight: "800", color: colors.text },
+
+  // Chapter
+  chapterBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: radius.sm, borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: spacing.sm, paddingVertical: 4,
+    marginBottom: spacing.sm,
+  },
+  chapterText: { ...fonts.kicker, fontSize: 8, color: colors.textMuted, letterSpacing: 2 },
 
   // Score
   scoreRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginTop: spacing.md },

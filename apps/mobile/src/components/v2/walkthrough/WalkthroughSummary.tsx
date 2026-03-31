@@ -13,6 +13,10 @@ import { colors, spacing, fonts, radius } from "../../../theme";
 import { titanColors } from "../../../theme/colors";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { useWalkthroughStore } from "../../../stores/useWalkthroughStore";
+import { setJSON } from "../../../db/storage";
+import { getTodayKey } from "../../../lib/date";
+import { narrativeDayOne } from "../../../lib/narrative-engine";
+import { useIdentityStore } from "../../../stores/useIdentityStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 import { IDENTITIES, type Archetype } from "../../../stores/useIdentityStore";
 import type { EngineKey } from "../../../db/schema";
@@ -79,8 +83,15 @@ export function WalkthroughSummary({ onFinish, onBack }: Props) {
     borderColor: `rgba(255, 215, 0, ${pulseOpacity.value})`,
   }));
 
+  const archetype = useIdentityStore((s) => s.archetype);
+
   const handleFinish = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Set first active date for day counting + chapter system
+    const today = getTodayKey();
+    setJSON("first_active_date", today);
+    // Generate Day 1 narrative entry
+    narrativeDayOne(archetype, today);
     onFinish();
   };
 
