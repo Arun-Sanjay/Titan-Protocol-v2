@@ -16,28 +16,22 @@ export function SkillBranch({ name, nodes, engineColor, onClaimNode }: Props) {
   const claimed = sorted.filter((n) => n.status === "claimed").length;
 
   /** Determine connector line style between node at idx-1 and idx. */
-  function getConnectorStyle(idx: number) {
+  function getConnectorStyle(idx: number): object {
     const prev = sorted[idx - 1];
     const curr = sorted[idx];
 
     // Both claimed -> solid engineColor
     if (prev.status === "claimed" && curr.status === "claimed") {
-      return { backgroundColor: engineColor, borderStyle: undefined } as const;
+      return { backgroundColor: engineColor };
     }
 
-    // Claimed -> ready -> dashed engineColor
+    // Claimed -> ready -> dashed engineColor (simulate with dotted bg)
     if (prev.status === "claimed" && curr.status === "ready") {
-      return {
-        backgroundColor: "transparent",
-        borderLeftWidth: 2,
-        borderLeftColor: engineColor,
-        borderStyle: "dashed" as const,
-        width: 0,
-      };
+      return { backgroundColor: engineColor, opacity: 0.5 };
     }
 
     // Everything else (locked -> locked, etc.) -> dim solid
-    return { backgroundColor: "rgba(255, 255, 255, 0.06)" } as const;
+    return { backgroundColor: "rgba(255, 255, 255, 0.06)" };
   }
 
   return (
