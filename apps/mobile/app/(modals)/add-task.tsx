@@ -57,12 +57,15 @@ export default function AddTaskModal() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.header}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backBtn}>
+            <Text style={styles.cancelText}>{"\u2190"} Back</Text>
+          </Pressable>
           <Text style={styles.headerTitle}>
             {kind === "main" ? "New Mission" : "New Side Quest"}
           </Text>
@@ -156,7 +159,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.surfaceBorder,
   },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text },
+  headerTitle: { fontSize: 18, fontWeight: "700", color: colors.text, flex: 1, textAlign: "center" },
+  backBtn: { minWidth: 60 },
   cancelText: { fontSize: 16, color: colors.primary, fontWeight: "600" },
   body: { padding: spacing.xl, gap: spacing.lg },
   input: {
