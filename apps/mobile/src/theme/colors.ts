@@ -43,8 +43,8 @@ export const colors = {
   mindDim: "rgba(167, 139, 250, 0.12)",
   money: "#FBBF24",
   moneyDim: "rgba(251, 191, 36, 0.12)",
-  general: "#60A5FA",
-  generalDim: "rgba(96, 165, 250, 0.12)",
+  charisma: "#60A5FA",
+  charismaDim: "rgba(96, 165, 250, 0.12)",
 
   // Panel specific (HUD — white tinted, not cyan)
   panelBorder: "rgba(255, 255, 255, 0.12)",
@@ -83,3 +83,19 @@ export const colors = {
 } as const;
 
 export type ColorKey = keyof typeof colors;
+
+// Titan Mode gold accent (only active when mode === 'titan')
+export const titanColors = {
+  accent: "#FFD700",
+  accentMuted: "rgba(255, 215, 0, 0.30)",
+  accentGlow: "rgba(255, 215, 0, 0.15)",
+  accentDim: "rgba(255, 215, 0, 0.06)",
+  ringGlow: "rgba(255, 215, 0, 0.20)",
+} as const;
+
+/**
+ * Get the appropriate accent color — gold in Titan Mode, default otherwise.
+ */
+export function getTitanAccent(isTitanMode: boolean): string {
+  return isTitanMode ? titanColors.accent : colors.primary;
+}

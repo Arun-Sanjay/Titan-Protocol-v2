@@ -3,6 +3,10 @@ import { createMMKV } from "react-native-mmkv";
 // Single MMKV instance — synchronous, no init needed, works instantly
 export const storage = createMMKV({ id: "titan-protocol" });
 
+// ─── Run migrations before anything reads from storage ────────────────────
+import { runMigrations } from "../lib/migration";
+runMigrations(storage);
+
 // ─── Generic helpers ───────────────────────────────────────────────────────
 
 export function getJSON<T>(key: string, fallback: T): T {

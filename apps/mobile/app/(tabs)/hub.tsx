@@ -7,6 +7,7 @@ import * as Haptics from "expo-haptics";
 import { colors, spacing, radius } from "../../src/theme";
 import { PageHeader } from "../../src/components/ui/PageHeader";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
+import { useModeStore, checkFeatureVisible, type Feature } from "../../src/stores/useModeStore";
 
 type HubItem = {
   icon: string;
@@ -15,6 +16,7 @@ type HubItem = {
   route: string;
   color: string;
   ready: boolean;
+  feature?: Feature; // If set, only show when this feature is visible
 };
 
 const HUB_ITEMS: HubItem[] = [
@@ -24,10 +26,13 @@ const HUB_ITEMS: HubItem[] = [
   { icon: "💰", ionicon: "wallet", label: "Finance Tracker", route: "/hub/cashflow", color: colors.money, ready: true },
   { icon: "💪", ionicon: "barbell", label: "Workouts", route: "/hub/workouts", color: colors.body, ready: true },
   { icon: "😴", ionicon: "moon", label: "Sleep Tracker", route: "/hub/sleep", color: colors.mind, ready: true },
-  { icon: "⚖️", ionicon: "scale", label: "Weight Tracker", route: "/hub/weight", color: colors.general, ready: true },
+  { icon: "⚖️", ionicon: "scale", label: "Weight Tracker", route: "/hub/weight", color: colors.charisma, ready: true },
   { icon: "🍎", ionicon: "nutrition", label: "Nutrition", route: "/hub/nutrition", color: colors.body, ready: true },
   { icon: "📋", ionicon: "clipboard", label: "Budgets", route: "/hub/budgets", color: colors.money, ready: true },
   { icon: "🔥", ionicon: "flame", label: "Deep Work", route: "/hub/deep-work", color: colors.warning, ready: true },
+  { icon: "🧠", ionicon: "bulb-outline", label: "Mind Training", route: "/mind-training", color: colors.mind, ready: true, feature: "mind_training" },
+  { icon: "🏆", ionicon: "flag", label: "Quests", route: "/quests", color: colors.warning, ready: true, feature: "quests" },
+  { icon: "🎖️", ionicon: "ribbon", label: "Achievements", route: "/achievements", color: colors.mind, ready: true },
   { icon: "⚙️", ionicon: "settings", label: "Settings", route: "/hub/settings", color: colors.textSecondary, ready: true },
 ];
 
@@ -59,6 +64,11 @@ function HubCard({ item, cardWidth, index }: { item: HubItem; cardWidth: number;
 export default function HubScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = (screenWidth - spacing.lg * 2 - spacing.md) / 2;
+  const hubMode = useModeStore((s) => s.mode);
+
+  const visibleItems = HUB_ITEMS.filter((item) =>
+    !item.feature || checkFeatureVisible(hubMode, item.feature),
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -71,7 +81,7 @@ export default function HubScreen() {
         <PageHeader kicker="TOOLS" title="Hub" subtitle="Tools & utilities" />
 
         <View style={styles.grid}>
-          {HUB_ITEMS.map((item, i) => (
+          {visibleItems.map((item, i) => (
             <HubCard key={item.route} item={item} cardWidth={cardWidth} index={i} />
           ))}
         </View>

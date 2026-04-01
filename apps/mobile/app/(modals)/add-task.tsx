@@ -6,13 +6,28 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, radius } from "../../src/theme";
-import { useEngineStore } from "../../src/stores/useEngineStore";
+import { colors, spacing, radius, fonts } from "../../src/theme";
+import { useEngineStore, ENGINES } from "../../src/stores/useEngineStore";
 import { XP_REWARDS } from "../../src/stores/useProfileStore";
+import { getTodayKey } from "../../src/lib/date";
 import type { EngineKey } from "../../src/db/schema";
 
+const ENGINE_LABELS: Record<EngineKey, string> = {
+  body: "BODY",
+  mind: "MIND",
+  money: "MONEY",
+  charisma: "CHARISMA",
+};
+
+const ENGINE_COLORS: Record<EngineKey, string> = {
+  body: colors.body,
+  mind: colors.mind,
+  money: colors.money,
+  charisma: colors.charisma,
+};
+
 export default function AddTaskModal() {
-  const { engine, kind: initialKind, dateKey } = useLocalSearchParams<{
+  const { engine: engineParam, kind: initialKind, dateKey } = useLocalSearchParams<{
     engine: string;
     kind: string;
     dateKey: string;
@@ -25,13 +40,18 @@ export default function AddTaskModal() {
   const [kind, setKind] = useState<"main" | "secondary">(
     (initialKind as "main" | "secondary") ?? "main"
   );
+  const [selectedEngine, setSelectedEngine] = useState<EngineKey | null>(
+    (engineParam as EngineKey) || null
+  );
   const [busy, setBusy] = useState(false);
 
+  const effectiveDateKey = dateKey || getTodayKey();
+
   const handleAdd = () => {
-    if (!title.trim() || busy) return;
+    if (!title.trim() || busy || !selectedEngine) return;
     setBusy(true);
-    addTask(engine as EngineKey, title.trim(), kind);
-    if (dateKey) loadEngine(engine as EngineKey, dateKey);
+    addTask(selectedEngine, title.trim(), kind);
+    loadEngine(selectedEngine, effectiveDateKey);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
   };
@@ -52,6 +72,40 @@ export default function AddTaskModal() {
         </View>
 
         <View style={styles.body}>
+          {/* Engine selector — shown when no engine was passed as a param */}
+          {!engineParam && (
+            <View>
+              <Text style={styles.selectorLabel}>ENGINE</Text>
+              <View style={styles.engineBtns}>
+                {ENGINES.map((eng) => {
+                  const active = selectedEngine === eng;
+                  return (
+                    <Pressable
+                      key={eng}
+                      style={[
+                        styles.engineBtn,
+                        active && {
+                          borderColor: ENGINE_COLORS[eng],
+                          backgroundColor: ENGINE_COLORS[eng] + "18",
+                        },
+                      ]}
+                      onPress={() => setSelectedEngine(eng)}
+                    >
+                      <Text
+                        style={[
+                          styles.engineBtnText,
+                          { color: active ? ENGINE_COLORS[eng] : colors.textSecondary },
+                        ]}
+                      >
+                        {ENGINE_LABELS[eng]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           <TextInput
             value={title}
             onChangeText={setTitle}
@@ -135,4 +189,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   submitText: { color: "#000", fontWeight: "700", fontSize: 16 },
+  selectorLabel: {
+    ...fonts.kicker,
+    fontSize: 9,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  engineBtns: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    flexWrap: "wrap",
+  },
+  engineBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceLight,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    minWidth: 70,
+  },
+  engineBtnText: {
+    ...fonts.kicker,
+    fontSize: 10,
+    letterSpacing: 1,
+    fontWeight: "700",
+  },
 });

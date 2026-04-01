@@ -32,7 +32,8 @@
     "scheme": "titan-protocol",
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "expo-sharing"
     ]
   }
 }

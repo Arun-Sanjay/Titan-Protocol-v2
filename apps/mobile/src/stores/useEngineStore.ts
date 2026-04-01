@@ -3,7 +3,7 @@ import { getJSON, setJSON, nextId } from "../db/storage";
 import { addDays } from "../lib/date";
 import type { EngineKey, Task } from "../db/schema";
 
-export const ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
+export const ENGINES: EngineKey[] = ["body", "mind", "money", "charisma"];
 
 function tasksKey(engine: EngineKey) {
   return `tasks:${engine}`;
@@ -40,7 +40,7 @@ function computeScore(tasks: Task[], completedIds: Set<number>): number {
 }
 
 export const useEngineStore = create<EngineState>()((set, get) => ({
-  tasks: { body: [], mind: [], money: [], general: [] },
+  tasks: { body: [], mind: [], money: [], charisma: [] },
   completions: {},
   scores: {},
 

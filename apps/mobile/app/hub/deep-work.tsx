@@ -48,7 +48,7 @@ const CATEGORY_SHORT: Record<DeepWorkCategory, string> = {
 const CATEGORY_COLORS: Record<DeepWorkCategory, string> = {
   "Main Job / College": colors.mind,
   "Side Hustle": colors.body,
-  Freelance: colors.general,
+  Freelance: colors.charisma,
   Investments: colors.money,
   Other: colors.textSecondary,
 };
@@ -56,7 +56,7 @@ const CATEGORY_COLORS: Record<DeepWorkCategory, string> = {
 const CATEGORY_DIM_COLORS: Record<DeepWorkCategory, string> = {
   "Main Job / College": colors.mindDim,
   "Side Hustle": colors.bodyDim,
-  Freelance: colors.generalDim,
+  Freelance: colors.charismaDim,
   Investments: colors.moneyDim,
   Other: "rgba(255, 255, 255, 0.06)",
 };
@@ -484,12 +484,12 @@ export default function DeepWorkScreen() {
               />
             </Panel>
             <Panel style={styles.weeklyStatCard} delay={150}>
-              <Ionicons name="calendar-outline" size={18} color={colors.general} />
+              <Ionicons name="calendar-outline" size={18} color={colors.charisma} />
               <MetricValue
                 label="Days Worked"
                 value={weeklyDaysWorked}
                 size="sm"
-                color={colors.general}
+                color={colors.charisma}
                 animated
               />
             </Panel>

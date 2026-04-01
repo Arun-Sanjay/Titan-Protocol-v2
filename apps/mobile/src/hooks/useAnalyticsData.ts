@@ -45,7 +45,7 @@ export function useAnalyticsData() {
 
   // 7-day sparkline data per engine
   const sparklineData = useMemo(() => {
-    const result: Record<EngineKey, number[]> = { body: [], mind: [], money: [], general: [] };
+    const result: Record<EngineKey, number[]> = { body: [], mind: [], money: [], charisma: [] };
     for (let i = 6; i >= 0; i--) {
       const dk = getDateKey(i);
       for (const e of ENGINES) {
@@ -94,7 +94,7 @@ export function useAnalyticsData() {
 
   // Last week stats (for comparison)
   const lastWeek = useMemo(() => {
-    const result: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, general: 0 };
+    const result: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
     let count = 0;
     for (let i = 7; i <= 13; i++) {
       const dk = getDateKey(i);
@@ -111,7 +111,7 @@ export function useAnalyticsData() {
 
   // This week engine averages (for comparison)
   const thisWeekEngines = useMemo(() => {
-    const result: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, general: 0 };
+    const result: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
     const now = new Date();
     const dayOfWeek = now.getDay();
     const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;

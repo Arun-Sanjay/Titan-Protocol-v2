@@ -35,16 +35,14 @@ type MenuItem = {
   color: string;
 };
 
-type Props = {
-  onAddTask?: () => void;
-};
+type Props = Record<string, never>;
 
 // ---------------------------------------------------------------------------
 // Menu items
 // ---------------------------------------------------------------------------
 
 const MENU_ITEMS: MenuItem[] = [
-  { label: "Add Task", icon: "\u2713", route: "/(tabs)/track", color: colors.general },
+  { label: "Add Task", icon: "\u2713", route: "/(modals)/add-task", color: colors.charisma },
   { label: "Log Workout", icon: "\u26A1", route: "/hub/workouts", color: colors.body },
   { label: "Log Sleep", icon: "\u263E", route: "/hub/sleep", color: colors.mind },
   { label: "Log Weight", icon: "\u2696", route: "/hub/weight", color: colors.body },
@@ -112,9 +110,7 @@ const MenuItemRow = React.memo(function MenuItemRow({
 // FloatingActionButton
 // ---------------------------------------------------------------------------
 
-export const FloatingActionButton = React.memo(function FloatingActionButton({
-  onAddTask,
-}: Props) {
+export const FloatingActionButton = React.memo(function FloatingActionButton(_props: Props) {
   const router = useRouter();
   const { height: windowHeight } = useWindowDimensions();
 
@@ -189,13 +185,9 @@ export const FloatingActionButton = React.memo(function FloatingActionButton({
     (item: MenuItem) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       closeMenu();
-      if (item.label === "Add Task" && onAddTask) {
-        onAddTask();
-      } else {
-        router.push(item.route as any);
-      }
+      router.push(item.route as any);
     },
-    [closeMenu, onAddTask, router],
+    [closeMenu, router],
   );
 
   return (

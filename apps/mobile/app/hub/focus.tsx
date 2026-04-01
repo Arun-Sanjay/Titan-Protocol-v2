@@ -40,7 +40,7 @@ type Phase = "focus" | "break" | "longBreak";
 
 const PHASE_COLORS: Record<Phase, string> = {
   focus: colors.body,
-  break: colors.general,
+  break: colors.charisma,
   longBreak: colors.mind,
 };
 
@@ -120,7 +120,7 @@ const WeekSessionChart = React.memo(function WeekSessionChart({
                     backgroundColor: hitTarget
                       ? colors.body
                       : day.sessions > 0
-                        ? colors.general
+                        ? colors.charisma
                         : colors.surfaceBorder,
                     opacity: day.sessions > 0 ? 1 : 0.3,
                   },
@@ -682,7 +682,7 @@ export default function FocusTimerScreen() {
               <Text style={styles.legendText}>Hit target</Text>
             </View>
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.general }]} />
+              <View style={[styles.legendDot, { backgroundColor: colors.charisma }]} />
               <Text style={styles.legendText}>Active</Text>
             </View>
           </View>

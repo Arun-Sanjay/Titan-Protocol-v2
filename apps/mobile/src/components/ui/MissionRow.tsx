@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  withSequence,
+  withDelay,
   runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -15,7 +17,7 @@ const ENGINE_BORDER_COLORS: Record<EngineKey, string> = {
   body: "#00FF88",
   mind: "#A78BFA",
   money: "#FBBF24",
-  general: "#60A5FA",
+  charisma: "#60A5FA",
 };
 
 type Props = {
@@ -31,14 +33,43 @@ type Props = {
 export const MissionRow = React.memo(function MissionRow({ title, xp, completed, kind, engine, onToggle, onDelete }: Props) {
   const translateX = useSharedValue(0);
   const checkScale = useSharedValue(completed ? 1 : 0);
+  const cardScale = useSharedValue(1);
+
+  // XP popup animation values
+  const xpPopupY = useSharedValue(0);
+  const xpPopupOpacity = useSharedValue(0);
+  const [showXpPopup, setShowXpPopup] = useState(false);
 
   React.useEffect(() => {
     checkScale.value = withTiming(completed ? 1 : 0, { duration: 300 });
   }, [completed]);
 
   const handleToggle = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const wasCompleted = completed;
     onToggle();
+
+    if (!wasCompleted) {
+      // Completing — show XP popup + card pulse
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowXpPopup(true);
+
+      // Card pulse
+      cardScale.value = withSequence(
+        withTiming(1.02, { duration: 100 }),
+        withTiming(1.0, { duration: 150 }),
+      );
+
+      // XP popup float up
+      xpPopupY.value = 0;
+      xpPopupOpacity.value = 1;
+      xpPopupY.value = withTiming(-40, { duration: 800 });
+      xpPopupOpacity.value = withDelay(400, withTiming(0, { duration: 400 }));
+
+      // Hide popup after animation
+      setTimeout(() => setShowXpPopup(false), 900);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
   };
 
   const swipeGesture = Gesture.Pan()
@@ -62,15 +93,33 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
     transform: [{ translateX: translateX.value }],
   }));
 
+  const cardPulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: cardScale.value }],
+  }));
+
   const checkStyle = useAnimatedStyle(() => ({
     transform: [{ scale: checkScale.value }],
     opacity: checkScale.value,
   }));
 
+  const xpPopupStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: xpPopupY.value }],
+    opacity: xpPopupOpacity.value,
+  }));
+
+  const borderColor = engine ? ENGINE_BORDER_COLORS[engine] : "rgba(255, 255, 255, 0.12)";
+
   return (
     <GestureDetector gesture={swipeGesture}>
-      <Animated.View style={[styles.container, rowStyle]}>
-        <Pressable onPress={handleToggle} style={[styles.row, completed && styles.rowDone, { borderLeftWidth: 3, borderLeftColor: engine ? ENGINE_BORDER_COLORS[engine] : "rgba(255, 255, 255, 0.12)" }]}>
+      <Animated.View style={[styles.container, rowStyle, cardPulseStyle]}>
+        <Pressable
+          onPress={handleToggle}
+          style={[
+            styles.row,
+            completed && styles.rowDone,
+            { borderLeftWidth: 3, borderLeftColor: borderColor },
+          ]}
+        >
           <View style={[styles.checkbox, completed && styles.checkboxDone]}>
             <Animated.View style={[styles.checkInner, checkStyle]} />
           </View>
@@ -79,17 +128,36 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
             <Text style={[styles.title, completed && styles.titleDone]} numberOfLines={1}>
               {title}
             </Text>
-            <Text style={styles.kindLabel}>
-              {kind === "main" ? "MISSION" : "SIDE QUEST"}
-            </Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.kindLabel}>
+                {kind === "main" ? "MISSION" : "SIDE QUEST"}
+              </Text>
+              {engine && (
+                <>
+                  <Text style={styles.metaSep}>{"\u00B7"}</Text>
+                  <Text style={[styles.engineLabel, { color: ENGINE_BORDER_COLORS[engine] }]}>
+                    {engine.toUpperCase()}
+                  </Text>
+                </>
+              )}
+            </View>
           </View>
 
           <View style={[styles.xpBadge, completed && styles.xpBadgeDone]}>
             <Text style={[styles.xpText, completed && styles.xpTextDone]}>
-              {completed ? "✓" : `+${xp}`}
+              {completed ? "\u2713" : `+${xp} XP`}
             </Text>
           </View>
         </Pressable>
+
+        {/* XP Popup Animation */}
+        {showXpPopup && (
+          <Animated.View style={[styles.xpPopup, xpPopupStyle]}>
+            <Text style={[styles.xpPopupText, { color: engine ? ENGINE_BORDER_COLORS[engine] : colors.success }]}>
+              +{xp} XP
+            </Text>
+          </Animated.View>
+        )}
       </Animated.View>
     </GestureDetector>
   );
@@ -107,7 +175,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.12)",
     paddingHorizontal: 11,
-    paddingVertical: 9,
+    paddingVertical: 10,
     minHeight: TOUCH_MIN,
     gap: spacing.md,
     ...shadows.card,
@@ -116,9 +184,9 @@ const styles = StyleSheet.create({
     borderColor: colors.success + "20",
   },
   checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 6,
     borderWidth: 1.5,
     borderColor: "rgba(255, 255, 255, 0.25)",
     backgroundColor: "rgba(0, 0, 0, 0.8)",
@@ -147,11 +215,25 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textDecorationLine: "line-through",
   },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 3,
+  },
   kindLabel: {
     ...fonts.kicker,
     fontSize: 9,
     color: colors.textMuted,
-    marginTop: 2,
+  },
+  metaSep: {
+    ...fonts.kicker,
+    fontSize: 9,
+    color: colors.textMuted,
+  },
+  engineLabel: {
+    ...fonts.kicker,
+    fontSize: 9,
   },
   xpBadge: {
     backgroundColor: "rgba(255, 255, 255, 0.06)",
@@ -167,10 +249,24 @@ const styles = StyleSheet.create({
   },
   xpText: {
     ...fonts.mono,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
   },
   xpTextDone: {
     color: colors.success,
+  },
+  // XP popup
+  xpPopup: {
+    position: "absolute",
+    right: spacing.lg,
+    top: -8,
+    zIndex: 10,
+  },
+  xpPopupText: {
+    ...fonts.mono,
+    fontSize: 16,
+    fontWeight: "800",
+    textShadowColor: "rgba(0,0,0,0.8)",
+    textShadowRadius: 4,
   },
 });

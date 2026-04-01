@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, Pressable, StyleSheet, ViewStyle } from "react-native";
+import { View, Pressable, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -18,7 +18,7 @@ type PanelTone = "default" | "hero" | "subtle";
 type Props = {
   children: React.ReactNode;
   onPress?: () => void;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   glowColor?: string;
   /** @deprecated Use `tone="hero"` instead */
   hero?: boolean;

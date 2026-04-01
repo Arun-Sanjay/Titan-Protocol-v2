@@ -669,12 +669,12 @@ export default function WeightScreen() {
                 />
               </Panel>
               <Panel style={styles.statCard} delay={450}>
-                <Ionicons name="analytics-outline" size={18} color={colors.general} />
+                <Ionicons name="analytics-outline" size={18} color={colors.charisma} />
                 <MetricValue
                   label="Entries"
                   value={entries.length}
                   size="sm"
-                  color={colors.general}
+                  color={colors.charisma}
                   animated
                 />
               </Panel>

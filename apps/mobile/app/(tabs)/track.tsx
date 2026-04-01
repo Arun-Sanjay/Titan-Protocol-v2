@@ -19,10 +19,16 @@ import { useHabitStore } from "../../src/stores/useHabitStore";
 import { useJournalStore } from "../../src/stores/useJournalStore";
 import { useGoalStore } from "../../src/stores/useGoalStore";
 import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
+import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdentityStore";
+import { getSuggestedHabits, type SuggestedHabit } from "../../src/lib/mission-suggester";
+import { HabitChain } from "../../src/components/v2/habits/HabitChain";
 import type { Habit, Goal } from "../../src/db/schema";
 import { getJSON } from "../../src/db/storage";
 
 const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
+
+// Stable empty array — prevents Zustand getSnapshot infinite loop when key is missing
+const EMPTY_IDS: number[] = [];
 
 type Tab = "habits" | "journal" | "goals";
 
@@ -68,7 +74,7 @@ export default function TrackScreen() {
 
 function HabitsTab({ dateKey }: { dateKey: string }) {
   const habits = useHabitStore((s) => s.habits);
-  const completedIds = useHabitStore((s) => s.completedIds[dateKey] ?? []);
+  const completedIds = useHabitStore((s) => s.completedIds[dateKey] ?? EMPTY_IDS);
   const load = useHabitStore((s) => s.load);
   const toggle = useHabitStore((s) => s.toggleHabit);
   const add = useHabitStore((s) => s.addHabit);
@@ -135,6 +141,24 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
     }
   };
 
+  // Identity for suggested habits
+  const archetype = useIdentityStore((s) => s.archetype);
+  const identityMeta = selectIdentityMeta(archetype);
+  const suggestions = useMemo(
+    () => archetype ? getSuggestedHabits(archetype) : [],
+    [archetype],
+  );
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+
+  const handleAddSuggested = (s: SuggestedHabit) => {
+    add(s.title, s.icon, s.engine, s.trigger, s.duration, s.frequency);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const handleDismissSuggested = (title: string) => {
+    setDismissedSuggestions((prev) => new Set([...prev, title]));
+  };
+
   const handleAdd = () => {
     if (!newTitle.trim()) return;
     add(newTitle.trim(), "✓");
@@ -185,12 +209,29 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
                 <Text style={[styles.habitTitle, done && styles.habitTitleDone]}>
                   {h.icon} {h.title}
                 </Text>
-                <View style={styles.habitMeta}>
-                  <Text style={styles.habitEngine}>{h.engine.toUpperCase()}</Text>
-                  {streak > 0 && <Text style={styles.habitStreak}>🔥 {streak}</Text>}
-                </View>
+                {h.trigger ? (
+                  <Text style={styles.habitTrigger}>{h.trigger} → {h.title}</Text>
+                ) : (
+                  <View style={styles.habitMeta}>
+                    <Text style={styles.habitEngine}>{h.engine.toUpperCase()}</Text>
+                    {streak > 0 && <Text style={styles.habitStreak}>🔥 {streak}</Text>}
+                  </View>
+                )}
               </View>
             </Pressable>
+            {/* 14-day chain */}
+            <View style={styles.habitChainWrap}>
+              <HabitChain
+                habitId={h.id!}
+                engineColor={
+                  h.engine === "body" ? colors.body :
+                  h.engine === "mind" ? colors.mind :
+                  h.engine === "money" ? colors.money :
+                  h.engine === "charisma" ? colors.charisma :
+                  colors.success
+                }
+              />
+            </View>
             {/* 12-week grid */}
             <View style={styles.habitGridWrap}>
               <HabitGrid logs={habitGrids[h.id!] ?? []} weeks={12} />
@@ -198,6 +239,34 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
           </Panel>
         );
       })}
+
+      {/* Suggested habits (show if any suggestions remain unadded/undismissed) */}
+      {suggestions.length > 0 && identityMeta && suggestions.some(
+        (s) => !dismissedSuggestions.has(s.title) && !habits.some((h) => h.title === s.title)
+      ) && (
+        <Panel style={styles.suggestedCard}>
+          <Text style={styles.suggestedTitle}>
+            Suggested habits for {identityMeta.name}
+          </Text>
+          {suggestions
+            .filter((s) => !dismissedSuggestions.has(s.title) && !habits.some((h) => h.title === s.title))
+            .map((s) => (
+              <View key={s.title} style={styles.suggestedRow}>
+                <Text style={styles.suggestedIcon}>{s.icon}</Text>
+                <View style={styles.suggestedInfo}>
+                  <Text style={styles.suggestedName}>{s.title}</Text>
+                  <Text style={styles.suggestedTrigger}>{s.trigger} · {s.duration}</Text>
+                </View>
+                <Pressable onPress={() => handleAddSuggested(s)} hitSlop={8} style={styles.suggestedBtn}>
+                  <Text style={styles.suggestedBtnText}>Add</Text>
+                </Pressable>
+                <Pressable onPress={() => handleDismissSuggested(s.title)} hitSlop={8}>
+                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            ))}
+        </Panel>
+      )}
 
       {/* Add habit */}
       {showAdd ? (
@@ -519,7 +588,7 @@ function GoalsTab({ dateKey }: { dateKey: string }) {
     if (!newTitle.trim()) return;
     addGoal({
       title: newTitle.trim(),
-      engine: "general",
+      engine: "charisma",
       type: "count",
       target: 1,
       unit: "tasks",
@@ -719,7 +788,20 @@ const styles = StyleSheet.create({
   habitMeta: { flexDirection: "row", gap: spacing.sm, marginTop: 2 },
   habitEngine: { ...fonts.kicker, fontSize: 8, color: colors.textMuted },
   habitStreak: { ...fonts.mono, fontSize: 10, color: colors.warning },
+  habitTrigger: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  habitChainWrap: { marginTop: spacing.sm, paddingLeft: spacing["4xl"] },
   habitGridWrap: { marginTop: spacing.md },
+
+  // Suggested habits
+  suggestedCard: { marginTop: spacing.lg, gap: spacing.md },
+  suggestedTitle: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: spacing.xs },
+  suggestedRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm },
+  suggestedIcon: { fontSize: 18, width: 28, textAlign: "center" },
+  suggestedInfo: { flex: 1, gap: 1 },
+  suggestedName: { fontSize: 14, fontWeight: "500", color: colors.text },
+  suggestedTrigger: { fontSize: 11, color: colors.textMuted },
+  suggestedBtn: { paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: 8, backgroundColor: colors.primaryDim },
+  suggestedBtnText: { fontSize: 12, fontWeight: "600", color: colors.primary },
 
   // Journal (old styles removed — now using jStyles below)
 

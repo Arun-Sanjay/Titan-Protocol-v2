@@ -7,7 +7,7 @@ import Animated, {
   withTiming,
   Easing,
 } from "react-native-reanimated";
-import { colors, fonts, shadows } from "../../theme";
+import { colors, fonts } from "../../theme";
 import { getDailyRank } from "../../db/gamification";
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -47,7 +47,7 @@ export const PowerRing = React.memo(function PowerRing({ score, size = 200, stro
   const ringColor = "rgba(247, 250, 255, 0.9)";
 
   return (
-    <View style={[styles.container, { width: size, height: size }, shadows.ring]}>
+    <View style={[styles.container, { width: size, height: size }]}>
       <Svg width={size} height={size}>
         <Defs>
           <LinearGradient id={ringGradId} x1="0" y1="0" x2="1" y2="1">

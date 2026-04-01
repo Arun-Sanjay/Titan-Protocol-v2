@@ -9,9 +9,19 @@ import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
 import { Card } from "../../src/components/ui/Card";
 import { useProfileStore } from "../../src/stores/useProfileStore";
+import { useSkillTreeStore } from "../../src/stores/useSkillTreeStore";
+import { useAchievementStore } from "../../src/stores/useAchievementStore";
+import { useTitanModeStore, selectUnlockProgress, selectDaysRemaining } from "../../src/stores/useTitanModeStore";
+import { useModeStore, checkFeatureVisible } from "../../src/stores/useModeStore";
+import { TitanProgress } from "../../src/components/ui/TitanProgress";
+import { NarrativeTimeline } from "../../src/components/v2/narrative/NarrativeTimeline";
+import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { getRankForLevel, RANKS } from "../../src/db/gamification";
 
 export default function ProfileScreen() {
+  const profileMode = useModeStore((s) => s.mode);
+  const showNarrative = checkFeatureVisible(profileMode, "narrative");
+  const showSkillTrees = checkFeatureVisible(profileMode, "skill_trees");
   const router = useRouter();
   const xp = useProfileStore((s) => s.profile.xp);
   const level = useProfileStore((s) => s.profile.level);
@@ -78,6 +88,33 @@ export default function ProfileScreen() {
           </Card>
         )}
 
+        {/* Titan Mode Card */}
+        <TitanModeCard />
+
+        {/* Achievements */}
+        <AchievementLink />
+
+        {/* Narrative Preview */}
+        {showNarrative && (
+          <View style={{ marginTop: spacing.xl }}>
+            <SectionHeader title="YOUR STORY" />
+            <NarrativeTimeline limit={3} />
+            <Pressable
+              onPress={() => router.push("/narrative" as any)}
+              style={{ alignItems: "center", paddingVertical: spacing.md }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
+                View Full Story
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Skill Trees Section */}
+        {showSkillTrees && (
+          <SkillTreesOverview />
+        )}
+
         <Pressable
           onPress={() => router.push("/hub/settings" as any)}
           style={styles.settingsBtn}
@@ -92,6 +129,141 @@ export default function ProfileScreen() {
     </SafeAreaView>
   );
 }
+
+function AchievementLink() {
+  const router = useRouter();
+  const count = useAchievementStore((s) => s.unlockedIds.length);
+  return (
+    <Pressable onPress={() => router.push("/achievements" as any)} style={styles.settingsBtn}>
+      <Ionicons name="ribbon-outline" size={20} color={colors.mind} />
+      <Text style={styles.settingsBtnText}>Achievements ({count}/35)</Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+    </Pressable>
+  );
+}
+
+function TitanModeCard() {
+  const unlocked = useTitanModeStore((s) => s.unlocked);
+  const days = useTitanModeStore((s) => s.consecutiveDays);
+  const avg = useTitanModeStore((s) => s.averageScore);
+  const mode = useModeStore((s) => s.mode);
+
+  if (mode === "titan") {
+    return (
+      <View style={titanStyles.card}>
+        <Ionicons name="flash" size={24} color="#FFD700" />
+        <Text style={titanStyles.activeLabel}>TITAN MODE ACTIVE</Text>
+        <Text style={titanStyles.activeDesc}>Equal weighting. No excuses. 85%+ standard.</Text>
+      </View>
+    );
+  }
+
+  if (unlocked) {
+    return (
+      <View style={titanStyles.card}>
+        <Ionicons name="flash" size={24} color="#FFD700" />
+        <Text style={titanStyles.unlockedLabel}>TITAN MODE UNLOCKED</Text>
+        <Text style={titanStyles.unlockedDesc}>Activate in Settings to enter the ultimate challenge.</Text>
+      </View>
+    );
+  }
+
+  if (days === 0) return null;
+
+  return (
+    <View style={titanStyles.card}>
+      <View style={titanStyles.row}>
+        <Ionicons name="lock-closed-outline" size={18} color="#FFD700" />
+        <Text style={titanStyles.lockLabel}>TITAN MODE</Text>
+      </View>
+      <Text style={titanStyles.lockDesc}>Day {days}/30 at {avg.toFixed(0)}% avg — {selectDaysRemaining(days)} days remaining</Text>
+      <View style={titanStyles.track}>
+        <View style={[titanStyles.fill, { width: `${selectUnlockProgress(days)}%` }]} />
+      </View>
+    </View>
+  );
+}
+
+const titanStyles = StyleSheet.create({
+  card: {
+    marginTop: spacing.xl,
+    padding: spacing.lg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 215, 0, 0.20)",
+    backgroundColor: "rgba(255, 215, 0, 0.03)",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  activeLabel: { fontSize: 12, fontWeight: "700", color: "#FFD700", letterSpacing: 3 },
+  activeDesc: { fontSize: 12, color: colors.textMuted, textAlign: "center" },
+  unlockedLabel: { fontSize: 12, fontWeight: "700", color: "#FFD700", letterSpacing: 2 },
+  unlockedDesc: { fontSize: 12, color: colors.textMuted, textAlign: "center" },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  lockLabel: { fontSize: 11, fontWeight: "700", color: "#FFD700", letterSpacing: 2 },
+  lockDesc: { fontSize: 11, color: colors.textMuted, textAlign: "center" },
+  track: { width: "100%", height: 3, backgroundColor: "rgba(255, 215, 0, 0.10)", borderRadius: 2, overflow: "hidden" },
+  fill: { height: "100%", backgroundColor: "#FFD700", borderRadius: 2 },
+});
+
+const SKILL_ENGINES = [
+  { id: "body", label: "Body", color: colors.body },
+  { id: "mind", label: "Mind", color: colors.mind },
+  { id: "money", label: "Money", color: colors.money },
+  { id: "charisma", label: "Charisma", color: colors.charisma },
+];
+
+function SkillTreesOverview() {
+  const router = useRouter();
+  const progress = useSkillTreeStore((s) => s.progress);
+  const overview = React.useMemo(() => useSkillTreeStore.getState().getOverview(), [progress]);
+
+  return (
+    <View style={skillStyles.container}>
+      <Text style={skillStyles.title}>SKILL TREES</Text>
+      <View style={skillStyles.grid}>
+        {SKILL_ENGINES.map((eng) => {
+          const data = overview.find((o) => o.engine === eng.id);
+          const total = data?.totalNodes ?? 0;
+          const completed = data?.totalCompleted ?? 0;
+          const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+          return (
+            <Pressable
+              key={eng.id}
+              style={skillStyles.card}
+              onPress={() => router.push(`/skill-tree/${eng.id}` as any)}
+            >
+              <View style={[skillStyles.dot, { backgroundColor: eng.color }]} />
+              <Text style={skillStyles.engineName}>{eng.label}</Text>
+              <TitanProgress value={pct} color={eng.color} height={3} />
+              <Text style={skillStyles.nodeCount}>{completed}/{total}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const skillStyles = StyleSheet.create({
+  container: { marginTop: spacing.xl },
+  title: { ...fonts.kicker, fontSize: 10, letterSpacing: 2, marginBottom: spacing.md },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  card: {
+    flex: 1,
+    minWidth: "45%",
+    padding: spacing.lg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    gap: spacing.sm,
+  },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  engineName: { fontSize: 14, fontWeight: "600", color: colors.text },
+  nodeCount: { fontSize: 11, fontWeight: "500", color: colors.textMuted },
+});
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },

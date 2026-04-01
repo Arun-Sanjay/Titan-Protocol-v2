@@ -13,7 +13,7 @@ const AXES: { key: EngineKey; label: string }[] = [
   { key: "body", label: "Body" },
   { key: "mind", label: "Mind" },
   { key: "money", label: "Money" },
-  { key: "general", label: "General" },
+  { key: "charisma", label: "Charisma" },
 ];
 
 function polarToXY(cx: number, cy: number, r: number, angleIndex: number, total: number) {

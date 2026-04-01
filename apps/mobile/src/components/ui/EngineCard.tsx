@@ -14,10 +14,10 @@ import type { EngineKey } from "../../db/schema";
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const ENGINE_META: Record<EngineKey, { icon: string; label: string; color: string }> = {
-  body: { icon: "⚡", label: "Body", color: colors.body },
+  body: { icon: "💪", label: "Body", color: colors.body },
   mind: { icon: "🧠", label: "Mind", color: colors.mind },
   money: { icon: "💰", label: "Money", color: colors.money },
-  general: { icon: "⚙️", label: "General", color: colors.general },
+  charisma: { icon: "🗣️", label: "Charisma", color: colors.charisma },
 };
 
 type Props = {
@@ -98,7 +98,6 @@ export const EngineCard = React.memo(function EngineCard({ engine, score, comple
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    minWidth: "45%",
   },
   top: {
     flexDirection: "row",

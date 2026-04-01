@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, AppState } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, AppState, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -11,12 +11,15 @@ import { Panel } from "../../src/components/ui/Panel";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { getTodayKey } from "../../src/lib/date";
 import { useEngineStore, selectTotalScore, selectAllTasksForDate } from "../../src/stores/useEngineStore";
+import { useModeStore, selectActiveEngines } from "../../src/stores/useModeStore";
 import type { EngineKey } from "../../src/db/schema";
 
-const ENGINES: EngineKey[] = ["body", "mind", "money", "general"];
+const ALL_ENGINES: EngineKey[] = ["body", "mind", "money", "charisma"];
 
 export default function EnginesScreen() {
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = (screenWidth - spacing.lg * 2 - spacing.md) / 2;
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
@@ -25,6 +28,10 @@ export default function EnginesScreen() {
     return () => sub.remove();
   }, []);
   const dateKey = useMemo(() => getTodayKey(), [appActive]);
+
+  const mode = useModeStore((s) => s.mode);
+  const focusEngines = useModeStore((s) => s.focusEngines);
+  const ENGINES = useMemo(() => selectActiveEngines(mode, focusEngines) as EngineKey[], [mode, focusEngines]);
 
   const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
   const scores = useEngineStore((s) => s.scores);
@@ -89,14 +96,15 @@ export default function EnginesScreen() {
           {ENGINES.map((engine) => {
             const c = engineCounts(engine);
             return (
-              <EngineCard
-                key={engine}
-                engine={engine}
-                score={scores[`${engine}:${dateKey}`] ?? 0}
-                completedCount={c.completed}
-                totalCount={c.total}
-                onPress={() => router.push(`/engine/${engine}`)}
-              />
+              <View key={engine} style={{ width: cardWidth }}>
+                <EngineCard
+                  engine={engine}
+                  score={scores[`${engine}:${dateKey}`] ?? 0}
+                  completedCount={c.completed}
+                  totalCount={c.total}
+                  onPress={() => router.push(`/engine/${engine}`)}
+                />
+              </View>
             );
           })}
         </View>
