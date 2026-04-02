@@ -23,6 +23,12 @@ import { Day4Cinematic } from "../src/components/v2/story/Day4Cinematic";
 import { Day5Cinematic } from "../src/components/v2/story/Day5Cinematic";
 import { Day6Cinematic } from "../src/components/v2/story/Day6Cinematic";
 import { Day7Cinematic } from "../src/components/v2/story/Day7Cinematic";
+import { Day14Cinematic } from "../src/components/v2/story/Day14Cinematic";
+import { Day30Cinematic } from "../src/components/v2/story/Day30Cinematic";
+import { Day45Cinematic } from "../src/components/v2/story/Day45Cinematic";
+import { Day60Cinematic } from "../src/components/v2/story/Day60Cinematic";
+import { Day90Cinematic } from "../src/components/v2/story/Day90Cinematic";
+import { Day365Cinematic } from "../src/components/v2/story/Day365Cinematic";
 import { getStoryForDay, addEntry } from "../src/lib/narrative-engine";
 import { useIdentityStore } from "../src/stores/useIdentityStore";
 import { useStoryStore } from "../src/stores/useStoryStore";
@@ -40,6 +46,12 @@ const DAY_CINEMATICS: Record<number, React.ComponentType<{ onComplete: () => voi
   5: Day5Cinematic,
   6: Day6Cinematic,
   7: Day7Cinematic,
+  14: Day14Cinematic,
+  30: Day30Cinematic,
+  45: Day45Cinematic,
+  60: Day60Cinematic,
+  90: Day90Cinematic,
+  365: Day365Cinematic,
 };
 
 export default function RootLayout() {

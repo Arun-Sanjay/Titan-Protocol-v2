@@ -19,6 +19,8 @@ import { getDailyRank } from "../../../db/gamification";
 import { getTodayKey } from "../../../lib/date";
 import { getCurrentChapter, getDayNumber } from "../../../data/chapters";
 import { getLatestNarrative, getStoryForDay } from "../../../lib/narrative-engine";
+import { generateDailyOperation, type DailyOperation } from "../../../lib/operation-engine";
+import { useStoryStore } from "../../../stores/useStoryStore";
 
 const ARCHETYPE_ICONS: Record<string, string> = {
   titan: "\u26A1", athlete: "\uD83D\uDCAA", scholar: "\uD83D\uDCDA", hustler: "\uD83D\uDCB0",
@@ -110,6 +112,16 @@ export function DailyBriefing({ onEnter }: Props) {
   // Latest narrative
   const narrative = getLatestNarrative();
 
+  // Generate today's operation
+  const userName = useStoryStore((s) => s.userName) || "Recruit";
+  const storyAct = useStoryStore((s) => s.currentAct);
+  const operation = useMemo(
+    () => dayNumber > 1
+      ? generateDailyOperation(userName, dayNumber, profile.streak, storyAct)
+      : null,
+    [dayNumber, userName, profile.streak, storyAct],
+  );
+
   // Meta
   const meta = IDENTITIES.find((i) => i.id === (archetype ?? identity));
 
@@ -189,8 +201,23 @@ export function DailyBriefing({ onEnter }: Props) {
         </Animated.View>
       )}
 
+      {/* Today's Operation */}
+      {operation && (
+        <Animated.View entering={FadeInDown.delay(1400).duration(500)} style={styles.section}>
+          <Text style={styles.operationKicker}>TODAY'S OPERATION</Text>
+          <Text style={styles.operationName}>{operation.displayName}</Text>
+          <Text style={styles.operationSubtitle}>{operation.subtitle}</Text>
+          <Text style={styles.operationMessage}>{operation.protocolMessage}</Text>
+          <View style={styles.operationStats}>
+            <Text style={styles.operationStat}>{operation.taskCount} TASKS</Text>
+            <Text style={styles.operationStatDivider}>{"\u00B7"}</Text>
+            <Text style={styles.operationStat}>{operation.consistencyRate}% CONSISTENCY</Text>
+          </View>
+        </Animated.View>
+      )}
+
       {/* Today preview */}
-      <Animated.View entering={FadeInDown.delay(1400).duration(400)} style={styles.section}>
+      <Animated.View entering={FadeInDown.delay(operation ? 1800 : 1400).duration(400)} style={styles.section}>
         <Text style={styles.previewLabel}>TODAY</Text>
         <Text style={styles.previewText}>
           {todayTasks.length} missions loaded {"\u00B7"} {habits.length} habits active
@@ -294,4 +321,30 @@ const styles = StyleSheet.create({
   },
   enterBtnText: { ...fonts.kicker, fontSize: 15, color: "#000", letterSpacing: 3 },
   skipText: { fontSize: 12, color: colors.textMuted },
+
+  // Operation display
+  operationKicker: {
+    ...fonts.kicker, fontSize: 9, color: colors.textMuted,
+    letterSpacing: 3, marginBottom: spacing.xs,
+  },
+  operationName: {
+    fontSize: 22, fontWeight: "800", color: colors.text,
+    letterSpacing: 2, marginBottom: 4,
+  },
+  operationSubtitle: {
+    fontSize: 12, color: colors.textSecondary, marginBottom: spacing.md,
+    fontStyle: "italic",
+  },
+  operationMessage: {
+    fontSize: 13, color: colors.textSecondary, lineHeight: 20,
+    textAlign: "center", marginBottom: spacing.md,
+  },
+  operationStats: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
+    justifyContent: "center",
+  },
+  operationStat: {
+    ...fonts.kicker, fontSize: 10, color: colors.textMuted, letterSpacing: 2,
+  },
+  operationStatDivider: { fontSize: 10, color: colors.textMuted },
 });
