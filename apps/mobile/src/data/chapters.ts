@@ -3,6 +3,8 @@
  * After Chapter 6: "Endgame" with harder targets.
  */
 
+import { getJSON } from "../db/storage";
+
 export type Chapter = {
   number: number;
   name: string;
@@ -103,11 +105,16 @@ export function getCurrentChapter(dayNumber: number): Chapter {
 
 /**
  * Get day number from first active date.
+ * Includes dev_day_offset for testing (DEV skip-day button).
  */
 export function getDayNumber(firstActiveDate: string | null): number {
   if (!firstActiveDate) return 1;
   const start = new Date(firstActiveDate + "T00:00:00");
   const now = new Date();
   now.setHours(0, 0, 0, 0);
-  return Math.max(1, Math.floor((now.getTime() - start.getTime()) / 86_400_000) + 1);
+  const realDay = Math.max(1, Math.floor((now.getTime() - start.getTime()) / 86_400_000) + 1);
+
+  // Add dev offset for testing (DEV skip-day button)
+  const offset = getJSON<number>("dev_day_offset", 0);
+  return realDay + offset;
 }

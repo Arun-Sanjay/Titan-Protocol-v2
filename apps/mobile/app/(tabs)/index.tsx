@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, RefreshControl, Pressable,
-  ScrollView, useWindowDimensions, AppState,
+  ScrollView, useWindowDimensions, AppState, Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -163,19 +163,24 @@ export default function HQScreen() {
   const [missionsExpanded, setMissionsExpanded] = useState(false);
 
   // ── DEV ONLY: Skip day for story testing ──
-  const [devDay, setDevDay] = useState(0);
+  const [devDay, setDevDay] = useState(getJSON<number>("dev_day_offset", 0));
   const handleDevSkipDay = () => {
     const newDay = devDay + 1;
     setDevDay(newDay);
-    // Store the simulated day offset
     setJSON("dev_day_offset", newDay);
     // Inject archetype story for the simulated day
-    const simulatedDayNumber = (dayNumber ?? 1) + newDay;
+    const simulatedDayNumber = (dayNumber ?? 1) + 1; // next day relative to current
     const story = getStoryForDay(archetype ?? identity, simulatedDayNumber);
     if (story) {
       addEntry({ date: today, text: story.text, type: "story" });
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Tell user to reopen for cinematic
+    Alert.alert(
+      `Day ${simulatedDayNumber} Simulated`,
+      "Close and reopen the app to see the cinematic for this day.",
+      [{ text: "OK" }],
+    );
   };
 
   return (
