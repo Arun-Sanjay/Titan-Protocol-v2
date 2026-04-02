@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet } from "react-native";
 import * as SystemUI from "expo-system-ui";
 import { colors } from "../src/theme";
+import { SystemNotificationProvider } from "../src/components/ui/SystemNotification";
 import { MotivationalSplash } from "../src/components/ui/MotivationalSplash";
 import { OnboardingShell } from "../src/components/v2/onboarding/OnboardingShell";
 import { useOnboardingStore } from "../src/stores/useOnboardingStore";
@@ -127,6 +128,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
+      <SystemNotificationProvider>
       <StatusBar style="light" backgroundColor={colors.bg} />
       <Stack
         screenOptions={{
@@ -164,6 +166,7 @@ export default function RootLayout() {
       {showCinematic && <FirstLaunchCinematic onComplete={handleCinematicComplete} />}
       {DayCinematicComponent && <DayCinematicComponent onComplete={handleDayCinematicComplete} />}
       {showBriefing && <DailyBriefing onEnter={handleBriefingEnter} />}
+      </SystemNotificationProvider>
     </GestureHandlerRootView>
   );
 }

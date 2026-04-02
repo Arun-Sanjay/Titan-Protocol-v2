@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from "react";
+import React, { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, RefreshControl, Pressable,
   ScrollView, useWindowDimensions, AppState, Alert,
@@ -12,6 +12,10 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { getJSON, setJSON } from "../../src/db/storage";
+import { useSystemNotification } from "../../src/components/ui/SystemNotification";
+import { QuestCard } from "../../src/components/ui/QuestCard";
+import { SystemVoice } from "../../src/components/ui/SystemVoice";
+import { LevelUpOverlay } from "../../src/components/ui/LevelUpOverlay";
 import { colors, spacing, fonts, radius } from "../../src/theme";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
@@ -133,6 +137,22 @@ export default function HQScreen() {
     setRefreshing(false);
   }, [analytics.today]);
 
+  // System notifications
+  const notify = useSystemNotification();
+
+  // Level-up detection
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [levelUpLevel, setLevelUpLevel] = useState(0);
+  const prevLevelRef = useRef(profileLevel);
+  useEffect(() => {
+    if (profileLevel > prevLevelRef.current && prevLevelRef.current > 0) {
+      setLevelUpLevel(profileLevel);
+      setShowLevelUp(true);
+      notify({ type: "level_up", title: `LEVEL ${profileLevel}`, subtitle: "You leveled up!" });
+    }
+    prevLevelRef.current = profileLevel;
+  }, [profileLevel]);
+
   // Mission toggle
   const handleToggle = useCallback((task: TaskWithStatus) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -142,10 +162,16 @@ export default function HQScreen() {
       awardXP(analytics.today, "task_complete", xp);
       updateStreak(analytics.today);
       evaluateAllTrees();
+      // System notification
+      notify({
+        type: "xp",
+        title: `+${xp} XP`,
+        subtitle: task.title,
+      });
     } else {
       awardXP(analytics.today, "task_uncomplete", -xp);
     }
-  }, [analytics.today, toggleTask, awardXP, updateStreak]);
+  }, [analytics.today, toggleTask, awardXP, updateStreak, notify]);
 
   // Protocol pulse animation
   const protocolPulse = useSharedValue(0.4);
@@ -254,6 +280,9 @@ export default function HQScreen() {
           </View>
         </Animated.View>
 
+        {/* ══════════════ SYSTEM VOICE ══════════════ */}
+        <SystemVoice delay={40} />
+
         {/* ══════════════ SECTION 2: TITAN SCORE HERO ══════════════ */}
         <Animated.View entering={FadeInDown.delay(60).duration(400)}>
           <Panel style={s.card} tone="hero" delay={60}>
@@ -344,6 +373,9 @@ export default function HQScreen() {
             </Animated.View>
           )}
         </Animated.View>
+
+        {/* ══════════════ DAILY QUEST ══════════════ */}
+        <QuestCard delay={200} />
 
         {/* ══════════════ SECTION 5: ENGINE SPARKLINE GRID (2x2) ══════════════ */}
         <Animated.View entering={FadeInDown.delay(240).duration(400)}>
@@ -529,6 +561,14 @@ export default function HQScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Level-Up Overlay */}
+      {showLevelUp && (
+        <LevelUpOverlay
+          newLevel={levelUpLevel}
+          onDismiss={() => setShowLevelUp(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }
