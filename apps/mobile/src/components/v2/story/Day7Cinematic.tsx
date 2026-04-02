@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
@@ -11,6 +11,7 @@ import { useProfileStore } from "../../../stores/useProfileStore";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 import { getTodayKey, addDays } from "../../../lib/date";
+import { generateDailyOperation } from "../../../lib/operation-engine";
 
 type Props = { onComplete: () => void };
 
@@ -33,6 +34,8 @@ export function Day7Cinematic({ onComplete }: Props) {
   const loadDateRange = useEngineStore((s) => s.loadDateRange);
   const streakCurrent = useProtocolStore((s) => s.streakCurrent);
   const xp = useProfileStore((s) => s.profile.xp);
+  const streak = useProfileStore((s) => s.profile.streak);
+  const storyAct = useStoryStore((s) => s.currentAct);
   const identity = useOnboardingStore((s) => s.identity) ?? "titan";
   const archetypeName = IDENTITY_LABELS[identity as IdentityArchetype] ?? "THE TITAN";
 
@@ -57,6 +60,12 @@ export function Day7Cinematic({ onComplete }: Props) {
 
   const rank = getRankLetter(averageScore);
 
+  // Get today's task count for the operation overview
+  const taskCount = useMemo(() => {
+    const op = generateDailyOperation(userName, 7, streak, storyAct);
+    return op.taskCount;
+  }, [userName, streak, storyAct]);
+
   // Phase 1: Terminal stats
   const statsLines: TerminalLine[] = useMemo(
     () => [
@@ -71,8 +80,9 @@ export function Day7Cinematic({ onComplete }: Props) {
       { text: `XP EARNED: ${xp}`, delay: 500 },
       { text: `RANK: ${rank}`, delay: 600, haptic: "heavy", bold: true, fontSize: 16, color: rank === "SS" || rank === "S" ? "#FBBF24" : rank === "A" ? colors.success : colors.text },
       { text: "\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550", delay: 400, haptic: "none" },
+      { text: `FINAL OPERATION: ${taskCount} TASKS ASSIGNED`, delay: 600, color: "#FBBF24" },
     ],
-    [userName, archetypeName, averageScore, streakCurrent, xp, rank],
+    [userName, archetypeName, averageScore, streakCurrent, xp, rank, taskCount],
   );
 
   // Phase 2: Protocol speech based on performance
