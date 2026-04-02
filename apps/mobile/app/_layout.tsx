@@ -17,21 +17,41 @@ import {
   DailyBriefing,
   isBriefingSeenToday,
 } from "../src/components/v2/story/DailyBriefing";
+import { Day2Cinematic } from "../src/components/v2/story/Day2Cinematic";
+import { Day3Cinematic } from "../src/components/v2/story/Day3Cinematic";
+import { Day4Cinematic } from "../src/components/v2/story/Day4Cinematic";
+import { Day5Cinematic } from "../src/components/v2/story/Day5Cinematic";
+import { Day6Cinematic } from "../src/components/v2/story/Day6Cinematic";
+import { Day7Cinematic } from "../src/components/v2/story/Day7Cinematic";
 import { getStoryForDay, addEntry } from "../src/lib/narrative-engine";
 import { useIdentityStore } from "../src/stores/useIdentityStore";
+import { useStoryStore } from "../src/stores/useStoryStore";
 import { getJSON } from "../src/db/storage";
 import { getDayNumber } from "../src/data/chapters";
 import { getTodayKey } from "../src/lib/date";
 
 import "../src/db/database";
 
+// Map day numbers to cinematic components
+const DAY_CINEMATICS: Record<number, React.ComponentType<{ onComplete: () => void }>> = {
+  2: Day2Cinematic,
+  3: Day3Cinematic,
+  4: Day4Cinematic,
+  5: Day5Cinematic,
+  6: Day6Cinematic,
+  7: Day7Cinematic,
+};
+
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
   const [showCinematic, setShowCinematic] = useState(false);
+  const [showDayCinematic, setShowDayCinematic] = useState<number | null>(null);
   const [showBriefing, setShowBriefing] = useState(false);
   const onboardingCompleted = useOnboardingStore((s) => s.completed);
   const walkthroughCompleted = useWalkthroughStore((s) => s.completed);
   const archetype = useIdentityStore((s) => s.archetype);
+  const getCinematicForDay = useStoryStore((s) => s.getCinematicForDay);
+  const storyFlags = useStoryStore((s) => s.storyFlags);
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg);
@@ -41,24 +61,47 @@ export default function RootLayout() {
   useEffect(() => {
     if (!showSplash && onboardingCompleted && walkthroughCompleted) {
       if (!isFirstLaunchSeen()) {
+        // Day 1 cinematic
         setShowCinematic(true);
-      } else if (!isBriefingSeenToday()) {
-        // Inject archetype story for today if available
+      } else {
+        // Check if there's a day-specific cinematic to show
         const firstActiveDate = getJSON<string | null>("first_active_date", null);
         const dayNum = getDayNumber(firstActiveDate);
-        const story = getStoryForDay(archetype, dayNum);
-        if (story) {
-          addEntry({ date: getTodayKey(), text: story.text, type: "story" });
+
+        // Check for Day 2-7 (and future day cinematics)
+        const cinematicKey = getCinematicForDay(dayNum);
+        if (cinematicKey && DAY_CINEMATICS[dayNum]) {
+          setShowDayCinematic(dayNum);
+        } else if (!isBriefingSeenToday()) {
+          // No cinematic for today — show daily briefing
+          const story = getStoryForDay(archetype, dayNum);
+          if (story) {
+            addEntry({ date: getTodayKey(), text: story.text, type: "story" });
+          }
+          setShowBriefing(true);
         }
-        setShowBriefing(true);
       }
     }
-  }, [showSplash, onboardingCompleted, walkthroughCompleted, archetype]);
+  }, [showSplash, onboardingCompleted, walkthroughCompleted, archetype, storyFlags]);
 
   const handleCinematicComplete = () => {
     setShowCinematic(false);
-    // After cinematic, show the daily briefing
+    // After Day 1 cinematic, show daily briefing if needed
     if (!isBriefingSeenToday()) {
+      setShowBriefing(true);
+    }
+  };
+
+  const handleDayCinematicComplete = () => {
+    setShowDayCinematic(null);
+    // After day cinematic, show briefing
+    if (!isBriefingSeenToday()) {
+      const firstActiveDate = getJSON<string | null>("first_active_date", null);
+      const dayNum = getDayNumber(firstActiveDate);
+      const story = getStoryForDay(archetype, dayNum);
+      if (story) {
+        addEntry({ date: getTodayKey(), text: story.text, type: "story" });
+      }
       setShowBriefing(true);
     }
   };
@@ -66,6 +109,9 @@ export default function RootLayout() {
   const handleBriefingEnter = () => {
     setShowBriefing(false);
   };
+
+  // Resolve the day cinematic component
+  const DayCinematicComponent = showDayCinematic ? DAY_CINEMATICS[showDayCinematic] : null;
 
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -104,6 +150,7 @@ export default function RootLayout() {
       {showSplash && <MotivationalSplash onDismiss={() => setShowSplash(false)} />}
       {!showSplash && !onboardingCompleted && <OnboardingShell />}
       {showCinematic && <FirstLaunchCinematic onComplete={handleCinematicComplete} />}
+      {DayCinematicComponent && <DayCinematicComponent onComplete={handleDayCinematicComplete} />}
       {showBriefing && <DailyBriefing onEnter={handleBriefingEnter} />}
     </GestureHandlerRootView>
   );
