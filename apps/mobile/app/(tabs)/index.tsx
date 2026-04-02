@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, RefreshControl, Pressable,
   ScrollView, useWindowDimensions, AppState, Alert,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,6 +19,8 @@ import { MissionRow } from "../../src/components/ui/MissionRow";
 import { Panel } from "../../src/components/ui/Panel";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
+import { RadarChart } from "../../src/components/ui/RadarChart";
+import { SparklineChart } from "../../src/components/ui/SparklineChart";
 import { useAnalyticsData } from "../../src/hooks/useAnalyticsData";
 import { useEngineStore, selectAllTasksForDate, ENGINES, type TaskWithStatus } from "../../src/stores/useEngineStore";
 import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
@@ -45,11 +48,14 @@ const ARCHETYPE_ICONS: Record<string, string> = {
   showman: "\uD83C\uDFA4", warrior: "\u2694\uFE0F", founder: "\uD83D\uDE80", charmer: "\u2728",
 };
 
-// ─── HQScreen — GTA Mission Select ──────────────────────────────────────────
+const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
+
+// ─── HQScreen — Titan OS Dashboard ────────────────────────────────────────────
 
 export default function HQScreen() {
   const router = useRouter();
   const today = getTodayKey();
+  const { width: screenWidth } = useWindowDimensions();
 
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
@@ -135,7 +141,6 @@ export default function HQScreen() {
     if (completed) {
       awardXP(analytics.today, "task_complete", xp);
       updateStreak(analytics.today);
-      // Re-evaluate skill trees after task completion
       evaluateAllTrees();
     } else {
       awardXP(analytics.today, "task_uncomplete", -xp);
@@ -168,14 +173,12 @@ export default function HQScreen() {
     const newDay = devDay + 1;
     setDevDay(newDay);
     setJSON("dev_day_offset", newDay);
-    // Inject archetype story for the simulated day
-    const simulatedDayNumber = (dayNumber ?? 1) + 1; // next day relative to current
+    const simulatedDayNumber = (dayNumber ?? 1) + 1;
     const story = getStoryForDay(archetype ?? identity, simulatedDayNumber);
     if (story) {
       addEntry({ date: today, text: story.text, type: "story" });
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Tell user to reopen for cinematic
     Alert.alert(
       `Day ${simulatedDayNumber} Simulated`,
       "Close and reopen the app to see the cinematic for this day.",
@@ -183,86 +186,129 @@ export default function HQScreen() {
     );
   };
 
+  // ── Derived metrics for new dashboard sections ──
+  const sparklineCardWidth = (screenWidth - 48 - 12) / 2; // 2 columns with gap
+
+  // Per-engine completed tasks today
+  const engineTaskStats = useMemo(() => {
+    const stats: Record<EngineKey, { done: number; total: number }> = {
+      body: { done: 0, total: 0 },
+      mind: { done: 0, total: 0 },
+      money: { done: 0, total: 0 },
+      charisma: { done: 0, total: 0 },
+    };
+    for (const t of tasks) {
+      stats[t.engine].total++;
+      if (t.completed) stats[t.engine].done++;
+    }
+    return stats;
+  }, [tasks]);
+
+  // VS Last Week comparison arrows
+  const vsLastWeek = useMemo(() => {
+    return ENGINES.map((e) => {
+      const thisW = analytics.thisWeekEngines[e];
+      const lastW = analytics.lastWeek[e];
+      const diff = thisW - lastW;
+      return { engine: e, thisWeek: thisW, lastWeek: lastW, diff };
+    });
+  }, [analytics.thisWeekEngines, analytics.lastWeek]);
+
   return (
-    <SafeAreaView style={styles.safe} edges={["top"]}>
+    <SafeAreaView style={s.safe} edges={["top"]}>
       <HUDBackground />
 
-      {/* DEV ONLY: Skip day button for story testing */}
-      <View style={styles.devBar}>
-        <Pressable onPress={handleDevSkipDay} style={styles.devBtn}>
-          <Text style={styles.devBtnText}>DEV: Skip Day (+{devDay})</Text>
+      {/* DEV ONLY: Skip day bar */}
+      <View style={s.devBar}>
+        <Pressable onPress={handleDevSkipDay} style={s.devBtn}>
+          <Text style={s.devBtnText}>DEV: Skip Day (+{devDay})</Text>
         </Pressable>
-        <Text style={styles.devDayText}>Simulated Day {(dayNumber ?? 1) + devDay}</Text>
+        <Text style={s.devDayText}>Simulated Day {(dayNumber ?? 1) + devDay}</Text>
       </View>
 
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+        style={s.scroll}
+        contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.text} />
         }
       >
-        {/* ═══ CHARACTER HUD ═══ */}
-        <Animated.View entering={FadeInDown.delay(0).duration(400)} style={styles.hud}>
-          <View style={styles.hudTop}>
-            <View style={styles.hudIdentity}>
-              <Text style={styles.hudIcon}>
-                {ARCHETYPE_ICONS[archetype ?? identity ?? "titan"] ?? "\u26A1"}
-              </Text>
-              <View>
-                <Text style={styles.hudName}>
-                  {identityMeta?.name ?? (identity ? IDENTITY_LABELS[identity] : "TITAN PROTOCOL")}
-                </Text>
-                <Text style={styles.hudLevel}>LEVEL {profileLevel} {"\u00B7"} DAY {dayNumber}</Text>
-              </View>
-            </View>
-            <View style={styles.hudStreak}>
-              <Text style={styles.streakFire}>{"\uD83D\uDD25"}</Text>
-              <Text style={styles.streakCount}>{profileStreak}</Text>
-            </View>
-          </View>
-          {/* Chapter badge */}
-          <View style={styles.chapterBadge}>
-            <Text style={styles.chapterText}>
-              CH.{chapter.number}: {chapter.name.toUpperCase()}
+        {/* ══════════════ SECTION 1: CHARACTER HUD ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(0).duration(400)} style={s.hudSection}>
+          <Text style={s.hudKicker}>
+            DAY {dayNumber} {"\u00B7"} CH.{chapter.number}: {chapter.name.toUpperCase()}
+          </Text>
+          <View style={s.hudIdentityRow}>
+            <Text style={s.hudArchetypeIcon}>
+              {ARCHETYPE_ICONS[archetype ?? identity ?? "titan"] ?? "\u26A1"}
+            </Text>
+            <Text style={s.hudArchetypeName}>
+              {identityMeta?.name ?? (identity ? IDENTITY_LABELS[identity] : "TITAN PROTOCOL")}
             </Text>
           </View>
-
-          <XPBar xp={profileXp} level={profileLevel} />
-
-          {/* Titan Score + Rank */}
-          <View style={styles.scoreRow}>
-            <View>
-              <Text style={styles.scoreLabel}>TITAN SCORE</Text>
-              <Text style={styles.scoreValue}>{analytics.titanScore}%</Text>
-            </View>
-            <View style={[styles.rankBadge, { borderColor: rank.color + "60" }]}>
-              <Text style={[styles.rankLetter, { color: rank.color }]}>{rank.letter}</Text>
-            </View>
-            <View style={styles.engineDots}>
-              {ENGINES.map((e) => (
-                <View key={e} style={styles.engineDot}>
-                  <View style={[styles.dot, { backgroundColor: ENGINE_COLORS[e] }]} />
-                  <Text style={styles.dotValue}>{analytics.engineScores[e]}%</Text>
-                </View>
-              ))}
-            </View>
+          <View style={s.hudMetaRow}>
+            <Text style={s.hudMetaText}>LVL {profileLevel}</Text>
+            <View style={s.hudMetaDot} />
+            <Text style={s.hudStreakText}>{"\uD83D\uDD25"} {profileStreak}</Text>
           </View>
         </Animated.View>
 
-        {/* ═══ MISSION CARDS ═══ */}
+        {/* ══════════════ SECTION 2: TITAN SCORE HERO ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+          <Panel style={s.card} tone="hero" delay={60}>
+            <Text style={s.kicker}>TITAN SCORE</Text>
+            <Text style={s.heroScore}>{analytics.titanScore}%</Text>
+            <Text style={s.heroSub}>
+              {analytics.activeEngines}/4 engines active today
+            </Text>
 
-        {/* Card 1: Daily Protocol */}
-        <Animated.View entering={FadeInDown.delay(80).duration(400)}>
+            {/* 4 engine progress bars */}
+            <View style={s.engineBarsWrap}>
+              {ENGINES.map((e) => (
+                <View key={e} style={s.engineBarRow}>
+                  <View style={[s.engineColorDot, { backgroundColor: ENGINE_COLORS[e] }]} />
+                  <Text style={[s.engineBarLabel, { color: ENGINE_COLORS[e] }]}>
+                    {ENGINE_LABELS[e]}
+                  </Text>
+                  <View style={s.engineBarTrack}>
+                    <TitanProgress
+                      value={analytics.engineScores[e]}
+                      color={ENGINE_COLORS[e]}
+                      height={6}
+                      shimmer={false}
+                    />
+                  </View>
+                  <Text style={s.engineBarPct}>{analytics.engineScores[e]}%</Text>
+                </View>
+              ))}
+            </View>
+          </Panel>
+        </Animated.View>
+
+        {/* ══════════════ SECTION 3: ENGINE OVERVIEW (Radar) ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(120).duration(400)}>
+          <Panel style={s.card} delay={120}>
+            <Text style={s.kicker}>ENGINE OVERVIEW</Text>
+            <View style={s.radarWrap}>
+              <RadarChart
+                scores={analytics.engineScores}
+                size={Math.min(screenWidth - 80, 240)}
+              />
+            </View>
+          </Panel>
+        </Animated.View>
+
+        {/* ══════════════ SECTION 4: PROTOCOL CARD ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(180).duration(400)}>
           {protocolCompleted ? (
-            <Panel style={styles.missionCard} delay={0}>
-              <View style={styles.missionCardRow}>
-                <Text style={styles.missionCardCheck}>{"\u2713"}</Text>
+            <Panel style={s.card} delay={180}>
+              <View style={s.protocolDoneRow}>
+                <Text style={s.protocolCheckMark}>{"\u2713"}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.missionCardKicker}>DAILY PROTOCOL</Text>
-                  <Text style={styles.missionCardTitle}>Protocol Complete</Text>
-                  <Text style={styles.missionCardSub}>
+                  <Text style={s.kicker}>DAILY PROTOCOL</Text>
+                  <Text style={s.protocolDoneTitle}>Protocol Complete</Text>
+                  <Text style={s.mutedText}>
                     Score: {protocolSession?.titanScore ?? analytics.titanScore}%
                     {identity ? ` \u00B7 ${IDENTITY_LABELS[identity]}` : ""}
                   </Text>
@@ -272,25 +318,25 @@ export default function HQScreen() {
           ) : (
             <Animated.View style={protocolBorderStyle}>
               <Pressable
-                style={styles.protocolCard}
+                style={s.protocolCardActive}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   router.push("/protocol");
                 }}
               >
-                <Text style={styles.protocolKicker}>
+                <Text style={s.kicker}>
                   {!morningDone ? "MORNING PROTOCOL" : "EVENING PROTOCOL"}
                 </Text>
-                <Text style={styles.protocolTitle}>
+                <Text style={s.protocolActiveTitle}>
                   {!morningDone ? "Start Your Day" : "End Your Day"}
                 </Text>
-                <Text style={styles.protocolSub}>
+                <Text style={s.protocolActiveSub}>
                   {!morningDone
                     ? "Set your intention \u2022 Preview missions \u2022 Lock in focus"
                     : "Review score \u2022 Reflect \u2022 Cast identity vote"}
                 </Text>
-                <View style={styles.protocolBtn}>
-                  <Text style={styles.protocolBtnText}>
+                <View style={s.protocolCTA}>
+                  <Text style={s.protocolCTAText}>
                     {!morningDone ? "BEGIN MORNING" : "BEGIN EVENING"}
                   </Text>
                 </View>
@@ -299,125 +345,158 @@ export default function HQScreen() {
           )}
         </Animated.View>
 
-        {/* Card 2: Today's Missions */}
-        <Animated.View entering={FadeInDown.delay(160).duration(400)}>
-          <Pressable
-            onPress={() => setMissionsExpanded(!missionsExpanded)}
-            style={styles.missionCardOuter}
-          >
-            <Panel style={styles.missionCard} delay={0}>
-              <View style={styles.missionCardRow}>
-                <View style={[styles.missionIcon, { backgroundColor: "rgba(52,211,153,0.15)" }]}>
-                  <Text style={{ fontSize: 20 }}>{"\uD83C\uDFAF"}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.missionCardKicker}>TODAY'S MISSIONS</Text>
-                  <Text style={styles.missionCardTitle}>
-                    {completedCount}/{tasks.length} completed
-                  </Text>
-                </View>
-                <Text style={styles.expandArrow}>{missionsExpanded ? "\u25B2" : "\u25BC"}</Text>
-              </View>
-
-              {/* Engine progress bars */}
-              <View style={styles.engineMiniBar}>
-                {ENGINES.map((e) => (
-                  <View key={e} style={{ flex: 1 }}>
-                    <TitanProgress value={analytics.engineScores[e]} color={ENGINE_COLORS[e]} height={3} />
-                  </View>
-                ))}
-              </View>
-            </Panel>
-          </Pressable>
-        </Animated.View>
-
-        {/* Expanded missions list */}
-        {missionsExpanded && (
-          <View style={styles.missionsExpanded}>
-            {tasks.length === 0 ? (
-              <Text style={styles.emptyText}>No missions yet. Go to an engine to add tasks.</Text>
-            ) : (
-              tasks.map((task) => (
-                <MissionRow
-                  key={task.id}
-                  title={task.title}
-                  xp={task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST}
-                  completed={task.completed}
-                  kind={task.kind}
-                  engine={task.engine}
-                  onToggle={() => handleToggle(task)}
-                />
-              ))
-            )}
-          </View>
-        )}
-
-        {/* Card 3: War Room */}
-        <Animated.View entering={FadeInDown.delay(220).duration(400)}>
-          <Pressable onPress={() => router.push("/war-room")}>
-            <Panel style={styles.missionCard} delay={0}>
-              <View style={styles.missionCardRow}>
-                <View style={[styles.missionIcon, { backgroundColor: "rgba(248,113,113,0.15)" }]}>
-                  <Text style={{ fontSize: 20 }}>{"\u2694\uFE0F"}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.missionCardKicker}>WAR ROOM</Text>
-                  <Text style={styles.missionCardTitle}>Operations Board</Text>
-                  <Text style={styles.missionCardSub}>
-                    Missions {"\u00B7"} Side Quests {"\u00B7"} Boss Challenge
-                  </Text>
-                </View>
-                <Text style={styles.expandArrow}>{"\u2192"}</Text>
-              </View>
-            </Panel>
-          </Pressable>
-        </Animated.View>
-
-        {/* Card 4: Skill Trees */}
+        {/* ══════════════ SECTION 5: ENGINE SPARKLINE GRID (2x2) ══════════════ */}
         <Animated.View entering={FadeInDown.delay(240).duration(400)}>
-          <Panel style={styles.missionCard} delay={0}>
-            <View style={styles.missionCardRow}>
-              <View style={[styles.missionIcon, { backgroundColor: "rgba(167,139,250,0.15)" }]}>
-                <Text style={{ fontSize: 20 }}>{"\uD83C\uDF33"}</Text>
+          <Text style={[s.kicker, { marginBottom: 12 }]}>ENGINES</Text>
+          <View style={s.sparkGrid}>
+            {ENGINES.map((e) => {
+              const score = analytics.engineScores[e];
+              const stats = engineTaskStats[e];
+              return (
+                <View key={e} style={[s.sparkCard, { width: sparklineCardWidth }]}>
+                  {/* Header */}
+                  <View style={s.sparkCardHeader}>
+                    <Text style={[s.sparkEngineName, { color: ENGINE_COLORS[e] }]}>
+                      {ENGINE_LABELS[e]}
+                    </Text>
+                    <Text style={s.sparkScore}>{score}%</Text>
+                  </View>
+
+                  {/* Sparkline */}
+                  <View style={s.sparkChartWrap}>
+                    <SparklineChart
+                      data={analytics.sparklineData[e]}
+                      width={sparklineCardWidth - 24}
+                      height={44}
+                      color={ENGINE_COLORS[e]}
+                    />
+                  </View>
+
+                  {/* Footer */}
+                  <View style={s.sparkCardFooter}>
+                    <Text style={s.sparkFooterText}>
+                      Today: {score}%
+                    </Text>
+                    <Text style={s.sparkFooterPts}>
+                      {stats.done}/{stats.total} pts
+                    </Text>
+                  </View>
+
+                  {/* Enter button */}
+                  <Pressable
+                    style={[s.sparkEnterBtn, { borderColor: ENGINE_COLORS[e] + "40" }]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      router.push(`/engine/${e}`);
+                    }}
+                  >
+                    <Text style={[s.sparkEnterText, { color: ENGINE_COLORS[e] }]}>ENTER</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        </Animated.View>
+
+        {/* ══════════════ SECTION 6: VS LAST WEEK ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+          <Panel style={s.card} delay={300}>
+            <Text style={s.kicker}>VS LAST WEEK</Text>
+            <View style={s.vsRow}>
+              {vsLastWeek.map(({ engine, thisWeek: tw, lastWeek: lw, diff }) => {
+                const isUp = diff > 0;
+                const isDown = diff < 0;
+                const arrowColor = isUp ? "#5cc9a0" : isDown ? "#de6b7d" : "rgba(247,250,255,0.96)";
+                const arrow = isUp ? "\u2191" : isDown ? "\u2193" : "\u2013";
+                return (
+                  <View key={engine} style={s.vsCol}>
+                    <Text style={[s.vsEngineName, { color: ENGINE_COLORS[engine] }]}>
+                      {ENGINE_LABELS[engine]}
+                    </Text>
+                    <View style={s.vsArrowRow}>
+                      <Text style={[s.vsArrow, { color: arrowColor }]}>{arrow}</Text>
+                      <Text style={[s.vsDiff, { color: arrowColor }]}>
+                        {Math.abs(diff)}%
+                      </Text>
+                    </View>
+                    <Text style={s.vsComparison}>{tw}% vs {lw}%</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </Panel>
+        </Animated.View>
+
+        {/* ══════════════ SECTION 7: THIS WEEK STATS ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(360).duration(400)}>
+          <Panel style={s.card} delay={360}>
+            <Text style={s.kicker}>THIS WEEK</Text>
+            <View style={s.weekStatsRow}>
+              <View style={s.weekStatCell}>
+                <Text style={s.weekStatNumber}>{analytics.thisWeek.avgScore}%</Text>
+                <Text style={s.weekStatLabel}>AVG TITAN{"\n"}SCORE</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.missionCardKicker}>SKILL TREES</Text>
-                <Text style={styles.missionCardTitle}>
-                  {readyToClaimCount > 0
-                    ? `${readyToClaimCount} node${readyToClaimCount > 1 ? "s" : ""} ready to claim`
-                    : "Earn mastery through performance"}
-                </Text>
+              <View style={s.weekStatDivider} />
+              <View style={s.weekStatCell}>
+                <Text style={s.weekStatNumber}>{analytics.thisWeek.tasksCompleted}</Text>
+                <Text style={s.weekStatLabel}>TASKS{"\n"}COMPLETED</Text>
+              </View>
+              <View style={s.weekStatDivider} />
+              <View style={s.weekStatCell}>
+                <Text style={s.weekStatNumber}>{analytics.thisWeek.bestDayScore}%</Text>
+                <Text style={s.weekStatLabel}>BEST{"\n"}DAY</Text>
+              </View>
+            </View>
+          </Panel>
+        </Animated.View>
+
+        {/* ══════════════ SECTION 8: SKILL TREES ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(420).duration(400)}>
+          <Panel style={s.card} delay={420}>
+            <View style={s.skillHeader}>
+              <View style={s.skillHeaderLeft}>
+                <Text style={{ fontSize: 20 }}>{"\uD83C\uDF33"}</Text>
+                <View>
+                  <Text style={s.kicker}>SKILL TREES</Text>
+                  <Text style={s.skillSubtitle}>
+                    {readyToClaimCount > 0
+                      ? `${readyToClaimCount} node${readyToClaimCount > 1 ? "s" : ""} ready to claim`
+                      : "Earn mastery through performance"}
+                  </Text>
+                </View>
               </View>
             </View>
 
-            {/* 4 engine navigation rows — proper tap targets */}
-            <View style={styles.skillEngineList}>
+            <View style={s.skillEngineList}>
               {ENGINES.map((e) => {
                 const nodes = skillProgress[e] ?? [];
                 const claimed = nodes.filter((n) => n.status === "claimed").length;
                 const ready = nodes.filter((n) => n.status === "ready").length;
-                const total = nodes.length || SKILL_TREES[e]?.reduce((s, b) => s + b.nodes.length, 0) || 0;
+                const total = nodes.length || SKILL_TREES[e]?.reduce((acc, b) => acc + b.nodes.length, 0) || 0;
                 const pct = total > 0 ? (claimed / total) * 100 : 0;
                 return (
                   <Pressable
                     key={e}
-                    style={styles.skillEngineRow}
+                    style={s.skillEngineRow}
                     onPress={() => router.push(`/skill-tree/${e}`)}
                   >
-                    <View style={[styles.skillEngineDot, { backgroundColor: ENGINE_COLORS[e] }]} />
-                    <Text style={[styles.skillEngineName, { color: ENGINE_COLORS[e] }]}>
+                    <View style={[s.skillEngineDot, { backgroundColor: ENGINE_COLORS[e] }]} />
+                    <Text style={[s.skillEngineName, { color: ENGINE_COLORS[e] }]}>
                       {ENGINE_LABELS[e]}
                     </Text>
                     <View style={{ flex: 1 }}>
                       <TitanProgress value={pct} color={ENGINE_COLORS[e]} height={3} />
                     </View>
-                    <Text style={styles.skillEngineCount}>{claimed}/{total}</Text>
+                    <Text style={s.skillEngineCount}>{claimed}/{total}</Text>
                     {ready > 0 && (
-                      <View style={[styles.skillReadyBadge, { backgroundColor: ENGINE_COLORS[e] + "25", borderColor: ENGINE_COLORS[e] + "50" }]}>
-                        <Text style={[styles.skillReadyText, { color: ENGINE_COLORS[e] }]}>{ready}</Text>
+                      <View style={[s.skillReadyBadge, {
+                        backgroundColor: ENGINE_COLORS[e] + "25",
+                        borderColor: ENGINE_COLORS[e] + "50",
+                      }]}>
+                        <Text style={[s.skillReadyText, { color: ENGINE_COLORS[e] }]}>{ready}</Text>
                       </View>
                     )}
-                    <Text style={styles.expandArrow}>{"\u2192"}</Text>
+                    <Text style={s.chevron}>{"\u2192"}</Text>
                   </Pressable>
                 );
               })}
@@ -425,37 +504,28 @@ export default function HQScreen() {
           </Panel>
         </Animated.View>
 
-        {/* Card 4: Analytics */}
-        <Animated.View entering={FadeInDown.delay(320).duration(400)}>
-          <Pressable onPress={() => router.push("/hub/analytics")}>
-            <Panel style={styles.missionCard} delay={0}>
-              <View style={styles.missionCardRow}>
-                <View style={[styles.missionIcon, { backgroundColor: "rgba(96,165,250,0.15)" }]}>
-                  <Text style={{ fontSize: 20 }}>{"\uD83D\uDCCA"}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.missionCardKicker}>ANALYTICS</Text>
-                  <Text style={styles.missionCardTitle}>Deep dive into your data</Text>
-                </View>
-                <Text style={styles.expandArrow}>{"\u2192"}</Text>
+        {/* ══════════════ SECTION 9: WAR ROOM ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(480).duration(400)}>
+          <Panel
+            style={s.card}
+            delay={480}
+            onPress={() => router.push("/war-room")}
+          >
+            <View style={s.warRoomRow}>
+              <View style={s.warRoomIcon}>
+                <Text style={{ fontSize: 20 }}>{"\u2694\uFE0F"}</Text>
               </View>
-            </Panel>
-          </Pressable>
-        </Animated.View>
-
-        {/* ═══ STORY FEED ═══ */}
-        {latestNarrative && (
-          <Animated.View entering={FadeInDown.delay(400).duration(400)}>
-            <Pressable onPress={() => router.push("/narrative")}>
-              <View style={styles.storyCard}>
-                <Text style={styles.storyKicker}>STORY</Text>
-                <Text style={styles.storyText} numberOfLines={2}>
-                  {latestNarrative.text}
+              <View style={{ flex: 1 }}>
+                <Text style={s.kicker}>WAR ROOM</Text>
+                <Text style={s.warRoomTitle}>Operations Board</Text>
+                <Text style={s.mutedText}>
+                  Missions {"\u00B7"} Side Quests {"\u00B7"} Boss Challenge
                 </Text>
               </View>
-            </Pressable>
-          </Animated.View>
-        )}
+              <Text style={s.chevron}>{"\u2192"}</Text>
+            </View>
+          </Panel>
+        </Animated.View>
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -465,124 +535,453 @@ export default function HQScreen() {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: spacing.lg },
+const s = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  scroll: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 16,
+  },
 
-  // DEV ONLY
+  // ── DEV BAR ──
   devBar: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: spacing.lg, paddingVertical: spacing.xs,
-    backgroundColor: "rgba(248,113,113,0.1)", borderBottomWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    backgroundColor: "rgba(248,113,113,0.1)",
+    borderBottomWidth: 1,
     borderBottomColor: "rgba(248,113,113,0.2)",
   },
   devBtn: {
-    backgroundColor: "rgba(248,113,113,0.2)", borderRadius: 6,
-    paddingHorizontal: spacing.sm, paddingVertical: 4,
+    backgroundColor: "rgba(248,113,113,0.2)",
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  devBtnText: { fontSize: 10, fontWeight: "700", color: "#f87171", letterSpacing: 1 },
-  devDayText: { fontSize: 10, color: "#f87171", opacity: 0.7 },
-
-  // HUD
-  hud: { paddingTop: spacing.md, marginBottom: spacing.lg },
-  hudTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
-  hudIdentity: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  hudIcon: { fontSize: 32 },
-  hudName: { fontSize: 16, fontWeight: "700", color: colors.text, letterSpacing: 0.5 },
-  hudLevel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginTop: 2 },
-  hudStreak: { flexDirection: "row", alignItems: "center", gap: 4 },
-  streakFire: { fontSize: 18 },
-  streakCount: { ...fonts.mono, fontSize: 18, fontWeight: "800", color: colors.text },
-
-  // Chapter
-  chapterBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: radius.sm, borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: spacing.sm, paddingVertical: 4,
-    marginBottom: spacing.sm,
+  devBtnText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#f87171",
+    letterSpacing: 1,
   },
-  chapterText: { ...fonts.kicker, fontSize: 8, color: colors.textMuted, letterSpacing: 2 },
-
-  // Score
-  scoreRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginTop: spacing.md },
-  scoreLabel: { ...fonts.kicker, fontSize: 9, color: colors.textMuted },
-  scoreValue: { ...fonts.monoValue, fontSize: 36, color: colors.text },
-  rankBadge: {
-    width: 44, height: 44, borderRadius: 22, borderWidth: 2,
-    alignItems: "center", justifyContent: "center",
+  devDayText: {
+    fontSize: 10,
+    color: "#f87171",
+    opacity: 0.7,
   },
-  rankLetter: { fontSize: 20, fontWeight: "900" },
-  engineDots: { flex: 1, gap: 4 },
-  engineDot: { flexDirection: "row", alignItems: "center", gap: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  dotValue: { ...fonts.mono, fontSize: 10, color: colors.textMuted },
 
-  // Mission cards
-  missionCard: { marginBottom: 0 },
-  missionCardOuter: { marginBottom: 0 },
-  missionCardRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  missionCardKicker: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: 2 },
-  missionCardTitle: { fontSize: 16, fontWeight: "600", color: colors.text },
-  missionCardSub: { ...fonts.mono, fontSize: 11, color: colors.textSecondary, marginTop: 2 },
-  missionCardCheck: { fontSize: 28, color: colors.success, marginRight: spacing.xs },
-  missionIcon: {
-    width: 44, height: 44, borderRadius: radius.md,
-    alignItems: "center", justifyContent: "center",
+  // ── SHARED ──
+  card: {
+    marginBottom: 16,
   },
-  expandArrow: { fontSize: 14, color: colors.textMuted },
-
-  // Engine mini bars (in missions card)
-  engineMiniBar: { flexDirection: "row", gap: 6, marginTop: spacing.md },
-
-  // Expanded missions
-  missionsExpanded: { marginBottom: spacing.sm },
-
-  // Protocol card
-  protocolCard: {
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: radius.md, borderWidth: 1.5,
-    padding: spacing.lg, marginBottom: spacing.sm,
+  kicker: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(233,240,255,0.72)",
+    textTransform: "uppercase" as const,
+    letterSpacing: 2.5,
+    marginBottom: 6,
   },
-  protocolKicker: { ...fonts.kicker, fontSize: 9, color: colors.textMuted, marginBottom: spacing.sm },
-  protocolTitle: { fontSize: 22, fontWeight: "200", color: colors.text, marginBottom: spacing.xs },
-  protocolSub: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.lg },
-  protocolBtn: {
-    backgroundColor: colors.primary, borderRadius: radius.md,
-    paddingVertical: spacing.md, alignItems: "center",
+  mutedText: {
+    fontSize: 11,
+    color: "rgba(233,240,255,0.52)",
+    marginTop: 2,
   },
-  protocolBtnText: { ...fonts.kicker, fontSize: 12, color: "#000", letterSpacing: 2 },
+  chevron: {
+    fontSize: 14,
+    color: "rgba(233,240,255,0.52)",
+  },
 
-  // Skill tree engine list
-  skillEngineList: { marginTop: spacing.md, gap: spacing.sm },
+  // ══════════════ SECTION 1: CHARACTER HUD ══════════════
+  hudSection: {
+    paddingTop: 16,
+    paddingBottom: 20,
+  },
+  hudKicker: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(233,240,255,0.52)",
+    textTransform: "uppercase" as const,
+    letterSpacing: 2.5,
+    marginBottom: 8,
+  },
+  hudIdentityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 6,
+  },
+  hudArchetypeIcon: {
+    fontSize: 28,
+  },
+  hudArchetypeName: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "rgba(247,250,255,0.96)",
+    letterSpacing: 0.5,
+  },
+  hudMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 2,
+  },
+  hudMetaText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(233,240,255,0.72)",
+    letterSpacing: 1,
+  },
+  hudMetaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: "rgba(233,240,255,0.32)",
+  },
+  hudStreakText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(233,240,255,0.72)",
+    letterSpacing: 1,
+  },
+
+  // ══════════════ SECTION 2: TITAN SCORE HERO ══════════════
+  heroScore: {
+    fontSize: 48,
+    fontWeight: "200",
+    fontFamily: MONO,
+    color: "rgba(247,250,255,0.96)",
+    fontVariant: ["tabular-nums"] as any,
+    marginBottom: 2,
+  },
+  heroSub: {
+    fontSize: 11,
+    color: "rgba(233,240,255,0.52)",
+    marginBottom: 16,
+  },
+  engineBarsWrap: {
+    gap: 10,
+  },
+  engineBarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  engineColorDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  engineBarLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 1,
+    width: 70,
+    textTransform: "uppercase" as const,
+  },
+  engineBarTrack: {
+    flex: 1,
+  },
+  engineBarPct: {
+    fontSize: 11,
+    fontWeight: "600",
+    fontFamily: MONO,
+    color: "rgba(233,240,255,0.72)",
+    width: 32,
+    textAlign: "right",
+    fontVariant: ["tabular-nums"] as any,
+  },
+
+  // ══════════════ SECTION 3: RADAR ══════════════
+  radarWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+  },
+
+  // ══════════════ SECTION 4: PROTOCOL ══════════════
+  protocolDoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  protocolCheckMark: {
+    fontSize: 28,
+    color: "#5cc9a0",
+  },
+  protocolDoneTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "rgba(247,250,255,0.96)",
+    marginTop: 2,
+  },
+  protocolCardActive: {
+    backgroundColor: "rgba(0,0,0,0.97)",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 20,
+    marginBottom: 16,
+    overflow: "hidden",
+  },
+  protocolActiveTitle: {
+    fontSize: 22,
+    fontWeight: "200",
+    color: "rgba(247,250,255,0.96)",
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  protocolActiveSub: {
+    fontSize: 12,
+    color: "rgba(233,240,255,0.52)",
+    marginBottom: 20,
+  },
+  protocolCTA: {
+    backgroundColor: "rgba(247,250,255,0.96)",
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  protocolCTAText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#000000",
+    letterSpacing: 2,
+  },
+
+  // ══════════════ SECTION 5: ENGINE SPARKLINE GRID ══════════════
+  sparkGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 16,
+  },
+  sparkCard: {
+    backgroundColor: "rgba(0,0,0,0.97)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.11)",
+    padding: 14,
+    overflow: "hidden",
+  },
+  sparkCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginBottom: 8,
+  },
+  sparkEngineName: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 1,
+    textTransform: "uppercase" as const,
+  },
+  sparkScore: {
+    fontSize: 22,
+    fontWeight: "200",
+    fontFamily: MONO,
+    color: "rgba(247,250,255,0.96)",
+    fontVariant: ["tabular-nums"] as any,
+  },
+  sparkChartWrap: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(0,0,0,0.86)",
+    padding: 4,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  sparkCardFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  sparkFooterText: {
+    fontSize: 10,
+    color: "rgba(233,240,255,0.52)",
+  },
+  sparkFooterPts: {
+    fontSize: 10,
+    fontFamily: MONO,
+    color: "rgba(233,240,255,0.52)",
+    fontVariant: ["tabular-nums"] as any,
+  },
+  sparkEnterBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  sparkEnterText: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 2,
+  },
+
+  // ══════════════ SECTION 6: VS LAST WEEK ══════════════
+  vsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  vsCol: {
+    flex: 1,
+    alignItems: "center",
+  },
+  vsEngineName: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textTransform: "uppercase" as const,
+    marginBottom: 6,
+  },
+  vsArrowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    marginBottom: 4,
+  },
+  vsArrow: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  vsDiff: {
+    fontSize: 14,
+    fontWeight: "600",
+    fontFamily: MONO,
+    fontVariant: ["tabular-nums"] as any,
+  },
+  vsComparison: {
+    fontSize: 9,
+    color: "rgba(233,240,255,0.42)",
+    fontFamily: MONO,
+    fontVariant: ["tabular-nums"] as any,
+  },
+
+  // ══════════════ SECTION 7: THIS WEEK STATS ══════════════
+  weekStatsRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  weekStatCell: {
+    flex: 1,
+    alignItems: "center",
+  },
+  weekStatNumber: {
+    fontSize: 28,
+    fontWeight: "200",
+    fontFamily: MONO,
+    color: "rgba(247,250,255,0.96)",
+    fontVariant: ["tabular-nums"] as any,
+    marginBottom: 4,
+  },
+  weekStatLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "rgba(233,240,255,0.52)",
+    textTransform: "uppercase" as const,
+    letterSpacing: 1.5,
+    textAlign: "center",
+    lineHeight: 13,
+  },
+  weekStatDivider: {
+    width: 1,
+    height: 48,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    marginTop: 4,
+  },
+
+  // ══════════════ SECTION 8: SKILL TREES ══════════════
+  skillHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  skillHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  skillSubtitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "rgba(247,250,255,0.96)",
+    marginTop: 2,
+  },
+  skillEngineList: {
+    gap: 8,
+  },
   skillEngineRow: {
-    flexDirection: "row", alignItems: "center", gap: spacing.sm,
-    paddingVertical: spacing.sm, paddingHorizontal: spacing.xs,
-    borderRadius: radius.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 8,
     minHeight: 40,
   },
-  skillEngineDot: { width: 8, height: 8, borderRadius: 4 },
-  skillEngineName: { ...fonts.kicker, fontSize: 9, width: 60, letterSpacing: 1 },
-  skillEngineCount: { ...fonts.mono, fontSize: 11, color: colors.textMuted, width: 36, textAlign: "right" },
+  skillEngineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  skillEngineName: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1,
+    width: 60,
+    textTransform: "uppercase" as const,
+  },
+  skillEngineCount: {
+    fontSize: 11,
+    fontWeight: "600",
+    fontFamily: MONO,
+    color: "rgba(233,240,255,0.52)",
+    width: 36,
+    textAlign: "right",
+    fontVariant: ["tabular-nums"] as any,
+  },
   skillReadyBadge: {
-    borderRadius: 10, borderWidth: 1,
-    paddingHorizontal: 6, paddingVertical: 2, marginLeft: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 2,
   },
-  skillReadyText: { ...fonts.mono, fontSize: 9, fontWeight: "700" },
-
-  // Story feed
-  storyCard: {
-    marginTop: spacing.sm,
-    backgroundColor: "rgba(255,255,255,0.02)",
-    borderRadius: radius.md, borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.06)",
-    padding: spacing.md,
+  skillReadyText: {
+    fontSize: 9,
+    fontWeight: "700",
+    fontFamily: MONO,
   },
-  storyKicker: { ...fonts.kicker, fontSize: 8, color: colors.textMuted, marginBottom: spacing.xs, letterSpacing: 2 },
-  storyText: { fontSize: 13, color: colors.textSecondary, lineHeight: 18, fontStyle: "italic" },
 
-  // Empty
-  emptyText: { fontSize: 13, color: colors.textMuted, textAlign: "center", paddingVertical: spacing.xl },
+  // ══════════════ SECTION 9: WAR ROOM ══════════════
+  warRoomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  warRoomIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "rgba(248,113,113,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  warRoomTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "rgba(247,250,255,0.96)",
+    marginTop: 2,
+  },
 });
