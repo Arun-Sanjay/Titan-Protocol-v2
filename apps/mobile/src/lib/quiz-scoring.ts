@@ -4,7 +4,7 @@
  * Normal answer: +3 to its engine.
  * Titan answer: +2 to its engine + +2 hidden Titan points.
  *
- * If titanPoints >= 8 → "titan"
+ * If titanPoints >= 10 (5+ Titan answers) → "titan"
  * Otherwise → map by dominant engine(s)
  */
 
@@ -36,8 +36,8 @@ export function scoreQuiz(answers: number[]): QuizResult {
     }
   }
 
-  // Titan: 4+ titan answers (8+ points) OR all engines within 3 points
-  if (titanPoints >= 8) {
+  // Titan: 5+ titan answers (10+ points) OR all engines within 3 points
+  if (titanPoints >= 10) {
     return { archetype: "titan", scores, titanPoints };
   }
 
@@ -45,7 +45,7 @@ export function scoreQuiz(answers: number[]): QuizResult {
   const values = Object.values(scores);
   const max = Math.max(...values);
   const min = Math.min(...values);
-  if (max - min <= 3 && titanPoints < 8) {
+  if (max - min <= 3 && titanPoints < 10) {
     return { archetype: "titan", scores, titanPoints };
   }
 

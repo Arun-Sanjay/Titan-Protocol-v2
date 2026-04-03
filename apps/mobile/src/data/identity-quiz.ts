@@ -1,8 +1,10 @@
 /**
- * Identity Quiz — 7 questions, 4 options each.
- * Each option maps to an engine. One option per question is the hidden Titan answer.
+ * Identity Quiz — 7 redesigned questions, 4 options each.
+ * Scenario-based projection, value conflicts, no obvious "right" answers.
+ *
  * Normal answer: +3 to its engine.
  * Titan answer: +2 to its engine + +2 hidden Titan points.
+ * Titan threshold: 5+ Titan answers (10+ points) → The Titan.
  */
 
 import type { EngineKey } from "../db/schema";
@@ -19,67 +21,80 @@ export type QuizQuestion = {
 };
 
 export const QUIZ_QUESTIONS: QuizQuestion[] = [
+  // Q1 — Wound question (Titan at position B)
   {
-    question: "What would hurt your ego the most?",
+    question: "You find out someone has been talking behind your back. What bothers you most?",
     options: [
-      { text: "Someone calling you stupid or clueless", engine: "mind", isTitan: false },
-      { text: "Someone saying \"you're not as good as you think you are\"", engine: "charisma", isTitan: true },
-      { text: "Someone calling you broke or going nowhere", engine: "money", isTitan: false },
-      { text: "Someone calling you lazy or out of shape", engine: "body", isTitan: false },
+      { text: "That they think I'm not smart enough", engine: "mind", isTitan: false },
+      { text: "That they don't take me seriously", engine: "charisma", isTitan: true },
+      { text: "That they think I'll never make it", engine: "money", isTitan: false },
+      { text: "That they think I'm weak", engine: "body", isTitan: false },
     ],
   },
+
+  // Q2 — Projective freedom (Titan at position C)
   {
-    question: "You're about to give up on something hard. What keeps you going?",
+    question: "You're given one year off with all expenses paid. No obligations. What do you actually do?",
     options: [
-      { text: "The payoff is too big to walk away from.", engine: "money", isTitan: false },
-      { text: "My body can handle more than my mind thinks.", engine: "body", isTitan: false },
-      { text: "Quitting this means settling. I don't settle.", engine: "body", isTitan: true },
-      { text: "I haven't figured it out yet. There's always a solution.", engine: "mind", isTitan: false },
+      { text: "Train like a professional athlete \u2014 finally no excuses", engine: "body", isTitan: false },
+      { text: "Build a business or investment portfolio \u2014 free time is an opportunity", engine: "money", isTitan: false },
+      { text: "Reinvent myself completely \u2014 new skills, new habits, come back unrecognizable", engine: "mind", isTitan: true },
+      { text: "Travel and meet as many interesting people as possible \u2014 build a global network", engine: "charisma", isTitan: false },
     ],
   },
+
+  // Q3 — Moral dilemma (Titan at position D)
   {
-    question: "Pick the superpower:",
+    question: "Two close friends ask for your help on the same night. One needs advice on a personal crisis. The other needs help on a project with a tight deadline. You can only help one.",
     options: [
-      { text: "Remember everything you've ever read or heard.", engine: "mind", isTitan: false },
-      { text: "Every business idea you touch succeeds.", engine: "money", isTitan: false },
-      { text: "Never get tired. Unlimited physical energy.", engine: "body", isTitan: false },
-      { text: "Learn anything to an expert level in one month.", engine: "mind", isTitan: true },
+      { text: "The personal crisis \u2014 people always come first", engine: "charisma", isTitan: false },
+      { text: "The personal crisis \u2014 but I'd find a way to send useful resources to the other", engine: "mind", isTitan: false },
+      { text: "The project \u2014 deadlines are real and I can help the other friend tomorrow", engine: "money", isTitan: false },
+      { text: "Whichever situation I can make a bigger impact on", engine: "money", isTitan: true },
     ],
   },
+
+  // Q4 — Talent discovery (Titan at position B)
   {
-    question: "What's your biggest flex?",
+    question: "You discover you're naturally talented at something you've never tried before. What matters most to you about that?",
     options: [
-      { text: "What I've built or earned", engine: "money", isTitan: false },
-      { text: "How far I've come from where I started", engine: "money", isTitan: true },
-      { text: "What my body can do", engine: "body", isTitan: false },
-      { text: "What I know that others don't", engine: "mind", isTitan: false },
+      { text: "Understanding WHY I'm good at it \u2014 what's the underlying principle?", engine: "mind", isTitan: false },
+      { text: "How good I can actually get if I go all in", engine: "body", isTitan: true },
+      { text: "How quickly I can turn this talent into income or opportunity", engine: "money", isTitan: false },
+      { text: "How I can use it to stand out or impress people", engine: "charisma", isTitan: false },
     ],
   },
+
+  // Q5 — Fear/failure (Titan at position C)
   {
-    question: "You're watching a movie. Which character do you root for?",
+    question: "What kind of failure would keep you up at night?",
     options: [
-      { text: "The genius who sees what nobody else sees", engine: "mind", isTitan: false },
-      { text: "The one who started broke and built an empire", engine: "money", isTitan: false },
-      { text: "The one everyone underestimated who proved them all wrong", engine: "charisma", isTitan: true },
-      { text: "The underdog who outworks everyone physically", engine: "body", isTitan: false },
+      { text: "Letting myself go physically \u2014 looking in the mirror and not recognizing the discipline I used to have", engine: "body", isTitan: false },
+      { text: "Choking in a moment that mattered \u2014 freezing when people were watching", engine: "charisma", isTitan: false },
+      { text: "Knowing I had potential and wasted it \u2014 looking back at a life of \"almost\"", engine: "mind", isTitan: true },
+      { text: "Losing money I worked hard to earn \u2014 or watching an investment fail", engine: "money", isTitan: false },
     ],
   },
+
+  // Q6 — Teaching philosophy (Titan at position A)
   {
-    question: "Finish this sentence: \"I respect people who...\"",
+    question: "A kid asks you: \"How do I become great at something?\" What do you tell them?",
     options: [
-      { text: "...push their body past what seems possible.", engine: "body", isTitan: false },
-      { text: "...are just built different. Whatever they touch, they figure out.", engine: "body", isTitan: true },
-      { text: "...turned nothing into something real.", engine: "money", isTitan: false },
-      { text: "...know more than everyone and never stop learning.", engine: "mind", isTitan: false },
+      { text: "Don't just get good \u2014 get so good that people can't ignore you.", engine: "charisma", isTitan: true },
+      { text: "Study the best. Learn everything about it. Knowledge is the shortcut.", engine: "mind", isTitan: false },
+      { text: "Find a way to get paid for it. If you can make money doing it, you'll never stop.", engine: "money", isTitan: false },
+      { text: "Show up every day. Even when you don't want to. Your body and habits will carry you.", engine: "body", isTitan: false },
     ],
   },
+
+  // Q7 — Regret/advice (Titan at position D)
   {
-    question: "One year from now, what would make you proudest?",
+    question: "You can go back 5 years and give yourself one piece of advice. What is it?",
     options: [
-      { text: "Being in the best shape of my life.", engine: "body", isTitan: false },
-      { text: "Having real financial momentum or a thriving project.", engine: "money", isTitan: false },
-      { text: "Being someone I wouldn't have recognized a year ago.", engine: "mind", isTitan: true },
-      { text: "Being genuinely sharper and more knowledgeable.", engine: "mind", isTitan: false },
+      { text: "Take care of your body now. It's harder to fix later.", engine: "body", isTitan: false },
+      { text: "Read more. The answers to most of your problems are already written somewhere.", engine: "mind", isTitan: false },
+      { text: "Start investing earlier. Every dollar you didn't save is compounding you'll never get back.", engine: "money", isTitan: false },
+      { text: "Start before you're ready. The people who win aren't smarter \u2014 they just started.", engine: "money", isTitan: true },
     ],
   },
 ];

@@ -661,6 +661,7 @@ const ExercisePicker = React.memo(function ExercisePicker({
         data={groups}
         horizontal
         showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled
         keyExtractor={(item) => item}
         style={s.groupTabs}
         renderItem={({ item }) => (
@@ -1514,6 +1515,7 @@ export default function WorkoutsScreen() {
                         data={MUSCLE_GROUPS}
                         horizontal
                         showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled
                         keyExtractor={(item) => item}
                         style={s.chipScroll}
                         renderItem={({ item: mg }) => (
@@ -1541,6 +1543,7 @@ export default function WorkoutsScreen() {
                         data={EQUIPMENT_LIST}
                         horizontal
                         showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled
                         keyExtractor={(item) => item}
                         style={s.chipScroll}
                         renderItem={({ item: eq }) => (

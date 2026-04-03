@@ -303,11 +303,22 @@ const settingStyles = StyleSheet.create({
 export default function FocusTimerScreen() {
   const router = useRouter();
 
-  // AppState refresh
+  // AppState refresh + timer resume on foreground
   const [appActive, setAppActive] = useState(0);
+  const endTimeRef = useRef<number | null>(null);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") setAppActive((c) => c + 1);
+      if (state === "active") {
+        setAppActive((c) => c + 1);
+        // Resume timer: recalculate secondsLeft from stored endTime
+        if (endTimeRef.current && endTimeRef.current > Date.now()) {
+          const remaining = Math.ceil((endTimeRef.current - Date.now()) / 1000);
+          setSecondsLeft(Math.max(0, remaining));
+        } else if (endTimeRef.current && endTimeRef.current <= Date.now()) {
+          // Timer expired while in background
+          setSecondsLeft(0);
+        }
+      }
     });
     return () => sub.remove();
   }, []);
@@ -382,16 +393,21 @@ export default function FocusTimerScreen() {
   // Stable interval — only start/stop on running change
   useEffect(() => {
     if (running) {
+      // Store the end timestamp so we can resume after backgrounding
+      endTimeRef.current = Date.now() + secondsLeft * 1000;
       intervalRef.current = setInterval(() => {
         setSecondsLeft((s) => {
           if (s <= 1) {
             clearInterval(intervalRef.current!);
             intervalRef.current = null;
+            endTimeRef.current = null;
             return 0;
           }
           return s - 1;
         });
       }, 1000);
+    } else {
+      endTimeRef.current = null;
     }
     return () => {
       if (intervalRef.current) {

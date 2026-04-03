@@ -193,8 +193,14 @@ export const useSkillTreeStore = create<SkillTreeState>()((set, get) => ({
 
   initializeTree: (engine, nodes) => {
     const { unlockedNodes, progress } = get();
-    // Skip if already initialized with nodes for this engine
-    if (progress[engine] && progress[engine].length > 0) return;
+    // Re-initialize if existing progress has stale nodeIds (from old SKILL_TREES)
+    const existing = progress[engine] ?? [];
+    if (existing.length > 0) {
+      const newIds = new Set(nodes.map((n) => n.nodeId));
+      const allMatch = existing.every((e) => newIds.has(e.nodeId));
+      if (allMatch) return; // Already initialized with correct nodeIds
+      // Stale data — reinitialize
+    }
 
     const engineProgress: SkillNodeProgress[] = nodes.map((n) => ({
       nodeId: n.nodeId,

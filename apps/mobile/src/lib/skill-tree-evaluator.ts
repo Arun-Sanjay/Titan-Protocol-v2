@@ -204,7 +204,28 @@ function checkRequirement(def: LevelDef): boolean {
 // ─── Individual Checkers ────────────────────────────────────────────────────
 
 function checkStreakDays(target: number): boolean {
-  const streak = useProtocolStore.getState().streakCurrent;
+  // Count consecutive days (ending today) with ANY task completion across all engines
+  const today = getTodayKey();
+  let streak = 0;
+  for (let i = 0; i < 365; i++) {
+    const dk = addDays(today, -i);
+    let dayHasCompletion = false;
+    const allKeys = storage.getAllKeys() as string[];
+    for (const key of allKeys) {
+      if (key.startsWith("completions:") && key.endsWith(`:${dk}`)) {
+        const ids = getJSON<number[]>(key, []);
+        if (ids.length > 0) {
+          dayHasCompletion = true;
+          break;
+        }
+      }
+    }
+    if (dayHasCompletion) {
+      streak++;
+    } else {
+      break; // streak broken
+    }
+  }
   return streak >= target;
 }
 
