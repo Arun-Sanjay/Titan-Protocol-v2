@@ -29,7 +29,7 @@ export function Day2Cinematic({ onComplete }: Props) {
     [userName],
   );
 
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleNarrationComplete = useCallback(() => {
     timerRef.current = setTimeout(() => setPhase("operation"), 1200);
   }, []);

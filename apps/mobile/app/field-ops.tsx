@@ -9,45 +9,45 @@ import { useFieldOpStore } from "../src/stores/useFieldOpStore";
 import { useRankStore } from "../src/stores/useRankStore";
 import { OpsBanner } from "../src/components/ui/OpsBanner";
 import { OpsCard } from "../src/components/ui/OpsCard";
-import { getFieldOpDef } from "../src/lib/field-ops";
-import { RANK_ORDER } from "../src/lib/ranks-v2";
+import { getFieldOpDef, isOnCooldown, type FieldOpDef } from "../src/lib/field-ops";
+import fieldOpDefs from "../src/data/field-ops.json";
+import { RANK_ORDER, type Rank } from "../src/lib/ranks-v2";
 
 export default function FieldOpsScreen() {
   const router = useRouter();
   const fieldOpStore = useFieldOpStore();
   const rankStore = useRankStore();
 
-  const activeFieldOp = fieldOpStore.active;
+  const activeFieldOp = fieldOpStore.activeFieldOp;
   const activeDef = activeFieldOp ? getFieldOpDef(activeFieldOp.fieldOpId) : null;
 
-  const currentRankIndex = RANK_ORDER.indexOf(rankStore.currentRank);
+  const currentRankIndex = RANK_ORDER.indexOf(rankStore.rank);
 
   const availableFieldOps = useMemo(() => {
-    const allDefs = fieldOpStore.getAllDefs();
+    const allDefs: FieldOpDef[] = fieldOpStore.getAvailable(rankStore.rank);
 
     return allDefs
-      .filter((def) => {
+      .filter((def: FieldOpDef) => {
         if (activeFieldOp && def.id === activeFieldOp.fieldOpId) return false;
-        const minRankIndex = RANK_ORDER.indexOf(def.minRank);
+        const minRankIndex = RANK_ORDER.indexOf(def.minRank as Rank);
         if (minRankIndex > currentRankIndex) return false;
-        if (fieldOpStore.isOnCooldown(def.id)) return false;
+        if (isOnCooldown()) return false;
         return true;
       })
-      .sort((a, b) => {
-        const rankDiff = RANK_ORDER.indexOf(a.minRank) - RANK_ORDER.indexOf(b.minRank);
+      .sort((a: FieldOpDef, b: FieldOpDef) => {
+        const rankDiff = RANK_ORDER.indexOf(a.minRank as Rank) - RANK_ORDER.indexOf(b.minRank as Rank);
         if (rankDiff !== 0) return rankDiff;
         return a.durationDays - b.durationDays;
       });
-  }, [fieldOpStore, activeFieldOp, currentRankIndex]);
+  }, [fieldOpStore, rankStore.rank, activeFieldOp, currentRankIndex]);
 
   const lockedFieldOps = useMemo(() => {
-    const allDefs = fieldOpStore.getAllDefs();
-    return allDefs.filter((def) => {
+    return (fieldOpDefs as FieldOpDef[]).filter((def: FieldOpDef) => {
       if (activeFieldOp && def.id === activeFieldOp.fieldOpId) return false;
-      const minRankIndex = RANK_ORDER.indexOf(def.minRank);
+      const minRankIndex = RANK_ORDER.indexOf(def.minRank as Rank);
       return minRankIndex > currentRankIndex;
     });
-  }, [fieldOpStore, activeFieldOp, currentRankIndex]);
+  }, [activeFieldOp, currentRankIndex]);
 
   const handleAbandon = () => {
     Alert.alert(
@@ -186,14 +186,14 @@ export default function FieldOpsScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing["2xl"],
   },
   header: {
     flexDirection: "row",
@@ -202,15 +202,15 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.mono.fontFamily,
     fontSize: 13,
     color: colors.textSecondary,
     letterSpacing: 0.8,
   },
   pageTitle: {
-    fontFamily: fonts.bold,
-    fontSize: 18,
-    color: colors.textPrimary,
+    fontSize: fonts.title.fontSize,
+    fontWeight: fonts.title.fontWeight,
+    color: colors.text,
     letterSpacing: 2,
     textTransform: "uppercase",
   },
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   sectionTitle: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.mono.fontFamily,
     fontSize: 11,
     color: colors.textMuted,
     letterSpacing: 1.5,
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   abandonText: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.mono.fontFamily,
     fontSize: 11,
     color: "#ef4444",
     letterSpacing: 1.2,
@@ -253,8 +253,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   emptyText: {
-    fontFamily: fonts.regular,
-    fontSize: 13,
+    fontSize: fonts.body.fontSize,
+    fontWeight: fonts.body.fontWeight,
     color: colors.textMuted,
     textAlign: "center",
     paddingVertical: spacing.xl,

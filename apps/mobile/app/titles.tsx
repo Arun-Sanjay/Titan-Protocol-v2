@@ -67,14 +67,14 @@ export default function TitlesScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing["2xl"],
   },
   header: {
     flexDirection: "row",
@@ -83,20 +83,20 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.mono.fontFamily,
     fontSize: 13,
     color: colors.textSecondary,
     letterSpacing: 0.8,
   },
   pageTitle: {
-    fontFamily: fonts.bold,
+    fontWeight: fonts.title.fontWeight,
     fontSize: 18,
-    color: colors.textPrimary,
+    color: colors.text,
     letterSpacing: 2,
     textTransform: "uppercase",
   },
   earnedCount: {
-    fontFamily: fonts.mono,
+    fontFamily: fonts.mono.fontFamily,
     fontSize: 11,
     color: colors.textMuted,
     letterSpacing: 0.8,

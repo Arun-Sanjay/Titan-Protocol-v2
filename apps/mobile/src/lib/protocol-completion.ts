@@ -62,6 +62,16 @@ export type ProtocolCompletionResult = {
   titanUnlocked: boolean;
   momentumMultiplier: number;
   momentumBonusXP: number;
+  statMilestones: Array<{ engine: import("../db/schema").EngineKey; milestone: number }>;
+  rankResult: {
+    promoted: boolean;
+    newRank?: import("./ranks-v2").Rank;
+    warning: boolean;
+    demoted: boolean;
+    demotedTo?: import("./ranks-v2").Rank;
+  };
+  fieldOpResult: string | null;
+  titlesUnlocked: Array<{ id: string; name: string; rarity: string }>;
 };
 
 export function handleProtocolCompletion(protocolScore: number, xpEarned: number): ProtocolCompletionResult {
@@ -418,6 +428,27 @@ export function handleProtocolCompletion(protocolScore: number, xpEarned: number
   if (activeOp) {
     const opEval = useFieldOpStore.getState().evaluateDay(engineScores, titanScore);
     fieldOpResult = opEval;
+
+    // If field op just completed, finalize it: award XP, apply stat bonus
+    if (opEval === "completed") {
+      const completedDef = useFieldOpStore.getState().complete();
+      if (completedDef) {
+        // Award field op XP reward
+        useProfileStore.getState().awardXP(today, "field_op", completedDef.xpReward);
+
+        // Apply stat bonus (split evenly across all 4 engines)
+        if (completedDef.statBonus > 0) {
+          const bonusPerEngine = completedDef.statBonus / 4;
+          const currentStats = useStatStore.getState().stats;
+          for (const eng of ENGINES) {
+            const key = eng as import("../db/schema").EngineKey;
+            setJSON(`stat:${key}`, (currentStats[key] ?? 0) + bonusPerEngine);
+          }
+          // Reload stat store to reflect changes
+          useStatStore.getState().load(today);
+        }
+      }
+    }
   }
 
   // 18. Check titles

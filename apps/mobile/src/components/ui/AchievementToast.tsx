@@ -51,7 +51,7 @@ function AchievementToastInner({
 }) {
   const translateY = useSharedValue(-120);
   const opacity = useSharedValue(0);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const borderColor = RARITY_COLORS[achievement.rarity];
 
   useEffect(() => {

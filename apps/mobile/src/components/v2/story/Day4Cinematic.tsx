@@ -12,7 +12,7 @@ export function Day4Cinematic({ onComplete }: Props) {
   const userName = useStoryStore((s) => s.userName) || "RECRUIT";
   const markPlayed = useStoryStore((s) => s.markCinematicPlayed);
   const [phase, setPhase] = useState<"speech" | "operation">("speech");
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const narrationLines: NarrationLine[] = useMemo(
     () => [
