@@ -33,9 +33,13 @@ import { Day365Cinematic } from "../src/components/v2/story/Day365Cinematic";
 import { getStoryForDay, addEntry } from "../src/lib/narrative-engine";
 import { useIdentityStore } from "../src/stores/useIdentityStore";
 import { useStoryStore } from "../src/stores/useStoryStore";
+import { useProtocolStore } from "../src/stores/useProtocolStore";
 import { getJSON } from "../src/db/storage";
 import { getDayNumber } from "../src/data/chapters";
 import { getTodayKey } from "../src/lib/date";
+import { AchievementToast } from "../src/components/ui/AchievementToast";
+import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider";
+import type { TransmissionContext } from "../src/lib/transmissions";
 
 import "../src/db/database";
 
@@ -65,6 +69,15 @@ export default function RootLayout() {
   const archetype = useIdentityStore((s) => s.archetype);
   const getCinematicForDay = useStoryStore((s) => s.getCinematicForDay);
   const storyFlags = useStoryStore((s) => s.storyFlags);
+  const userName = useStoryStore((s) => s.userName);
+  const streakCurrent = useProtocolStore((s) => s.streakCurrent);
+
+  // Build context for transmission splash
+  const transmissionCtx: TransmissionContext = {
+    name: userName || undefined,
+    dayNumber: getDayNumber(getJSON<string | null>("first_active_date", null)),
+    streak: streakCurrent,
+  };
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(colors.bg);
@@ -128,6 +141,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
+      <SystemWindowProvider>
       <SystemNotificationProvider>
       <StatusBar style="light" backgroundColor={colors.bg} />
       <Stack
@@ -154,19 +168,31 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="skill-tree/[engine]"
-          options={{
-            animation: "slide_from_right",
-          }}
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="status"
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="field-ops"
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen
+          name="titles"
+          options={{ animation: "slide_from_right" }}
         />
       </Stack>
 
       {/* Overlays — order matters (last = on top) */}
-      {showSplash && <MotivationalSplash onDismiss={() => setShowSplash(false)} />}
+      <AchievementToast />
+      {showSplash && <MotivationalSplash onDismiss={() => setShowSplash(false)} context={transmissionCtx} />}
       {!showSplash && !onboardingCompleted && <OnboardingShell />}
       {showCinematic && <FirstLaunchCinematic onComplete={handleCinematicComplete} />}
       {DayCinematicComponent && <DayCinematicComponent onComplete={handleDayCinematicComplete} />}
       {showBriefing && <DailyBriefing onEnter={handleBriefingEnter} />}
       </SystemNotificationProvider>
+      </SystemWindowProvider>
     </GestureHandlerRootView>
   );
 }

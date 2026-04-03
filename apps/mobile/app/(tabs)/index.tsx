@@ -28,6 +28,8 @@ import { SparklineChart } from "../../src/components/ui/SparklineChart";
 import { useAnalyticsData } from "../../src/hooks/useAnalyticsData";
 import { useEngineStore, selectAllTasksForDate, ENGINES, type TaskWithStatus } from "../../src/stores/useEngineStore";
 import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
+import { getMomentum, getMomentumColor } from "../../src/lib/momentum";
+import { loadIntegrity, getIntegrityColor } from "../../src/lib/protocol-integrity";
 import { useModeStore, IDENTITY_LABELS } from "../../src/stores/useModeStore";
 import { useProtocolStore } from "../../src/stores/useProtocolStore";
 import { useSkillTreeStore, SKILL_TREES } from "../../src/stores/useSkillTreeStore";
@@ -89,6 +91,9 @@ export default function HQScreen() {
   const loadProfile = useProfileStore((s) => s.load);
   const awardXP = useProfileStore((s) => s.awardXP);
   const updateStreak = useProfileStore((s) => s.updateStreak);
+
+  // Game systems
+  const protocolStreak = useProtocolStore((s) => s.streakCurrent);
 
   const identity = useModeStore((s) => s.identity);
   const archetype = useIdentityStore((s) => s.archetype);
@@ -276,8 +281,31 @@ export default function HQScreen() {
           <View style={s.hudMetaRow}>
             <Text style={s.hudMetaText}>LVL {profileLevel}</Text>
             <View style={s.hudMetaDot} />
-            <Text style={s.hudStreakText}>{"\uD83D\uDD25"} {profileStreak}</Text>
+            <Text style={[s.hudStreakText, { color: getIntegrityColor(loadIntegrity().level) }]}>
+              {"\uD83D\uDD25"} {protocolStreak} {"\u00B7"} {loadIntegrity().level}
+            </Text>
+            {getMomentum(protocolStreak).multiplier > 1 && (
+              <>
+                <View style={s.hudMetaDot} />
+                <Text style={[s.hudMetaText, { color: getMomentumColor(getMomentum(protocolStreak).tier) }]}>
+                  {getMomentum(protocolStreak).multiplier}x
+                </Text>
+              </>
+            )}
           </View>
+        </Animated.View>
+
+        {/* ══════════════ PLAYER HUD ROW ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(20).duration(400)} style={s.playerHudRow}>
+          <Pressable style={s.statusBtn} onPress={() => router.push("/status")}>
+            <Text style={s.statusBtnText}>STATUS</Text>
+          </Pressable>
+          <Pressable style={s.statusBtn} onPress={() => router.push("/field-ops")}>
+            <Text style={s.statusBtnText}>FIELD OPS</Text>
+          </Pressable>
+          <Pressable style={s.statusBtn} onPress={() => router.push("/titles")}>
+            <Text style={s.statusBtnText}>TITLES</Text>
+          </Pressable>
         </Animated.View>
 
         {/* ══════════════ SYSTEM VOICE ══════════════ */}
@@ -689,6 +717,29 @@ const s = StyleSheet.create({
     fontWeight: "600",
     color: "rgba(233,240,255,0.72)",
     letterSpacing: 1,
+  },
+
+  // ══════════════ PLAYER HUD ROW ══════════════
+  playerHudRow: {
+    flexDirection: "row" as const,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  statusBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    borderRadius: radius.sm,
+    paddingVertical: 8,
+    alignItems: "center" as const,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  statusBtnText: {
+    fontFamily: MONO,
+    fontSize: 9,
+    fontWeight: "700" as const,
+    color: colors.textMuted,
+    letterSpacing: 2,
   },
 
   // ══════════════ SECTION 2: TITAN SCORE HERO ══════════════

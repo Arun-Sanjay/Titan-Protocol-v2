@@ -3,7 +3,7 @@
  * After Chapter 6: "Endgame" with harder targets.
  */
 
-import { getJSON } from "../db/storage";
+import { getJSON, setJSON } from "../db/storage";
 
 export type Chapter = {
   number: number;
@@ -104,8 +104,10 @@ export function getCurrentChapter(dayNumber: number): Chapter {
 }
 
 /**
- * Get day number from first active date.
+ * Get day number from first active date (device local time).
  * Includes dev_day_offset for testing (DEV skip-day button).
+ * Anti-regression: clamps to never go below the highest day previously reached
+ * (prevents device clock manipulation from regressing progress).
  */
 export function getDayNumber(firstActiveDate: string | null): number {
   if (!firstActiveDate) return 1;
@@ -116,5 +118,13 @@ export function getDayNumber(firstActiveDate: string | null): number {
 
   // Add dev offset for testing (DEV skip-day button)
   const offset = getJSON<number>("dev_day_offset", 0);
-  return realDay + offset;
+  const calculatedDay = realDay + offset;
+
+  // Anti-regression clamp: never go below highest day reached
+  const maxReached = getJSON<number>("max_day_reached", 0);
+  const finalDay = Math.max(calculatedDay, maxReached);
+  if (finalDay > maxReached) {
+    setJSON("max_day_reached", finalDay);
+  }
+  return finalDay;
 }

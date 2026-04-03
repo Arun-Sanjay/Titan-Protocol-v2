@@ -178,7 +178,6 @@ export const useStoryStore = create<StoryState>()((set, get) => {
         6: { flag: "day6_played", component: "Day6Cinematic" },
         7: { flag: "day7_played", component: "Day7Cinematic" },
         14: { flag: "day14_played", component: "Day14Cinematic" },
-        21: { flag: "day21_played", component: "Day21Cinematic" },
         30: { flag: "day30_played", component: "Day30Cinematic" },
         45: { flag: "day45_played", component: "Day45Cinematic" },
         60: { flag: "day60_played", component: "Day60Cinematic" },

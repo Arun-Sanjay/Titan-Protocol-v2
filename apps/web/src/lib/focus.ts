@@ -1,5 +1,5 @@
 import { db, type FocusSettings, type FocusDaily } from "./db";
-import { assertDateISO, todayISO } from "./date";
+import { assertDateISO } from "./date";
 
 // ---- defaults ----
 const DEFAULT_SETTINGS: FocusSettings = {
@@ -58,16 +58,17 @@ export async function incrementFocusSessions(
 
 export async function getFocusWeekSessions(): Promise<number> {
   const today = new Date();
-  let total = 0;
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 6);
+  const fmt = (d: Date) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
-    const key = `${y}-${m}-${day}`;
-    const rec = await db.focus_daily.get(key);
-    if (rec) total += rec.completedSessions;
-  }
-  return total;
+    return `${y}-${m}-${day}`;
+  };
+  const records = await db.focus_daily
+    .where("dateKey")
+    .between(fmt(weekAgo), fmt(today), true, true)
+    .toArray();
+  return records.reduce((sum, rec) => sum + rec.completedSessions, 0);
 }

@@ -45,6 +45,7 @@ export type ProtocolSession = {
 const SESSIONS_KEY = "protocol_sessions";
 const STREAK_KEY = "protocol_streak";
 const STREAK_DATE_KEY = "protocol_streak_date";
+const STREAK_PREV_KEY = "protocol_streak_previous";
 
 // ─── Morning / Evening MMKV keys ─────────────────────────────────────────────
 
@@ -78,6 +79,7 @@ type ProtocolState = {
   phaseResults: PhaseResult[];
   // Streak
   streakCurrent: number;
+  streakPrevious: number;
   streakLastDate: string | null;
   todayCompleted: boolean;
 
@@ -112,6 +114,7 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
   currentPhase: null,
   phaseResults: [],
   streakCurrent: getJSON<number>(STREAK_KEY, 0),
+  streakPrevious: getJSON<number>(STREAK_PREV_KEY, 0),
   streakLastDate: getJSON<string | null>(STREAK_DATE_KEY, null),
   todayCompleted: false,
 
@@ -124,6 +127,7 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
   load: () => {
     const sessions = getJSON<Record<string, ProtocolSession>>(SESSIONS_KEY, {});
     const streakCurrent = getJSON<number>(STREAK_KEY, 0);
+    const streakPrevious = getJSON<number>(STREAK_PREV_KEY, 0);
     const streakLastDate = getJSON<string | null>(STREAK_DATE_KEY, null);
     const today = getTodayKey();
 
@@ -134,6 +138,7 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
     set({
       sessions,
       streakCurrent,
+      streakPrevious,
       streakLastDate,
       todayCompleted: !!sessions[today],
       morningCompleted: !!mData,
@@ -181,18 +186,26 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
 
     // Calculate new streak
     let newStreak = 1;
+    let streakPrevious = get().streakPrevious;
     if (streakLastDate) {
       if (streakLastDate === today) {
         newStreak = streakCurrent; // Already counted today
       } else {
         const yesterday = addDays(today, -1);
-        newStreak = streakLastDate === yesterday ? streakCurrent + 1 : 1;
+        if (streakLastDate === yesterday) {
+          newStreak = streakCurrent + 1;
+        } else {
+          // Streak broke — save what was lost
+          streakPrevious = streakCurrent;
+          newStreak = 1;
+        }
       }
     }
 
     // Persist streak
     setJSON(STREAK_KEY, newStreak);
     setJSON(STREAK_DATE_KEY, today);
+    setJSON(STREAK_PREV_KEY, streakPrevious);
 
     // Record completion
     const session: ProtocolSession = {
@@ -212,6 +225,7 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
     set({
       sessions: updatedSessions,
       streakCurrent: newStreak,
+      streakPrevious,
       streakLastDate: today,
       todayCompleted: true,
       isActive: false,
@@ -256,17 +270,24 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
 
     // Calculate new streak
     let newStreak = 1;
+    let streakPrevious = get().streakPrevious;
     if (streakLastDate) {
       if (streakLastDate === today) {
         newStreak = streakCurrent;
       } else {
         const yesterday = addDays(today, -1);
-        newStreak = streakLastDate === yesterday ? streakCurrent + 1 : 1;
+        if (streakLastDate === yesterday) {
+          newStreak = streakCurrent + 1;
+        } else {
+          streakPrevious = streakCurrent;
+          newStreak = 1;
+        }
       }
     }
 
     setJSON(STREAK_KEY, newStreak);
     setJSON(STREAK_DATE_KEY, today);
+    setJSON(STREAK_PREV_KEY, streakPrevious);
 
     const session: ProtocolSession = {
       dateKey: today,
@@ -283,6 +304,7 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
     set({
       sessions: updatedSessions,
       streakCurrent: newStreak,
+      streakPrevious,
       streakLastDate: today,
       todayCompleted: true,
       isActive: false,

@@ -201,15 +201,22 @@ function BranchSection({
   };
 
   const claimedCount = branch.nodes.filter((n) => getNodeStatus(n.id, 0) === "claimed").length;
+  const isBranchComplete = claimedCount === branch.nodes.length && branch.nodes.length > 0;
 
   return (
     <View style={branchStyles.section}>
       <View style={branchStyles.header}>
         <View style={[branchStyles.dot, { backgroundColor: engineColor }]} />
         <Text style={branchStyles.branchName}>{branch.name}</Text>
-        <Text style={branchStyles.branchProgress}>
-          {claimedCount}/{branch.nodes.length}
-        </Text>
+        {isBranchComplete ? (
+          <View style={[branchStyles.masteryBadge, { borderColor: engineColor + "60", backgroundColor: engineColor + "15" }]}>
+            <Text style={[branchStyles.masteryText, { color: engineColor }]}>MASTERY</Text>
+          </View>
+        ) : (
+          <Text style={branchStyles.branchProgress}>
+            {claimedCount}/{branch.nodes.length}
+          </Text>
+        )}
       </View>
 
       <View style={branchStyles.progressTrack}>
@@ -248,6 +255,11 @@ const branchStyles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   branchName: { ...fonts.kicker, fontSize: 10, color: colors.text, flex: 1 },
   branchProgress: { ...fonts.mono, fontSize: 11, color: colors.textMuted },
+  masteryBadge: {
+    borderRadius: radius.sm, borderWidth: 1,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  masteryText: { ...fonts.kicker, fontSize: 8, fontWeight: "700", letterSpacing: 2 },
   progressTrack: {
     height: 2, backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 1, marginBottom: spacing.md, overflow: "hidden",

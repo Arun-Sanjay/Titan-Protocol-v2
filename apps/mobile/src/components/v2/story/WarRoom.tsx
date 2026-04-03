@@ -25,6 +25,8 @@ import { getCurrentChapter, getDayNumber } from "../../../data/chapters";
 import { getJSON } from "../../../db/storage";
 import { evaluateAllTrees } from "../../../lib/skill-tree-evaluator";
 import { HUDBackground } from "../../ui/AnimatedBackground";
+import { MissionBoard } from "../../ui/MissionBoard";
+import { useQuestStore } from "../../../stores/useQuestStore";
 
 /* ─── Constants ────────────────────────────────────────────────────── */
 const CARD_GAP = 12;
@@ -414,6 +416,40 @@ export function WarRoom() {
               </Text>
             </View>
           </View>
+
+          {/* ══════════════ WEEKLY MISSION BOARD ══════════════ */}
+          {(() => {
+            const weeklyQuests = useQuestStore.getState().weeklyQuests;
+            const boss = useQuestStore.getState().bossChallenge;
+            const quests = weeklyQuests.map((q) => ({
+              id: q.id,
+              title: q.title,
+              description: q.description,
+              status: q.status as "active" | "completed" | "failed",
+              targetType: q.targetType ?? "completion",
+              targetValue: q.targetValue,
+              currentValue: q.currentValue,
+              xpReward: q.xpReward,
+            }));
+            const bossChallenge = boss ? {
+              name: boss.title,
+              description: boss.description ?? "",
+              daysRequired: boss.daysRequired,
+              daysCompleted: boss.dayResults.filter(Boolean).length,
+              active: boss.active,
+            } : null;
+            const completed = quests.filter((q) => q.status === "completed").length;
+            const totalXP = quests.filter((q) => q.status === "completed").reduce((s, q) => s + q.xpReward, 0);
+            return (
+              <View style={{ marginTop: spacing.xl }}>
+                <MissionBoard
+                  quests={quests}
+                  bossChallenge={bossChallenge}
+                  weekStats={{ missionsCleared: completed, totalMissions: quests.length, xpEarned: totalXP }}
+                />
+              </View>
+            );
+          })()}
         </ScrollView>
       </SafeAreaView>
     </View>

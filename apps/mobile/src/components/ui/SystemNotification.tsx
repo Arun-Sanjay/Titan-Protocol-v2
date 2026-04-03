@@ -105,10 +105,11 @@ export function SystemNotificationProvider({ children }: { children: React.React
       setQueue((q) => q.slice(1));
 
       // Auto-dismiss after 3 seconds
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         setCurrent(null);
         isShowing.current = false;
       }, 3000);
+      return () => clearTimeout(timer);
     }
   }, [queue, current]);
 

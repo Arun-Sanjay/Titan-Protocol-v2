@@ -117,8 +117,7 @@ export async function addRepayment(input: RepaymentInput): Promise<MoneyTx> {
 
 export async function listTxByDate(dateISO: string): Promise<MoneyTx[]> {
   const safeDate = assertDateISO(dateISO);
-  const rows = await db.money_tx.toArray();
-  return rows.filter((tx) => tx.dateISO === safeDate);
+  return db.money_tx.where("dateISO").equals(safeDate).toArray();
 }
 
 export async function listTxByMonth(dateISO: string): Promise<MoneyTx[]> {
@@ -132,14 +131,12 @@ export async function listTxByMonth(dateISO: string): Promise<MoneyTx[]> {
 export async function listTxByRange(startISO: string, endISO: string): Promise<MoneyTx[]> {
   const start = assertDateISO(startISO);
   const end = assertDateISO(endISO);
-  const rows = await db.money_tx.toArray();
-  return rows.filter((tx) => typeof tx.dateISO === "string" && isDateInRangeISO(tx.dateISO, start, end));
+  return db.money_tx.where("dateISO").between(start, end, true, true).toArray();
 }
 
 export async function listLoans(status?: "unpaid" | "paid"): Promise<MoneyLoan[]> {
-  const rows = await db.money_loans.toArray();
-  if (!status) return rows;
-  return rows.filter((loan) => loan.status === status);
+  if (!status) return db.money_loans.toArray();
+  return db.money_loans.where("status").equals(status).toArray();
 }
 
 export async function listMoneyTasks(): Promise<MoneyTask[]> {

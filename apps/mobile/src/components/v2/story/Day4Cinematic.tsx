@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import { View, StyleSheet } from "react-native";
 import { spacing } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
@@ -12,6 +12,7 @@ export function Day4Cinematic({ onComplete }: Props) {
   const userName = useStoryStore((s) => s.userName) || "RECRUIT";
   const markPlayed = useStoryStore((s) => s.markCinematicPlayed);
   const [phase, setPhase] = useState<"speech" | "operation">("speech");
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const narrationLines: NarrationLine[] = useMemo(
     () => [
@@ -27,9 +28,9 @@ export function Day4Cinematic({ onComplete }: Props) {
     [userName],
   );
 
-  const handleNarrationComplete = () => {
-    setTimeout(() => setPhase("operation"), 1200);
-  };
+  const handleNarrationComplete = useCallback(() => {
+    timerRef.current = setTimeout(() => setPhase("operation"), 1200);
+  }, []);
 
   const handleAccept = () => {
     markPlayed(4);

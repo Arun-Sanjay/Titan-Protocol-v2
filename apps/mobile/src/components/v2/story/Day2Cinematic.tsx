@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useCallback } from "react";
 import { View, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { spacing } from "../../../theme";
@@ -29,9 +29,10 @@ export function Day2Cinematic({ onComplete }: Props) {
     [userName],
   );
 
-  const handleNarrationComplete = () => {
-    setTimeout(() => setPhase("operation"), 1200);
-  };
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const handleNarrationComplete = useCallback(() => {
+    timerRef.current = setTimeout(() => setPhase("operation"), 1200);
+  }, []);
 
   const handleAccept = () => {
     markPlayed(2);

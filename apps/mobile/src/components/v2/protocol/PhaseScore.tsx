@@ -18,6 +18,8 @@ import { calculateRank, getRankColor } from "../../../lib/scoring-v2";
 import { handleProtocolCompletion } from "../../../lib/protocol-completion";
 import { getTodayKey, addDays } from "../../../lib/date";
 import { ShareButton } from "../celebrations/ShareButton";
+import { RankCeremony } from "../../ui/RankCeremony";
+import { getJSON } from "../../../db/storage";
 
 function computeProtocolScore(phases: PhaseResult[]): number {
   let score = 0;
@@ -118,8 +120,28 @@ export function PhaseScore() {
   // XP for protocol
   const xpEarned = Math.round(finalScore * 0.5) + 10; // Base 10 + 0.5 per score point
 
+  // Rank ceremony state
+  const [showRankCeremony, setShowRankCeremony] = useState(false);
+  const [completionResult, setCompletionResult] = useState<ReturnType<typeof handleProtocolCompletion> | null>(null);
+
+  // Get yesterday's score for rank comparison
+  const yesterdayScore = useMemo(() => {
+    const yesterday = addDays(getTodayKey(), -1);
+    const comp = getJSON<{ score?: number } | null>(`protocol_completions:${yesterday}`, null);
+    return comp?.score;
+  }, []);
+
   function handleDone() {
     const result = handleProtocolCompletion(finalScore, xpEarned);
+    // Show rank ceremony first, then proceed to celebration cascade
+    setCompletionResult(result);
+    setShowRankCeremony(true);
+  }
+
+  function handleRankCeremonyDismiss() {
+    setShowRankCeremony(false);
+    if (!completionResult) { router.back(); return; }
+    const result = completionResult;
     if (result.titanUnlocked) {
       router.replace("/(modals)/titan-unlock");
     } else if (result.bossDefeated && result.defeatedBoss) {
@@ -204,6 +226,15 @@ export function PhaseScore() {
         </Pressable>
         <ShareButton type="score" title="Protocol Complete" value={`${finalScore}% — ${rank} Rank`} />
       </Animated.View>
+
+      {/* Rank Ceremony overlay */}
+      {showRankCeremony && (
+        <RankCeremony
+          score={finalScore}
+          previousScore={yesterdayScore}
+          onDismiss={handleRankCeremonyDismiss}
+        />
+      )}
     </View>
   );
 }

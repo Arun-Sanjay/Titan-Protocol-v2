@@ -231,8 +231,8 @@ function selectOperationType(
   // Consistency-driven (highest priority)
   if (consistency === "LOW") return "REFOCUS";
 
-  // Streak-driven
-  if (streak === 0 || streak === 1) return "REBUILD";
+  // Streak-driven — only treat 0 as broken (streak=1 means user completed yesterday)
+  if (streak === 0) return "REBUILD";
 
   // Score-driven (check before momentum — engine health matters most)
   if (oneBelow30) return "ENGINE_RECOVERY";

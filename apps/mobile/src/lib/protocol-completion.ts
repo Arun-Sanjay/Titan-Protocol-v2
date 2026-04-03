@@ -24,6 +24,12 @@ import { checkAllAchievements, type AppState as AchievementAppState } from "./ac
 import { generateNarrativeEntry } from "./narrative-writer";
 import { cancelStreakWarning, cancelBossReminder, scheduleQuestDeadline, scheduleBossReminder } from "./notifications";
 import { getTodayKey } from "./date";
+import { applyMomentum } from "./momentum";
+import { recordCompletion as recordIntegrity } from "./protocol-integrity";
+import { useStatStore } from "../stores/useStatStore";
+import { useRankStore } from "../stores/useRankStore";
+import { useTitleStore } from "../stores/useTitleStore";
+import { useFieldOpStore } from "../stores/useFieldOpStore";
 import achievementDefsJson from "../data/achievements.json";
 
 /**
@@ -54,6 +60,8 @@ export type ProtocolCompletionResult = {
   skillNodesUnlocked: { nodeId: string; name: string; branch: string; level: number; engine: string }[];
   achievementsUnlocked: string[];
   titanUnlocked: boolean;
+  momentumMultiplier: number;
+  momentumBonusXP: number;
 };
 
 export function handleProtocolCompletion(protocolScore: number, xpEarned: number): ProtocolCompletionResult {
@@ -62,11 +70,16 @@ export function handleProtocolCompletion(protocolScore: number, xpEarned: number
   // 1. Finish protocol (persists completion + updates streak)
   useProtocolStore.getState().finishProtocol(protocolScore);
 
+  // 1b. Record protocol integrity (forgiving streak system)
+  recordIntegrity();
+
   // 2. Cast identity vote
   useIdentityStore.getState().castVote();
 
-  // 3. Award XP
-  useProfileStore.getState().awardXP(today, "protocol_complete", xpEarned);
+  // 3. Award XP with momentum multiplier
+  const streak = useProtocolStore.getState().streakCurrent;
+  const { finalXP, multiplier: momentumMultiplier, bonusXP: momentumBonusXP } = applyMomentum(xpEarned, streak);
+  useProfileStore.getState().awardXP(today, "protocol_complete", finalXP);
   useProfileStore.getState().updateStreak(today);
 
   // 4. Get current engine scores for Titan Score
@@ -393,7 +406,35 @@ export function handleProtocolCompletion(protocolScore: number, xpEarned: number
     }
   }
 
-  // 15. Update notifications
+  // 15. Record daily stats + check milestones
+  const statMilestones = useStatStore.getState().recordDaily(today, engineScores as Record<import("../db/schema").EngineKey, number>);
+
+  // 16. Evaluate rank progression (E→S)
+  const rankResult = useRankStore.getState().evaluateDay(titanScore);
+
+  // 17. Evaluate field op progress
+  let fieldOpResult: string | null = null;
+  const activeOp = useFieldOpStore.getState().activeFieldOp;
+  if (activeOp) {
+    const opEval = useFieldOpStore.getState().evaluateDay(engineScores, titanScore);
+    fieldOpResult = opEval;
+  }
+
+  // 18. Check titles
+  const titleContext = {
+    streak: protocolStreak,
+    titanScore,
+    engineScores,
+    stats: useStatStore.getState().stats,
+    totalOutput: useStatStore.getState().totalOutput,
+    rank: useRankStore.getState().rank,
+    fieldOpsCleared: useFieldOpStore.getState().getClearedCount(),
+    dayNumber,
+    protocolCompleteToday: true,
+  };
+  const titlesUnlocked = useTitleStore.getState().checkAndUnlock(titleContext);
+
+  // 19. Update notifications
   cancelStreakWarning(); // Protocol done — no streak warning needed
   if (bossDefeated) cancelBossReminder(); // Boss done — no more reminders
   scheduleQuestDeadline(); // Refresh quest deadline with updated progress
@@ -408,6 +449,12 @@ export function handleProtocolCompletion(protocolScore: number, xpEarned: number
     skillNodesUnlocked,
     achievementsUnlocked,
     titanUnlocked: titanJustUnlockedNow,
+    momentumMultiplier,
+    momentumBonusXP,
+    statMilestones,
+    rankResult,
+    fieldOpResult,
+    titlesUnlocked: titlesUnlocked.map((t) => ({ id: t.id, name: t.name, rarity: t.rarity })),
   };
 }
 

@@ -121,21 +121,21 @@ export function getDashboardMessage(
 
   if (eligible.length === 0) return `${userName}. Day ${dayNumber}. Execute.`;
 
-  // Check recently used
-  const recentIds = getJSON<number[]>("recent_message_ids", []);
+  // Check recently used — track by message text prefix (stable across filter changes)
+  const recentKeys = getJSON<string[]>("recent_message_keys", []);
 
-  // Find first unused message
-  let selected = eligible.find((_, i) => !recentIds.includes(i));
-  let selectedIdx = eligible.indexOf(selected!);
+  // Find first unused message by checking text prefix (first 40 chars)
+  const toKey = (msg: ProtocolMessage) => msg.text.slice(0, 40);
+  let selected = eligible.find((m) => !recentKeys.includes(toKey(m)));
   if (!selected) {
-    // All used, reset and pick first
-    selectedIdx = 0;
+    // All used, reset rotation and pick first
     selected = eligible[0];
+    setJSON("recent_message_keys", [toKey(selected)]);
+  } else {
+    // Track usage — keep last 10 to prevent repeats across phase transitions
+    const newRecent = [...recentKeys.slice(-9), toKey(selected)];
+    setJSON("recent_message_keys", newRecent);
   }
-
-  // Track usage
-  const newRecent = [...recentIds.slice(-6), selectedIdx]; // Keep last 7
-  setJSON("recent_message_ids", newRecent);
 
   // Replace variables
   let text = selected.text;

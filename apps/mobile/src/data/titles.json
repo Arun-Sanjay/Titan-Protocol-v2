@@ -1,0 +1,282 @@
+[
+  {
+    "id": "consistent",
+    "name": "Consistent",
+    "description": "Maintained a 7-day protocol streak.",
+    "category": "streak",
+    "rarity": "common",
+    "condition": { "type": "streak_days", "value": 7 }
+  },
+  {
+    "id": "persistent",
+    "name": "Persistent",
+    "description": "Maintained a 14-day protocol streak.",
+    "category": "streak",
+    "rarity": "common",
+    "condition": { "type": "streak_days", "value": 14 }
+  },
+  {
+    "id": "unbreakable",
+    "name": "Unbreakable",
+    "description": "Maintained a 30-day protocol streak. Discipline forged.",
+    "category": "streak",
+    "rarity": "rare",
+    "condition": { "type": "streak_days", "value": 30 }
+  },
+  {
+    "id": "immortal",
+    "name": "Immortal",
+    "description": "60 consecutive days of protocol adherence.",
+    "category": "streak",
+    "rarity": "epic",
+    "condition": { "type": "streak_days", "value": 60 }
+  },
+  {
+    "id": "eternal",
+    "name": "Eternal",
+    "description": "100 consecutive days. Your discipline is beyond question.",
+    "category": "streak",
+    "rarity": "epic",
+    "condition": { "type": "streak_days", "value": 100 }
+  },
+  {
+    "id": "the_undying",
+    "name": "The Undying",
+    "description": "365 consecutive days. An entire year without breaking the chain.",
+    "category": "streak",
+    "rarity": "legendary",
+    "condition": { "type": "streak_days", "value": 365 }
+  },
+  {
+    "id": "awakened",
+    "name": "Awakened",
+    "description": "Completed your first protocol day.",
+    "category": "performance",
+    "rarity": "common",
+    "condition": { "type": "day_number", "value": 1 }
+  },
+  {
+    "id": "operational",
+    "name": "Operational",
+    "description": "All four engines running at 50% or above.",
+    "category": "performance",
+    "rarity": "common",
+    "condition": { "type": "all_engines_score", "value": 50 }
+  },
+  {
+    "id": "dangerous",
+    "name": "Dangerous",
+    "description": "All four engines at 70%+. You are becoming a threat.",
+    "category": "performance",
+    "rarity": "rare",
+    "condition": { "type": "all_engines_score", "value": 70 }
+  },
+  {
+    "id": "unstoppable",
+    "name": "Unstoppable",
+    "description": "All four engines at 85%+. Nearly perfect execution.",
+    "category": "performance",
+    "rarity": "epic",
+    "condition": { "type": "all_engines_score", "value": 85 }
+  },
+  {
+    "id": "perfect_day",
+    "name": "Perfect Day",
+    "description": "All four engines at 100%. Absolute perfection.",
+    "category": "performance",
+    "rarity": "legendary",
+    "condition": { "type": "all_engines_score", "value": 100 }
+  },
+  {
+    "id": "machine",
+    "name": "Machine",
+    "description": "7 consecutive days above 80% average. Mechanized precision.",
+    "category": "performance",
+    "rarity": "epic",
+    "condition": { "type": "custom", "value": "7d_consecutive_80" }
+  },
+  {
+    "id": "flawless",
+    "name": "Flawless",
+    "description": "7 consecutive days above 95% average. Inhuman consistency.",
+    "category": "performance",
+    "rarity": "legendary",
+    "condition": { "type": "custom", "value": "7d_consecutive_95" }
+  },
+  {
+    "id": "first_deployment",
+    "name": "First Deployment",
+    "description": "Cleared your first Field Op.",
+    "category": "ops",
+    "rarity": "common",
+    "condition": { "type": "field_op_count", "value": 1 }
+  },
+  {
+    "id": "field_commander",
+    "name": "Field Commander",
+    "description": "Cleared 5 Field Ops. You lead from the front.",
+    "category": "ops",
+    "rarity": "rare",
+    "condition": { "type": "field_op_count", "value": 5 }
+  },
+  {
+    "id": "operations_master",
+    "name": "Operations Master",
+    "description": "Cleared 15 Field Ops. No challenge remains unconquered.",
+    "category": "ops",
+    "rarity": "epic",
+    "condition": { "type": "field_op_count", "value": 15 }
+  },
+  {
+    "id": "the_conqueror",
+    "name": "The Conqueror",
+    "description": "Cleared an S-rank Field Op. You have conquered the impossible.",
+    "category": "ops",
+    "rarity": "legendary",
+    "condition": { "type": "field_op_specific", "value": "S" }
+  },
+  {
+    "id": "iron_body",
+    "name": "Iron Body",
+    "description": "Body stat reached 50. Forged in discipline.",
+    "category": "engine",
+    "rarity": "common",
+    "condition": { "type": "engine_stat", "value": 50, "engine": "body" }
+  },
+  {
+    "id": "steel_mind",
+    "name": "Steel Mind",
+    "description": "Mind stat reached 50. Sharpened through focus.",
+    "category": "engine",
+    "rarity": "common",
+    "condition": { "type": "engine_stat", "value": 50, "engine": "mind" }
+  },
+  {
+    "id": "gold_standard",
+    "name": "Gold Standard",
+    "description": "Money stat reached 50. Building real wealth.",
+    "category": "engine",
+    "rarity": "common",
+    "condition": { "type": "engine_stat", "value": 50, "engine": "money" }
+  },
+  {
+    "id": "silver_tongue",
+    "name": "Silver Tongue",
+    "description": "Charisma stat reached 50. Words carry weight.",
+    "category": "engine",
+    "rarity": "common",
+    "condition": { "type": "engine_stat", "value": 50, "engine": "charisma" }
+  },
+  {
+    "id": "peak_physical",
+    "name": "Peak Physical",
+    "description": "Body stat reached 100. Physical mastery achieved.",
+    "category": "engine",
+    "rarity": "rare",
+    "condition": { "type": "engine_stat", "value": 100, "engine": "body" }
+  },
+  {
+    "id": "genius",
+    "name": "Genius",
+    "description": "Mind stat reached 100. Intellectual dominance.",
+    "category": "engine",
+    "rarity": "rare",
+    "condition": { "type": "engine_stat", "value": 100, "engine": "mind" }
+  },
+  {
+    "id": "mogul",
+    "name": "Mogul",
+    "description": "Money stat reached 100. Financial mastery unlocked.",
+    "category": "engine",
+    "rarity": "rare",
+    "condition": { "type": "engine_stat", "value": 100, "engine": "money" }
+  },
+  {
+    "id": "magnetic",
+    "name": "Magnetic",
+    "description": "Charisma stat reached 100. Impossible to ignore.",
+    "category": "engine",
+    "rarity": "rare",
+    "condition": { "type": "engine_stat", "value": 100, "engine": "charisma" }
+  },
+  {
+    "id": "d_class",
+    "name": "D-Class",
+    "description": "Promoted to D-rank. Protocol acknowledged.",
+    "category": "rank",
+    "rarity": "common",
+    "condition": { "type": "rank_achieved", "value": "D" }
+  },
+  {
+    "id": "c_class",
+    "name": "C-Class",
+    "description": "Promoted to C-rank. Competence confirmed.",
+    "category": "rank",
+    "rarity": "rare",
+    "condition": { "type": "rank_achieved", "value": "C" }
+  },
+  {
+    "id": "b_class",
+    "name": "B-Class",
+    "description": "Promoted to B-rank. Operating at specialist level.",
+    "category": "rank",
+    "rarity": "rare",
+    "condition": { "type": "rank_achieved", "value": "B" }
+  },
+  {
+    "id": "a_class",
+    "name": "A-Class",
+    "description": "Promoted to A-rank. Elite operator status.",
+    "category": "rank",
+    "rarity": "epic",
+    "condition": { "type": "rank_achieved", "value": "A" }
+  },
+  {
+    "id": "s_class",
+    "name": "S-Class",
+    "description": "Promoted to S-rank. The highest echelon.",
+    "category": "rank",
+    "rarity": "legendary",
+    "condition": { "type": "rank_achieved", "value": "S" }
+  },
+  {
+    "id": "the_protocol",
+    "name": "The Protocol",
+    "description": "30 days in the protocol. You are committed.",
+    "category": "special",
+    "rarity": "common",
+    "condition": { "type": "day_number", "value": 30 }
+  },
+  {
+    "id": "centurion",
+    "name": "Centurion",
+    "description": "100 days in the protocol. A century of discipline.",
+    "category": "special",
+    "rarity": "rare",
+    "condition": { "type": "day_number", "value": 100 }
+  },
+  {
+    "id": "comeback",
+    "name": "Comeback",
+    "description": "Completed a full protocol day after receiving a stat penalty.",
+    "category": "special",
+    "rarity": "rare",
+    "condition": { "type": "custom", "value": "comeback_after_penalty" }
+  },
+  {
+    "id": "survivor",
+    "name": "Survivor",
+    "description": "90 days in the protocol. Battle-hardened.",
+    "category": "special",
+    "rarity": "epic",
+    "condition": { "type": "day_number", "value": 90 }
+  },
+  {
+    "id": "the_titan",
+    "name": "The Titan",
+    "description": "Total output reached 200. You have ascended.",
+    "category": "special",
+    "rarity": "legendary",
+    "condition": { "type": "total_output", "value": 200 }
+  }
+]

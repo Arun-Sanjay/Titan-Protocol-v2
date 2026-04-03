@@ -21,6 +21,7 @@ import { getCurrentChapter, getDayNumber } from "../../../data/chapters";
 import { getLatestNarrative, getStoryForDay } from "../../../lib/narrative-engine";
 import { generateDailyOperation, type DailyOperation } from "../../../lib/operation-engine";
 import { useStoryStore } from "../../../stores/useStoryStore";
+import { checkIntegrityStatus, getIntegrityColor } from "../../../lib/protocol-integrity";
 
 const ARCHETYPE_ICONS: Record<string, string> = {
   titan: "\u26A1", athlete: "\uD83D\uDCAA", scholar: "\uD83D\uDCDA", hustler: "\uD83D\uDCB0",
@@ -202,6 +203,39 @@ export function DailyBriefing({ onEnter }: Props) {
       )}
 
       {/* Today's Operation */}
+      {/* Protocol Integrity Warning */}
+      {(() => {
+        const integrity = checkIntegrityStatus();
+        if (integrity.warning) {
+          return (
+            <Animated.View entering={FadeInDown.delay(1200).duration(400)} style={styles.section}>
+              <View style={{
+                borderWidth: 1,
+                borderColor: integrity.status === "RESET" ? colors.danger + "60" : colors.warning + "60",
+                backgroundColor: integrity.status === "RESET" ? colors.dangerDim : colors.warningDim,
+                borderRadius: radius.md,
+                padding: spacing.md,
+              }}>
+                <Text style={{
+                  fontFamily: "monospace",
+                  fontSize: 10,
+                  fontWeight: "700",
+                  letterSpacing: 2,
+                  color: integrity.status === "RESET" ? colors.danger : colors.warning,
+                  marginBottom: 4,
+                }}>
+                  {integrity.status === "WARNING" ? "INTEGRITY WARNING" : integrity.status === "BREACH" ? "INTEGRITY BREACH" : "PROTOCOL RESET"}
+                </Text>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 18 }}>
+                  {integrity.warning}
+                </Text>
+              </View>
+            </Animated.View>
+          );
+        }
+        return null;
+      })()}
+
       {operation && (
         <Animated.View entering={FadeInDown.delay(1400).duration(500)} style={styles.section}>
           <Text style={styles.operationKicker}>TODAY'S OPERATION</Text>
