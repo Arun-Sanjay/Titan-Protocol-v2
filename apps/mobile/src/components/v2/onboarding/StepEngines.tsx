@@ -6,6 +6,8 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   runOnJS,
+  FadeInDown,
+  Layout,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
@@ -81,57 +83,62 @@ function DraggableRow({
   }, [onDragEnd]);
 
   return (
-    <PanGestureHandler
-      activeOffsetY={[-10, 10]}
-      onGestureEvent={(e) => {
-        const { translationY } = e.nativeEvent;
-        translateY.value = translationY;
-
-        const swapDelta = translationY - swapAccumulator.current;
-        if (swapDelta > SWAP_THRESHOLD && currentIndex.current < total - 1) {
-          swapAccumulator.current += ITEM_HEIGHT + ITEM_GAP;
-          runOnJS(handleSwapDown)();
-        } else if (swapDelta < -SWAP_THRESHOLD && currentIndex.current > 0) {
-          swapAccumulator.current -= ITEM_HEIGHT + ITEM_GAP;
-          runOnJS(handleSwapUp)();
-        }
-      }}
-      onHandlerStateChange={(e) => {
-        if (e.nativeEvent.state === GestureState.BEGAN) {
-          scale.value = withSpring(1.03, { damping: 15, stiffness: 200 });
-          zIdx.value = 10;
-          swapAccumulator.current = 0;
-          runOnJS(handleDragStart)();
-        } else if (
-          e.nativeEvent.state === GestureState.END ||
-          e.nativeEvent.state === GestureState.CANCELLED ||
-          e.nativeEvent.state === GestureState.FAILED
-        ) {
-          translateY.value = withSpring(0, { damping: 15, stiffness: 200 });
-          scale.value = withSpring(1, { damping: 15, stiffness: 200 });
-          zIdx.value = 0;
-          runOnJS(handleDragEnd)();
-        }
-      }}
+    <Animated.View
+      entering={FadeInDown.delay(index * 60).duration(400)}
+      layout={Layout.springify().damping(25).stiffness(100)}
     >
-      <Animated.View style={[styles.row, { borderLeftColor: meta.color }, animatedStyle]}>
-        <Text style={styles.dragHandle}>{"\u2801\u2801\u2801"}</Text>
-        <Text style={styles.rank}>#{index + 1}</Text>
-        <Text style={styles.icon}>{meta.icon}</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.label, { color: meta.color }]}>{meta.label}</Text>
-          <Text style={styles.desc}>{meta.desc}</Text>
-        </View>
-        <View style={styles.arrows}>
-          <Pressable onPress={() => onMoveUp(index)} hitSlop={6} style={styles.arrow}>
-            <Text style={[styles.arrowText, index === 0 && { opacity: 0.2 }]}>{"\u25B2"}</Text>
-          </Pressable>
-          <Pressable onPress={() => onMoveDown(index)} hitSlop={6} style={styles.arrow}>
-            <Text style={[styles.arrowText, index === total - 1 && { opacity: 0.2 }]}>{"\u25BC"}</Text>
-          </Pressable>
-        </View>
-      </Animated.View>
-    </PanGestureHandler>
+      <PanGestureHandler
+        activeOffsetY={[-10, 10]}
+        onGestureEvent={(e) => {
+          const { translationY } = e.nativeEvent;
+          translateY.value = translationY;
+
+          const swapDelta = translationY - swapAccumulator.current;
+          if (swapDelta > SWAP_THRESHOLD && currentIndex.current < total - 1) {
+            swapAccumulator.current += ITEM_HEIGHT + ITEM_GAP;
+            runOnJS(handleSwapDown)();
+          } else if (swapDelta < -SWAP_THRESHOLD && currentIndex.current > 0) {
+            swapAccumulator.current -= ITEM_HEIGHT + ITEM_GAP;
+            runOnJS(handleSwapUp)();
+          }
+        }}
+        onHandlerStateChange={(e) => {
+          if (e.nativeEvent.state === GestureState.BEGAN) {
+            scale.value = withSpring(1.06, { damping: 25, stiffness: 100, mass: 0.8 });
+            zIdx.value = 10;
+            swapAccumulator.current = 0;
+            runOnJS(handleDragStart)();
+          } else if (
+            e.nativeEvent.state === GestureState.END ||
+            e.nativeEvent.state === GestureState.CANCELLED ||
+            e.nativeEvent.state === GestureState.FAILED
+          ) {
+            translateY.value = withSpring(0, { damping: 25, stiffness: 100, mass: 0.8 });
+            scale.value = withSpring(1, { damping: 25, stiffness: 100, mass: 0.8 });
+            zIdx.value = 0;
+            runOnJS(handleDragEnd)();
+          }
+        }}
+      >
+        <Animated.View style={[styles.row, { borderLeftColor: meta.color }, animatedStyle]}>
+          <Text style={styles.dragHandle}>{"\u2801\u2801\u2801"}</Text>
+          <Text style={styles.rank}>#{index + 1}</Text>
+          <Text style={styles.icon}>{meta.icon}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: meta.color }]}>{meta.label}</Text>
+            <Text style={styles.desc}>{meta.desc}</Text>
+          </View>
+          <View style={styles.arrows}>
+            <Pressable onPress={() => onMoveUp(index)} hitSlop={6} style={styles.arrow}>
+              <Text style={[styles.arrowText, index === 0 && { opacity: 0.2 }]}>{"\u25B2"}</Text>
+            </Pressable>
+            <Pressable onPress={() => onMoveDown(index)} hitSlop={6} style={styles.arrow}>
+              <Text style={[styles.arrowText, index === total - 1 && { opacity: 0.2 }]}>{"\u25BC"}</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      </PanGestureHandler>
+    </Animated.View>
   );
 }
 

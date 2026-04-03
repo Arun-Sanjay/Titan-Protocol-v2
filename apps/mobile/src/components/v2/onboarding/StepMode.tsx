@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
@@ -35,35 +36,44 @@ export function StepMode({ onNext, onBack }: Props) {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Pressable onPress={onBack} hitSlop={12}>
-          <Text style={styles.backText}>← BACK</Text>
-        </Pressable>
-        <Text style={styles.kicker}>STEP 3 OF 6</Text>
-        <Text style={styles.title}>CHOOSE YOUR MODE</Text>
-        <Text style={styles.subtitle}>You can change this anytime in Settings.</Text>
+        <Animated.View entering={FadeInDown.delay(0).duration(400)}>
+          <Pressable onPress={onBack} hitSlop={12}>
+            <Text style={styles.backText}>{"\u2190"} BACK</Text>
+          </Pressable>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+          <Text style={styles.kicker}>STEP 3 OF 6</Text>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <Text style={styles.title}>CHOOSE YOUR MODE</Text>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+          <Text style={styles.subtitle}>You can change this anytime in Settings.</Text>
+        </Animated.View>
 
         <View style={styles.cards}>
-          {MODES.map((m) => {
+          {MODES.map((m, index) => {
             const selected = mode === m.id;
             return (
-              <Pressable
-                key={m.id}
-                style={[styles.card, selected && styles.cardSelected]}
-                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMode(m.id); }}
-              >
-                <View style={styles.cardHeader}>
-                  <Text style={[styles.cardLabel, selected && styles.cardLabelSelected]}>{m.label}</Text>
-                  {selected && (
-                    <View style={styles.checkBadge}><Text style={styles.checkText}>✓</Text></View>
-                  )}
-                </View>
-                <Text style={styles.cardDesc}>{m.desc}</Text>
-                <View style={styles.features}>
-                  {m.features.map((f) => (
-                    <Text key={f} style={styles.feature}>· {f}</Text>
-                  ))}
-                </View>
-              </Pressable>
+              <Animated.View key={m.id} entering={FadeInDown.delay(200 + index * 80).duration(500)}>
+                <Pressable
+                  style={[styles.card, selected && styles.cardSelected]}
+                  onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setMode(m.id); }}
+                >
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.cardLabel, selected && styles.cardLabelSelected]}>{m.label}</Text>
+                    {selected && (
+                      <View style={styles.checkBadge}><Text style={styles.checkText}>{"\u2713"}</Text></View>
+                    )}
+                  </View>
+                  <Text style={styles.cardDesc}>{m.desc}</Text>
+                  <View style={styles.features}>
+                    {m.features.map((f) => (
+                      <Text key={f} style={styles.feature}>{"\u00B7"} {f}</Text>
+                    ))}
+                  </View>
+                </Pressable>
+              </Animated.View>
             );
           })}
         </View>

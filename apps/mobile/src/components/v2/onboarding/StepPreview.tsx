@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
+import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useOnboardingStore, ONBOARDING_STEPS } from "../../../stores/useOnboardingStore";
@@ -23,8 +24,8 @@ const ENGINE_LABELS: Record<EngineKey, string> = {
 };
 
 const IDENTITY_ICONS: Record<string, string> = {
-  titan: "⚡", athlete: "💪", scholar: "📚", hustler: "💰",
-  showman: "🎤", warrior: "⚔️", founder: "🚀", charmer: "✨",
+  titan: "\u26A1", athlete: "\uD83D\uDCAA", scholar: "\uD83D\uDCDA", hustler: "\uD83D\uDCB0",
+  showman: "\uD83C\uDFA4", warrior: "\u2694\uFE0F", founder: "\uD83D\uDE80", charmer: "\u2728",
 };
 
 const MODE_LABELS: Record<string, string> = {
@@ -48,12 +49,16 @@ const GOAL_LABELS: Record<string, string> = {
 
 const DAY_DESCRIPTIONS: Record<string, string> = {
   full_protocol:
-    "Morning: Start with your Daily Protocol — a 3-minute guided session to set your intention, train your mind, and check your habits. Then complete your missions across each engine. Evening: Review your Titan Score and track your progress.",
+    "Morning: Start with your Daily Protocol \u2014 a 3-minute guided session to set your intention, train your mind, and check your habits. Then complete your missions across each engine. Evening: Review your Titan Score and track your progress.",
   tracker:
     "Add your own tasks to each engine. Complete them throughout the day to earn XP and grow your Titan Score. Check your weekly analytics to spot trends.",
   zen:
     "Set a daily intention each morning. Track your core habits throughout the day. In the evening, write a brief journal reflection. No scores, no pressure.",
 };
+
+// ─── Summary Row Items ──────────────────────────────────────────────────────
+
+const SUMMARY_ITEMS = ["identity", "mode", "engines", "goals", "schedule"] as const;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -69,19 +74,27 @@ export function StepPreview({ onNext, onBack, goToStep }: Props) {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Pressable onPress={onBack} hitSlop={12}>
-          <Text style={styles.backText}>← BACK</Text>
-        </Pressable>
-        <Text style={styles.kicker}>REVIEW</Text>
-        <Text style={styles.title}>HERE'S YOUR SETUP</Text>
-        <Text style={styles.subtitle}>
-          Review your choices below. You can change anything anytime in Settings.
-        </Text>
+        <Animated.View entering={FadeInDown.delay(0).duration(400)}>
+          <Pressable onPress={onBack} hitSlop={12}>
+            <Text style={styles.backText}>{"\u2190"} BACK</Text>
+          </Pressable>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+          <Text style={styles.kicker}>REVIEW</Text>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <Text style={styles.title}>HERE'S YOUR SETUP</Text>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+          <Text style={styles.subtitle}>
+            Review your choices below. You can change anything anytime in Settings.
+          </Text>
+        </Animated.View>
 
         {/* Summary Card */}
-        <View style={styles.summaryCard}>
+        <Animated.View entering={FadeInDown.delay(200).duration(500)} style={styles.summaryCard}>
           {/* Identity */}
-          <View style={styles.summaryRow}>
+          <Animated.View entering={FadeIn.delay(300 + 0 * 80).duration(400)} style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>IDENTITY</Text>
             <View style={styles.summaryValue}>
               <Text style={styles.summaryIcon}>{identity ? IDENTITY_ICONS[identity] : "?"}</Text>
@@ -89,22 +102,22 @@ export function StepPreview({ onNext, onBack, goToStep }: Props) {
                 {identity ? IDENTITY_LABELS[identity] : "Not set"}
               </Text>
             </View>
-          </View>
+          </Animated.View>
 
           <View style={styles.divider} />
 
           {/* Mode */}
-          <View style={styles.summaryRow}>
+          <Animated.View entering={FadeIn.delay(300 + 1 * 80).duration(400)} style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>MODE</Text>
             <Text style={styles.summaryText}>
               {mode ? MODE_LABELS[mode] : "Not set"}
             </Text>
-          </View>
+          </Animated.View>
 
           <View style={styles.divider} />
 
           {/* Engine Priority */}
-          <View style={styles.summaryRow}>
+          <Animated.View entering={FadeIn.delay(300 + 2 * 80).duration(400)} style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>ENGINE PRIORITY</Text>
             <View style={styles.enginePills}>
               {enginePriority.map((eng, i) => (
@@ -115,50 +128,52 @@ export function StepPreview({ onNext, onBack, goToStep }: Props) {
                 </View>
               ))}
             </View>
-          </View>
+          </Animated.View>
 
           <View style={styles.divider} />
 
           {/* Goals */}
-          <View style={styles.summaryRow}>
+          <Animated.View entering={FadeIn.delay(300 + 3 * 80).duration(400)} style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>GOALS</Text>
             <Text style={styles.summaryGoals}>
               {goals.length > 0
                 ? goals.map((g) => GOAL_LABELS[g] ?? g).join(", ")
                 : "None selected"}
             </Text>
-          </View>
+          </Animated.View>
 
           <View style={styles.divider} />
 
           {/* Schedule */}
-          <View style={styles.summaryRow}>
+          <Animated.View entering={FadeIn.delay(300 + 4 * 80).duration(400)} style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>SCHEDULE</Text>
             <Text style={styles.summaryText}>
               {activeDays.length > 0 ? activeDays.join(", ") : "No days selected"}
             </Text>
-          </View>
-        </View>
+          </Animated.View>
+        </Animated.View>
 
         {/* Day in the life */}
-        <View style={styles.dayCard}>
+        <Animated.View entering={FadeInDown.delay(700).duration(400)} style={styles.dayCard}>
           <Text style={styles.dayCardKicker}>WHAT YOUR DAY WILL LOOK LIKE</Text>
           <Text style={styles.dayCardText}>
             {mode ? DAY_DESCRIPTIONS[mode] : DAY_DESCRIPTIONS.full_protocol}
           </Text>
-        </View>
+        </Animated.View>
 
         {/* Change something */}
-        <Pressable
-          style={styles.changeBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            // Go back to identity step (step index 1)
-            goToStep(1);
-          }}
-        >
-          <Text style={styles.changeBtnText}>CHANGE SOMETHING</Text>
-        </Pressable>
+        <Animated.View entering={FadeIn.delay(900).duration(300)}>
+          <Pressable
+            style={styles.changeBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              // Go back to identity step (step index 1)
+              goToStep(1);
+            }}
+          >
+            <Text style={styles.changeBtnText}>CHANGE SOMETHING</Text>
+          </Pressable>
+        </Animated.View>
       </ScrollView>
 
       <Pressable

@@ -1,5 +1,12 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
+import Animated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
@@ -35,59 +42,113 @@ const GOAL_OPTIONS: GoalOption[] = [
   { id: "organized",   label: "Be more organized",        engine: "charisma" },
 ];
 
+// ─── Animated Chip ───────────────────────────────────────────────────────────
+
+function GoalChip({
+  goal,
+  selected,
+  engineColor,
+  index,
+  onToggle,
+}: {
+  goal: GoalOption;
+  selected: boolean;
+  engineColor: string;
+  index: number;
+  onToggle: (id: string) => void;
+}) {
+  const scale = useSharedValue(1);
+
+  const animatedChipStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePress = useCallback(() => {
+    onToggle(goal.id);
+    scale.value = withSequence(
+      withTiming(1.04, { duration: 100 }),
+      withTiming(1.0, { duration: 100 }),
+    );
+  }, [goal.id, onToggle, scale]);
+
+  return (
+    <Animated.View entering={FadeInDown.delay(200 + index * 60).duration(400)}>
+      <Pressable
+        style={[
+          styles.chip,
+          { borderLeftColor: engineColor },
+          selected && { borderColor: engineColor, backgroundColor: engineColor + "12" },
+        ]}
+        onPress={handlePress}
+      >
+        <Animated.View style={animatedChipStyle}>
+          <View style={styles.chipInner}>
+            {selected && (
+              <View style={[styles.chipCheck, { backgroundColor: engineColor }]}>
+                <Text style={styles.chipCheckText}>{"\u2713"}</Text>
+              </View>
+            )}
+            <Text style={[styles.chipLabel, selected && { color: colors.text }]}>
+              {goal.label}
+            </Text>
+          </View>
+        </Animated.View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function StepGoals({ onNext, onBack }: Props) {
   const goals = useOnboardingStore((s) => s.goals);
   const setGoals = useOnboardingStore((s) => s.setGoals);
 
-  const toggleGoal = (id: string) => {
+  const toggleGoal = useCallback((id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (goals.includes(id)) {
       setGoals(goals.filter((g) => g !== id));
     } else if (goals.length < 4) {
       setGoals([...goals, id]);
     }
-  };
+  }, [goals, setGoals]);
 
   const canContinue = goals.length >= 2;
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Pressable onPress={onBack} hitSlop={12}>
-          <Text style={styles.backText}>← BACK</Text>
-        </Pressable>
-        <Text style={styles.kicker}>STEP 2 OF 6</Text>
-        <Text style={styles.title}>WHAT ARE YOU{"\n"}WORKING TOWARD?</Text>
-        <Text style={styles.subtitle}>
-          Select your top priorities (pick 2-4). This helps us suggest the right missions.
-        </Text>
+        <Animated.View entering={FadeInDown.delay(0).duration(400)}>
+          <Pressable onPress={onBack} hitSlop={12}>
+            <Text style={styles.backText}>{"\u2190"} BACK</Text>
+          </Pressable>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+          <Text style={styles.kicker}>STEP 2 OF 6</Text>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <Text style={styles.title}>WHAT ARE YOU{"\n"}WORKING TOWARD?</Text>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+          <Text style={styles.subtitle}>
+            Select your top priorities (pick 2-4). This helps us suggest the right missions.
+          </Text>
+        </Animated.View>
 
         <View style={styles.chips}>
-          {GOAL_OPTIONS.map((goal) => {
+          {GOAL_OPTIONS.map((goal, index) => {
             const selected = goals.includes(goal.id);
             const engineColor = ENGINE_COLORS[goal.engine];
 
             return (
-              <Pressable
+              <GoalChip
                 key={goal.id}
-                style={[
-                  styles.chip,
-                  { borderLeftColor: engineColor },
-                  selected && { borderColor: engineColor, backgroundColor: engineColor + "12" },
-                ]}
-                onPress={() => toggleGoal(goal.id)}
-              >
-                {selected && (
-                  <View style={[styles.chipCheck, { backgroundColor: engineColor }]}>
-                    <Text style={styles.chipCheckText}>✓</Text>
-                  </View>
-                )}
-                <Text style={[styles.chipLabel, selected && { color: colors.text }]}>
-                  {goal.label}
-                </Text>
-              </Pressable>
+                goal={goal}
+                selected={selected}
+                engineColor={engineColor}
+                index={index}
+                onToggle={toggleGoal}
+              />
             );
           })}
         </View>
@@ -127,7 +188,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
     borderLeftWidth: 3,
     paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-    gap: spacing.sm,
+  },
+  chipInner: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm,
   },
   chipCheck: {
     width: 20, height: 20, borderRadius: 10,

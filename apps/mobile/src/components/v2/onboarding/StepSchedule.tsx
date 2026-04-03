@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
+import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
@@ -22,16 +23,24 @@ export function StepSchedule({ onNext, onBack }: Props) {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Pressable onPress={onBack} hitSlop={12}>
-          <Text style={styles.backText}>← BACK</Text>
-        </Pressable>
-        <Text style={styles.kicker}>STEP 5 OF 6</Text>
-        <Text style={styles.title}>YOUR SCHEDULE</Text>
-        <Text style={styles.subtitle}>
-          Which days will you show up? Select the days you commit to working on your engines.
-        </Text>
+        <Animated.View entering={FadeInDown.delay(0).duration(400)}>
+          <Pressable onPress={onBack} hitSlop={12}>
+            <Text style={styles.backText}>{"\u2190"} BACK</Text>
+          </Pressable>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(50).duration(400)}>
+          <Text style={styles.kicker}>STEP 5 OF 6</Text>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <Text style={styles.title}>YOUR SCHEDULE</Text>
+        </Animated.View>
+        <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+          <Text style={styles.subtitle}>
+            Which days will you show up? Select the days you commit to working on your engines.
+          </Text>
+        </Animated.View>
 
-        <View style={styles.daysRow}>
+        <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.daysRow}>
           {DAYS.map((day) => {
             const active = schedule[day];
             return (
@@ -44,14 +53,14 @@ export function StepSchedule({ onNext, onBack }: Props) {
               </Pressable>
             );
           })}
-        </View>
+        </Animated.View>
 
         <Text style={styles.countText}>
           {activeDays} day{activeDays !== 1 ? "s" : ""} per week
         </Text>
 
         {/* Presets */}
-        <View style={styles.presets}>
+        <Animated.View entering={FadeIn.delay(500).duration(300)} style={styles.presets}>
           <Pressable
             style={styles.preset}
             onPress={() => {
@@ -70,7 +79,7 @@ export function StepSchedule({ onNext, onBack }: Props) {
           >
             <Text style={styles.presetText}>EVERY DAY</Text>
           </Pressable>
-        </View>
+        </Animated.View>
       </ScrollView>
 
       <Pressable
