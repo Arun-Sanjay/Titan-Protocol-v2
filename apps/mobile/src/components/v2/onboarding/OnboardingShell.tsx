@@ -5,6 +5,7 @@ import { colors, spacing } from "../../../theme";
 import { HUDBackground } from "../../ui/AnimatedBackground";
 import { useOnboardingStore, ONBOARDING_STEPS } from "../../../stores/useOnboardingStore";
 import { StepWelcome } from "./StepWelcome";
+import { StepRanks } from "./StepRanks";
 import { StepName } from "./StepName";
 import { StepIdentity } from "./StepIdentity";
 import { StepGoals } from "./StepGoals";
@@ -58,6 +59,8 @@ export function OnboardingShell() {
     switch (stepId) {
       case "welcome":
         return <StepWelcome onNext={next} />;
+      case "ranks":
+        return <StepRanks onNext={next} onBack={back} />;
       case "name":
         return <StepName onNext={next} onBack={back} />;
       case "identity":

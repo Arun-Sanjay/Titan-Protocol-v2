@@ -43,16 +43,16 @@ export type TitleCheckContext = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 export const RARITY_COLORS: Record<string, string> = {
-  common: "#6B7280",
-  rare: "#60A5FA",
-  epic: "#FBBF24",
-  legendary: "#F97316",
+  common: "#9CA3AF",
+  rare: "#34D399",
+  epic: "#A78BFA",
+  legendary: "#FFD700",
 };
 
 const MMKV_UNLOCKED = "titles_unlocked";
 const MMKV_EQUIPPED = "title_equipped";
 
-const RANK_ORDER = ["E", "D", "C", "B", "A", "S"];
+const RANK_ORDER = ["initiate", "operative", "agent", "specialist", "commander", "vanguard", "sentinel", "titan"];
 
 // ─── Condition Evaluator ──────────────────────────────────────────────────────
 
@@ -84,14 +84,14 @@ export function evaluateCondition(
         Array<{ fieldOpId: string; completed: boolean }>
       >("field_op_history", []);
       // S-rank field op IDs by convention
-      const sRankIds = new Set(["the_final_trial", "titan_proving_ground"]);
-      const aRankIds = new Set(["the_gauntlet", "peak_protocol"]);
-      const bRankIds = new Set(["the_crucible", "the_specialist"]);
+      const titanRankIds = new Set(["the_final_trial", "titan_proving_ground"]);
+      const sentinelRankIds = new Set(["the_gauntlet", "peak_protocol"]);
+      const commanderRankIds = new Set(["the_crucible", "the_specialist"]);
 
       const rankIdMap: Record<string, Set<string>> = {
-        S: sRankIds,
-        A: aRankIds,
-        B: bRankIds,
+        titan: titanRankIds,
+        sentinel: sentinelRankIds,
+        commander: commanderRankIds,
       };
 
       const ids = rankIdMap[requiredRank];

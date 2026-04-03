@@ -8,6 +8,7 @@ import { scoreQuiz, type QuizResult } from "../lib/quiz-scoring";
 
 export type OnboardingStepId =
   | "welcome"
+  | "ranks"
   | "name"
   | "identity"
   | "reveal"
@@ -22,6 +23,7 @@ export type SchedulePreference = "early_morning" | "morning" | "midday" | "eveni
 
 export const ONBOARDING_STEPS: OnboardingStepId[] = [
   "welcome",
+  "ranks",
   "name",
   "identity",
   "reveal",

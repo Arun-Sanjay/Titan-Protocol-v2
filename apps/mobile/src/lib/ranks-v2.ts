@@ -2,7 +2,15 @@ import { getJSON, setJSON } from "../db/storage";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type Rank = "E" | "D" | "C" | "B" | "A" | "S";
+export type Rank =
+  | "initiate"
+  | "operative"
+  | "agent"
+  | "specialist"
+  | "commander"
+  | "vanguard"
+  | "sentinel"
+  | "titan";
 
 export type RankState = {
   rank: Rank;
@@ -26,31 +34,97 @@ type EvaluationResult = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const RANK_REQUIREMENTS: Record<Rank, RankRequirement> = {
-  E: { avgScore: 0, consecutiveDays: 0, extra: null },
-  D: { avgScore: 50, consecutiveDays: 7, extra: null },
-  C: { avgScore: 60, consecutiveDays: 14, extra: null },
-  B: { avgScore: 70, consecutiveDays: 21, extra: null },
-  A: { avgScore: 80, consecutiveDays: 30, extra: null },
-  S: { avgScore: 85, consecutiveDays: 30, extra: "s_field_op_cleared" },
+export const RANK_ORDER: Rank[] = [
+  "initiate",
+  "operative",
+  "agent",
+  "specialist",
+  "commander",
+  "vanguard",
+  "sentinel",
+  "titan",
+];
+
+export const RANK_REQUIREMENTS: Record<Rank, RankRequirement> = {
+  initiate:   { avgScore: 0,  consecutiveDays: 0,  extra: null },
+  operative:  { avgScore: 40, consecutiveDays: 5,  extra: null },
+  agent:      { avgScore: 50, consecutiveDays: 7,  extra: null },
+  specialist: { avgScore: 60, consecutiveDays: 14, extra: null },
+  commander:  { avgScore: 70, consecutiveDays: 21, extra: null },
+  vanguard:   { avgScore: 75, consecutiveDays: 25, extra: null },
+  sentinel:   { avgScore: 80, consecutiveDays: 30, extra: null },
+  titan:      { avgScore: 85, consecutiveDays: 30, extra: "s_field_op_cleared" },
 };
 
-export const RANK_ORDER: Rank[] = ["E", "D", "C", "B", "A", "S"];
-
 export const RANK_COLORS: Record<Rank, string> = {
-  E: "#6B7280",
-  D: "#A78BFA",
-  C: "#60A5FA",
-  B: "#34D399",
-  A: "#FBBF24",
-  S: "#F97316",
+  initiate:   "#6B7280",
+  operative:  "#9CA3AF",
+  agent:      "#A78BFA",
+  specialist: "#60A5FA",
+  commander:  "#34D399",
+  vanguard:   "#FBBF24",
+  sentinel:   "#F97316",
+  titan:      "#FF4444",
+};
+
+export const RANK_NAMES: Record<Rank, string> = {
+  initiate:   "Initiate",
+  operative:  "Operative",
+  agent:      "Agent",
+  specialist: "Specialist",
+  commander:  "Commander",
+  vanguard:   "Vanguard",
+  sentinel:   "Sentinel",
+  titan:      "Titan",
+};
+
+export const RANK_ABBREVIATIONS: Record<Rank, string> = {
+  initiate:   "INI",
+  operative:  "OPR",
+  agent:      "AGT",
+  specialist: "SPC",
+  commander:  "CMD",
+  vanguard:   "VGD",
+  sentinel:   "SNT",
+  titan:      "TTN",
 };
 
 const MMKV_KEY = "player_rank";
 const WARNING_THRESHOLD = 7;
 const DEMOTION_THRESHOLD = 14;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Migration ───────────────────────────────────────────────────────────────
+
+/** Legacy rank values from the old E/D/C/B/A/S system. */
+type LegacyRank = "E" | "D" | "C" | "B" | "A" | "S";
+
+const LEGACY_RANK_MAP: Record<LegacyRank, Rank> = {
+  E: "initiate",
+  D: "agent",
+  C: "specialist",
+  B: "commander",
+  A: "sentinel",
+  S: "titan",
+};
+
+/**
+ * Migrate a rank value from the old E/D/C/B/A/S system to the new IDs.
+ * Returns the input unchanged if it is already a valid new-system rank.
+ */
+export function migrateRank(raw: string): Rank {
+  // Already a valid new rank
+  if ((RANK_ORDER as string[]).includes(raw)) {
+    return raw as Rank;
+  }
+  // Legacy rank
+  if (raw in LEGACY_RANK_MAP) {
+    return LEGACY_RANK_MAP[raw as LegacyRank];
+  }
+  // Unknown value -- fall back to initiate
+  return "initiate";
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function rankIndex(rank: Rank): number {
   return RANK_ORDER.indexOf(rank);
@@ -61,8 +135,6 @@ function hasClearedSFieldOp(): boolean {
     "field_op_history",
     [],
   );
-  // Load field op definitions lazily to check minRank
-  // We check by convention: S-rank field op IDs are "the_final_trial" and "titan_proving_ground"
   const sRankFieldOpIds = new Set([
     "the_final_trial",
     "titan_proving_ground",
@@ -72,15 +144,34 @@ function hasClearedSFieldOp(): boolean {
   );
 }
 
-// ─── Core Functions ───────────────────────────────────────────────────────────
+// ─── Core Functions ──────────────────────────────────────────────────────────
 
-/** Load current rank state from MMKV. */
+/** Load current rank state from MMKV, migrating legacy ranks if needed. */
 export function loadRank(): RankState {
-  return getJSON<RankState>(MMKV_KEY, {
-    rank: "E",
+  const raw = getJSON<RankState & { rank: string }>(MMKV_KEY, {
+    rank: "initiate",
     qualifyingDays: 0,
     consecutiveDaysBelow: 0,
   });
+
+  const migrated = migrateRank(raw.rank);
+
+  // Persist migration if the rank value changed
+  if (migrated !== raw.rank) {
+    const updated: RankState = {
+      rank: migrated,
+      qualifyingDays: raw.qualifyingDays,
+      consecutiveDaysBelow: raw.consecutiveDaysBelow,
+    };
+    setJSON(MMKV_KEY, updated);
+    return updated;
+  }
+
+  return {
+    rank: migrated,
+    qualifyingDays: raw.qualifyingDays,
+    consecutiveDaysBelow: raw.consecutiveDaysBelow,
+  };
 }
 
 /** Persist rank state to MMKV. */
@@ -116,7 +207,7 @@ export function evaluateRankDay(titanScore: number): EvaluationResult {
       state.qualifyingDays += 1;
 
       if (state.qualifyingDays >= req.consecutiveDays) {
-        // Check extra conditions (S-rank requires field op clear)
+        // Check extra conditions (titan rank requires field op clear)
         const extraSatisfied =
           req.extra === "s_field_op_cleared"
             ? hasClearedSFieldOp()
@@ -163,15 +254,15 @@ export function evaluateRankDay(titanScore: number): EvaluationResult {
   return result;
 }
 
-// ─── Utility Functions ────────────────────────────────────────────────────────
+// ─── Utility Functions ───────────────────────────────────────────────────────
 
 /** Get the display color for a rank. */
 export function getRankColor(rank: string): string {
-  return RANK_COLORS[rank as Rank] ?? RANK_COLORS.E;
+  return RANK_COLORS[rank as Rank] ?? RANK_COLORS.initiate;
 }
 
 /**
- * Returns the requirements for the next rank, or null if already S-rank.
+ * Returns the requirements for the next rank, or null if already at titan rank.
  */
 export function getNextRankRequirement(
   rank: string,
@@ -190,7 +281,7 @@ export function getNextRankRequirement(
 
 /**
  * Returns 0-100 progress toward the next rank based on qualifying days.
- * Returns 100 if already at S-rank.
+ * Returns 100 if already at titan rank.
  */
 export function getRankProgress(rank: string, qualifyingDays: number): number {
   const next = getNextRankRequirement(rank);

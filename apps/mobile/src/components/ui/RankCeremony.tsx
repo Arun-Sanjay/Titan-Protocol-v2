@@ -13,6 +13,8 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { colors } from "../../theme";
 import { getDailyRank, DAILY_RANKS } from "../../db/gamification";
+import { RANK_NAMES, RANK_ABBREVIATIONS } from "../../lib/ranks-v2";
+import { speakRankUp } from "../../lib/voice";
 
 const { width, height } = Dimensions.get("window");
 
@@ -31,6 +33,8 @@ export function RankCeremony({ score, previousScore, onDismiss }: Props) {
   const prevRank = previousScore != null ? getDailyRank(previousScore) : null;
   const isRankUp = prevRank && DAILY_RANKS.indexOf(rank) > DAILY_RANKS.indexOf(prevRank);
   const isSS = rank.letter === "SS";
+  const rankName = RANK_NAMES[rank.letter as keyof typeof RANK_NAMES] ?? rank.letter;
+  const rankAbbr = RANK_ABBREVIATIONS[rank.letter as keyof typeof RANK_ABBREVIATIONS] ?? rank.letter;
 
   // Animation values
   const bgOpacity = useSharedValue(0);
@@ -76,6 +80,7 @@ export function RankCeremony({ score, previousScore, onDismiss }: Props) {
       timers.current.push(setTimeout(() => {
         setShowRankUp(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        speakRankUp(rankName);
         rankUpOpacity.value = withSequence(
           withTiming(1, { duration: 200 }),
           withDelay(800, withTiming(0, { duration: 400 })),
@@ -132,11 +137,14 @@ export function RankCeremony({ score, previousScore, onDismiss }: Props) {
           </Animated.View>
         )}
 
-        {/* Rank letter */}
+        {/* Rank display */}
         {showRank && (
           <Animated.View style={[styles.rankContainer, rankStyle]}>
             <Text style={[styles.rankLetter, { color: rank.color }]}>
-              {rank.letter}
+              {rankAbbr}
+            </Text>
+            <Text style={[styles.rankNameText, { color: rank.color }]}>
+              {rankName}
             </Text>
             {isSS && (
               <View style={[styles.ssGlow, { backgroundColor: rank.color }]} />
@@ -196,6 +204,15 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: -4,
     textAlign: "center",
+  },
+  rankNameText: {
+    fontFamily: "monospace",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 4,
+    textTransform: "uppercase",
+    textAlign: "center",
+    marginTop: 8,
   },
   ssGlow: {
     position: "absolute",

@@ -2,6 +2,7 @@ import { getJSON, setJSON } from "../db/storage";
 import { getTodayKey } from "./date";
 import type { EngineKey } from "../db/schema";
 import fieldOpDefs from "../data/field-ops.json";
+import { RANK_ORDER } from "./ranks-v2";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,6 @@ type DayResult = "passed" | "failed" | "completed" | null;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const RANK_ORDER = ["E", "D", "C", "B", "A", "S"];
 const ENGINES: EngineKey[] = ["body", "mind", "money", "charisma"];
 
 const MMKV_ACTIVE = "field_op_active";
@@ -55,7 +55,7 @@ const MMKV_COOLDOWN = "field_op_cooldown";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function rankIndex(rank: string): number {
-  return RANK_ORDER.indexOf(rank);
+  return RANK_ORDER.indexOf(rank as import("./ranks-v2").Rank);
 }
 
 // ─── Core Functions ───────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ export function startFieldOp(fieldOpId: string): void {
   }
 
   // Rank gate check
-  const playerRank = getJSON<{ rank: string }>("player_rank", { rank: "E" });
+  const playerRank = getJSON<{ rank: string }>("player_rank", { rank: "initiate" });
   if (rankIndex(playerRank.rank) < rankIndex(def.minRank)) {
     throw new Error(
       `Rank ${def.minRank} required. Current rank: ${playerRank.rank}`,

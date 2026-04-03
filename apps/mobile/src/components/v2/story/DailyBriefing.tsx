@@ -22,6 +22,7 @@ import { getLatestNarrative, getStoryForDay } from "../../../lib/narrative-engin
 import { generateDailyOperation, type DailyOperation } from "../../../lib/operation-engine";
 import { useStoryStore } from "../../../stores/useStoryStore";
 import { checkIntegrityStatus, getIntegrityColor } from "../../../lib/protocol-integrity";
+import { speakBriefing, stopSpeaking } from "../../../lib/voice";
 
 const ARCHETYPE_ICONS: Record<string, string> = {
   titan: "\u26A1", athlete: "\uD83D\uDCAA", scholar: "\uD83D\uDCDA", hustler: "\uD83D\uDCB0",
@@ -140,6 +141,16 @@ export function DailyBriefing({ onEnter }: Props) {
   const pulseStyle = useAnimatedStyle(() => ({
     borderColor: `rgba(247, 250, 255, ${pulse.value})`,
   }));
+
+  // Speak today's operation briefing after animations settle
+  useEffect(() => {
+    if (operation) {
+      const timer = setTimeout(() => {
+        speakBriefing(operation.displayName, operation.protocolMessage);
+      }, 2000);
+      return () => { clearTimeout(timer); stopSpeaking(); };
+    }
+  }, [operation]);
 
   const handleEnter = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);

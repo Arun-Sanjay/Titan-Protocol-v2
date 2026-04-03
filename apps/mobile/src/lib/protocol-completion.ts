@@ -31,6 +31,7 @@ import { useRankStore } from "../stores/useRankStore";
 import { useTitleStore } from "../stores/useTitleStore";
 import { useFieldOpStore } from "../stores/useFieldOpStore";
 import achievementDefsJson from "../data/achievements.json";
+import { speakFieldOp, speakAchievement } from "./voice";
 
 /**
  * Handle all post-protocol side effects.
@@ -132,8 +133,43 @@ export function handleProtocolCompletion(protocolScore: number, xpEarned: number
     dayNumber = Math.max(1, Math.floor((now.getTime() - start.getTime()) / 86_400_000) + 1);
   }
 
-  // Streak milestones: 7, 14, 21, 30, 60, 100
+  // Early day narrative entries (so story is never empty)
   const allEntries = useNarrativeStore.getState().entries;
+
+  if (dayNumber === 1 && !allEntries.some((e) => e.title === "Protocol Activated")) {
+    addEntry({
+      date: today, dayNumber, type: "milestone",
+      title: "Protocol Activated",
+      body: "The Titan Protocol is online. Four engines. One mission. The journey begins.",
+      stats: { titanScore },
+    });
+  }
+  if (dayNumber === 3 && !allEntries.some((e) => e.title === "Day 3")) {
+    addEntry({
+      date: today, dayNumber, type: "milestone",
+      title: "Day 3",
+      body: "Three days in. Most quit by now. You didn't. The protocol takes hold.",
+      stats: { titanScore, streak: protocolStreak },
+    });
+  }
+  if (dayNumber === 5 && !allEntries.some((e) => e.title === "Day 5")) {
+    addEntry({
+      date: today, dayNumber, type: "milestone",
+      title: "Day 5",
+      body: "Five days complete. Momentum is building. The engines are warming up.",
+      stats: { titanScore, streak: protocolStreak },
+    });
+  }
+  if (dayNumber === 10 && !allEntries.some((e) => e.title === "Day 10")) {
+    addEntry({
+      date: today, dayNumber, type: "milestone",
+      title: "Day 10",
+      body: "Ten days. Double digits. This is no longer a trial — it's a pattern.",
+      stats: { titanScore, streak: protocolStreak },
+    });
+  }
+
+  // Streak milestones: 7, 14, 21, 30, 60, 100
   const streakMilestones = [7, 14, 21, 30, 60, 100];
   if (streakMilestones.includes(protocolStreak)) {
     const title = `${protocolStreak}-Day Streak`;
@@ -416,6 +452,15 @@ export function handleProtocolCompletion(protocolScore: number, xpEarned: number
     }
   }
 
+  // Voice feedback for the first achievement unlocked
+  if (achievementsUnlocked.length > 0) {
+    const firstAchId = achievementsUnlocked[0];
+    const firstAchDef = (achievementDefsJson as { id: string; name: string; rarity: string }[]).find((d) => d.id === firstAchId);
+    if (firstAchDef) {
+      speakAchievement(firstAchDef.name);
+    }
+  }
+
   // 15. Record daily stats + check milestones
   const statMilestones = useStatStore.getState().recordDaily(today, engineScores as Record<import("../db/schema").EngineKey, number>);
 
@@ -447,6 +492,9 @@ export function handleProtocolCompletion(protocolScore: number, xpEarned: number
           // Reload stat store to reflect changes
           useStatStore.getState().load(today);
         }
+
+        // Voice feedback for completed field op
+        speakFieldOp("completed", completedDef.name);
       }
     }
   }

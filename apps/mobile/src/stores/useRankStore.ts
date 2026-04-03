@@ -18,7 +18,7 @@ type RankStoreState = {
 };
 
 export const useRankStore = create<RankStoreState>()((set, _get) => ({
-  rank: "E",
+  rank: "initiate",
   qualifyingDays: 0,
   consecutiveDaysBelow: 0,
 

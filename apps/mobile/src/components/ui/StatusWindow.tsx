@@ -24,6 +24,7 @@ import { useStoryStore } from "../../stores/useStoryStore";
 import { useIdentityStore } from "../../stores/useIdentityStore";
 import { IDENTITY_LABELS } from "../../stores/useModeStore";
 import { getTitleDef, RARITY_COLORS } from "../../lib/titles";
+import { RANK_NAMES } from "../../lib/ranks-v2";
 
 import type { EngineKey } from "../../db/schema";
 import type { IdentityArchetype } from "../../stores/useModeStore";
@@ -114,7 +115,12 @@ export function StatusWindow({
             />
             <View style={styles.kvRow}>
               <Text style={styles.kvLabel}>Rank</Text>
-              <RankBadge rank={rank} size="sm" />
+              <View style={styles.rankRow}>
+                <RankBadge rank={rank} size="sm" />
+                <Text style={styles.kvValue}>
+                  {"  "}{RANK_NAMES[rank] ?? rank}
+                </Text>
+              </View>
             </View>
             <KeyValue label="Level" value={String(profile.level)} />
           </View>
@@ -290,6 +296,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: colors.text,
+  },
+  rankRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   // Section dividers

@@ -205,7 +205,7 @@
     "description": "Promoted to D-rank. Protocol acknowledged.",
     "category": "rank",
     "rarity": "common",
-    "condition": { "type": "rank_achieved", "value": "D" }
+    "condition": { "type": "rank_achieved", "value": "agent" }
   },
   {
     "id": "c_class",
@@ -213,7 +213,7 @@
     "description": "Promoted to C-rank. Competence confirmed.",
     "category": "rank",
     "rarity": "rare",
-    "condition": { "type": "rank_achieved", "value": "C" }
+    "condition": { "type": "rank_achieved", "value": "specialist" }
   },
   {
     "id": "b_class",
@@ -221,7 +221,7 @@
     "description": "Promoted to B-rank. Operating at specialist level.",
     "category": "rank",
     "rarity": "rare",
-    "condition": { "type": "rank_achieved", "value": "B" }
+    "condition": { "type": "rank_achieved", "value": "commander" }
   },
   {
     "id": "a_class",
@@ -229,7 +229,7 @@
     "description": "Promoted to A-rank. Elite operator status.",
     "category": "rank",
     "rarity": "epic",
-    "condition": { "type": "rank_achieved", "value": "A" }
+    "condition": { "type": "rank_achieved", "value": "sentinel" }
   },
   {
     "id": "s_class",
@@ -237,7 +237,7 @@
     "description": "Promoted to S-rank. The highest echelon.",
     "category": "rank",
     "rarity": "legendary",
-    "condition": { "type": "rank_achieved", "value": "S" }
+    "condition": { "type": "rank_achieved", "value": "titan" }
   },
   {
     "id": "the_protocol",

@@ -19,6 +19,7 @@
 import { getJSON, setJSON } from "../db/storage";
 import { getTodayKey, addDays } from "./date";
 import type { EngineKey, Task } from "../db/schema";
+import { checkIntegrityStatus } from "./protocol-integrity";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,7 +33,8 @@ export type OperationType =
   | "FULL_SPECTRUM"
   | "REBALANCE"
   | "REFOCUS"
-  | "FIRST_LIGHT";
+  | "FIRST_LIGHT"
+  | "RECOVERY";
 
 export type DailyOperation = {
   name: OperationType;
@@ -71,7 +73,8 @@ const OPERATION_NAMES: Record<OperationType, { display: string; subtitle: string
   MAINTAIN_PRESSURE: { display: "MAINTAIN PRESSURE", subtitle: "Keep all systems firing" },
   ENGINE_RECOVERY: { display: "ENGINE RECOVERY", subtitle: "Bring the weak link back online" },
   MOMENTUM: { display: "MOMENTUM", subtitle: "You're on a roll. Don't stop." },
-  REBUILD: { display: "REBUILD", subtitle: "Start again. Stronger this time." },
+  RECOVERY: { display: "RECOVERY", subtitle: "Welcome back. The protocol remembers." },
+  REBUILD: { display: "REBUILD", subtitle: "Day one. No excuses." },
   FULL_SPECTRUM: { display: "FULL SPECTRUM", subtitle: "All four engines. Maximum output." },
   REBALANCE: { display: "REBALANCE", subtitle: "Stop hiding behind your strengths" },
   REFOCUS: { display: "REFOCUS", subtitle: "Less tasks. More intention." },
@@ -231,8 +234,15 @@ function selectOperationType(
   // Consistency-driven (highest priority)
   if (consistency === "LOW") return "REFOCUS";
 
-  // Streak-driven — only treat 0 as broken (streak=1 means user completed yesterday)
-  if (streak === 0) return "REBUILD";
+  // Streak-driven — check integrity system for nuanced recovery
+  if (streak === 0) {
+    const integrity = checkIntegrityStatus();
+    // If user has prior history and integrity shows they're recovering, encourage them
+    if (integrity.lastCompletionDate && (integrity.status === "WARNING" || integrity.status === "BREACH" || integrity.status === "RECOVERING")) {
+      return "RECOVERY";
+    }
+    return "REBUILD";
+  }
 
   // Score-driven (check before momentum — engine health matters most)
   if (oneBelow30) return "ENGINE_RECOVERY";
@@ -370,8 +380,11 @@ function generateProtocolMessage(
     case "MOMENTUM":
       return `${name}. ${streak}-day streak. ${consistencyRate}% consistency. You're building something real. Don't let up now.`;
 
+    case "RECOVERY":
+      return `${name}. Welcome back. The protocol remembers your progress. Pick up where you left off. Today is recovery day.`;
+
     case "REBUILD":
-      return `${name}. Your streak broke. I could give you a speech. But you know what to do. Start again. Today.`;
+      return `${name}. First day. No history, no excuses. The protocol starts now. Show me what you've got.`;
 
     case "FULL_SPECTRUM":
       return `${name}. All engines above 70%. This is rare. Today: maintain across the board. Prove yesterday wasn't a fluke.`;
