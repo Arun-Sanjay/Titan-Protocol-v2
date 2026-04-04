@@ -26,9 +26,8 @@ const ENGINES = [
 ] as const;
 
 // Timing: synced to ONBO-004 voice line when each engine name is spoken (ms)
-// UPDATED: Speech is faster than highlights, so triggers are earlier now
-// "Body" ~2.0s, "Mind" ~3.5s, "Money" ~5.0s, "Charisma" ~6.5s
-const ENGINE_TIMINGS = [2000, 3500, 5000, 6500];
+// Audio analysis timestamps: Body 2.682s, Mind 8.034s, Money 12.597s, Charisma 17.079s
+const ENGINE_TIMINGS = [2682, 8034, 12597, 17079];
 
 // ── Typewriter label that types out character by character ──
 function TypewriterLabel({
@@ -210,7 +209,7 @@ export function BeatFourEngines({ onComplete }: Props) {
     // Play the four engines voice line
     playVoiceLineAsync("ONBO-004");
 
-    // After all 4 lit (~7.5s with new timings): draw network lines + center glow
+    // After all 4 lit: draw network lines + center glow (after "connection" at ~25s)
     t(() => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       networkOpacity.value = withTiming(0.5, {
@@ -221,26 +220,26 @@ export function BeatFourEngines({ onComplete }: Props) {
         duration: 800,
         easing: Easing.out(Easing.cubic),
       });
-    }, 7500);
+    }, 22000);
 
-    // "TITAN SCORE" fades in at ~8s
+    // "TITAN SCORE" fades in alongside network lines
     t(() => {
       titanScoreOpacity.value = withTiming(1, {
         duration: 500,
         easing: Easing.out(Easing.cubic),
       });
-    }, 8000);
+    }, 22000);
 
-    // Tap hint at 5s
+    // Tap hint at 10s
     t(() => {
       tapHintOpacity.value = withTiming(0.1, { duration: 600 });
-    }, 5000);
+    }, 10000);
 
-    // Auto-advance at 12s (tighter since voice is faster)
+    // Auto-advance at 27s (voice ends ~25s + buffer)
     t(() => {
       stopCurrentAudio();
       onComplete();
-    }, 12000);
+    }, 27000);
 
     return () => {
       timers.current.forEach(clearTimeout);
