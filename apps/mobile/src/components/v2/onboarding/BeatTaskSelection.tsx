@@ -402,7 +402,7 @@ const CIRCLE_SIZE = 22;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000000",
     paddingTop: spacing["4xl"],
   },

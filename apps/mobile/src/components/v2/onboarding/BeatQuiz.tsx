@@ -361,7 +361,7 @@ const monoFont = Platform.select({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000000",
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,

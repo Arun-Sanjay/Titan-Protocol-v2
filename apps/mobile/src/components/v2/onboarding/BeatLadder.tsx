@@ -1,12 +1,20 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, Pressable, StyleSheet, Dimensions } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Dimensions,
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
+  withDelay,
   withRepeat,
   withSequence,
   Easing,
+  FadeInUp,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
@@ -20,79 +28,111 @@ import {
   type Rank,
 } from "../../../lib/ranks-v2";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type Props = { onComplete: () => void };
 
-// ── Rank node sizing ─────────────────────────────────────────────────────────
+// ── Layout constants ────────────────────────────────────────────────────────
+// Designed so 8 ranks + 7 connection lines + header space + button all fit
+// within ~712px usable height (812px minus safe areas).
 
-const NODE_SIZE = 14;
-const TITAN_NODE_SIZE = 20;
-const ROW_HEIGHT = 44;
-const LINE_WIDTH = 2;
+const RANK_COUNT = 8;
+const NODE_SIZE = 12;
+const TITAN_NODE_SIZE = 18;
+const LINE_HEIGHT_PX = 16;
+const LINE_WIDTH = 1.5;
 
-// ── Requirement labels ───────────────────────────────────────────────────────
+// Row heights: compact enough to fit on one screen
+const ROW_HEIGHT = 52; // each rank row
+const TITAN_ROW_HEIGHT = 58; // titan gets a bit more
+
+// ── Voice-sync timings (ms from mount) ──────────────────────────────────────
+// Matches ONBO-010 narration: each rank name spoken at these approximate times
+
+const RANK_APPEAR_TIMES: number[] = [
+  1500, // initiate
+  4000, // operative
+  6000, // agent
+  8000, // specialist
+  10000, // commander
+  12000, // vanguard
+  14000, // sentinel
+  16000, // titan
+];
+
+// ── Requirement labels ──────────────────────────────────────────────────────
 
 function getRequirementLabel(rank: Rank): string {
   const req = RANK_REQUIREMENTS[rank];
   if (rank === "initiate") return "Starting rank";
-  if (rank === "titan") return `${req.avgScore}% avg, ${req.consecutiveDays}d + Field Op`;
-  return `${req.avgScore}% avg, ${req.consecutiveDays}d`;
+  if (rank === "titan")
+    return `${req.avgScore}% avg / ${req.consecutiveDays}d + Field Op`;
+  return `${req.avgScore}% avg / ${req.consecutiveDays}d streak`;
 }
 
-// ── Animated rank node ───────────────────────────────────────────────────────
+// ── Animated rank node ──────────────────────────────────────────────────────
 
 function RankNode({
   rank,
-  index,
   visible,
   isTitan,
   isFirst,
 }: {
   rank: Rank;
-  index: number;
   visible: boolean;
   isTitan: boolean;
   isFirst: boolean;
 }) {
   const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.6);
+  const translateY = useSharedValue(20);
   const glowOpacity = useSharedValue(0);
   const youAreHereOpacity = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      opacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) });
-      scale.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.back(1.5)) });
+      opacity.value = withTiming(1, {
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+      });
+      translateY.value = withTiming(0, {
+        duration: 400,
+        easing: Easing.out(Easing.cubic),
+      });
 
       if (isTitan) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        glowOpacity.value = withRepeat(
-          withSequence(
-            withTiming(0.6, { duration: 800 }),
-            withTiming(0.15, { duration: 800 }),
+        glowOpacity.value = withDelay(
+          200,
+          withRepeat(
+            withSequence(
+              withTiming(0.7, { duration: 900 }),
+              withTiming(0.15, { duration: 900 }),
+            ),
+            -1,
+            true,
           ),
-          -1,
-          true,
         );
       }
 
       if (isFirst) {
-        youAreHereOpacity.value = withRepeat(
-          withSequence(
-            withTiming(1, { duration: 600 }),
-            withTiming(0.4, { duration: 600 }),
+        youAreHereOpacity.value = withDelay(
+          300,
+          withRepeat(
+            withSequence(
+              withTiming(1, { duration: 700 }),
+              withTiming(0.3, { duration: 700 }),
+            ),
+            -1,
+            true,
           ),
-          -1,
-          true,
         );
       }
     }
   }, [visible]);
 
-  const nodeStyle = useAnimatedStyle(() => ({
+  const nodeAnimStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ scale: scale.value }],
+    transform: [{ translateY: translateY.value }],
   }));
 
   const glowStyle = useAnimatedStyle(() => ({
@@ -105,15 +145,21 @@ function RankNode({
 
   const size = isTitan ? TITAN_NODE_SIZE : NODE_SIZE;
   const color = RANK_COLORS[rank];
+  const height = isTitan ? TITAN_ROW_HEIGHT : ROW_HEIGHT;
 
   return (
-    <Animated.View style={[styles.rankRow, nodeStyle]}>
-      {/* Abbreviation (left) */}
-      <Text style={[styles.abbreviation, { color: "rgba(255,255,255,0.35)" }]}>
+    <Animated.View style={[styles.rankRow, { height }, nodeAnimStyle]}>
+      {/* Abbreviation (left column, fixed width) */}
+      <Text
+        style={[
+          styles.abbreviation,
+          isTitan && { color: "rgba(255,255,255,0.50)" },
+        ]}
+      >
         {RANK_ABBREVIATIONS[rank]}
       </Text>
 
-      {/* Node circle */}
+      {/* Node circle (center column, fixed width) */}
       <View style={styles.nodeWrap}>
         {isTitan && (
           <Animated.View
@@ -137,15 +183,24 @@ function RankNode({
         />
       </View>
 
-      {/* Name + requirement (right) */}
+      {/* Name + requirement (right column, flex) */}
       <View style={styles.rankInfo}>
-        <Text style={[styles.rankName, { color }, isTitan && styles.titanName]}>
+        <Text
+          style={[
+            styles.rankName,
+            { color },
+            isTitan && styles.titanName,
+          ]}
+          numberOfLines={1}
+        >
           {RANK_NAMES[rank]}
         </Text>
-        <Text style={styles.requirement}>{getRequirementLabel(rank)}</Text>
+        <Text style={styles.requirement} numberOfLines={1}>
+          {getRequirementLabel(rank)}
+        </Text>
       </View>
 
-      {/* "YOU ARE HERE" for Initiate */}
+      {/* "YOU ARE HERE" badge for Initiate */}
       {isFirst && (
         <Animated.View style={[styles.youAreHereWrap, youAreHereStyle]}>
           <Text style={styles.youAreHere}>YOU ARE HERE</Text>
@@ -155,40 +210,42 @@ function RankNode({
   );
 }
 
-// ── Connection line ──────────────────────────────────────────────────────────
+// ── Connection line between ranks ───────────────────────────────────────────
 
-function ConnectionLine({ visible, index }: { visible: boolean; index: number }) {
-  const height = useSharedValue(0);
+function ConnectionLine({ visible }: { visible: boolean }) {
+  const lineOpacity = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      height.value = withTiming(ROW_HEIGHT - NODE_SIZE - 4, {
-        duration: 300,
+      lineOpacity.value = withTiming(1, {
+        duration: 250,
         easing: Easing.out(Easing.cubic),
       });
     }
   }, [visible]);
 
-  const lineStyle = useAnimatedStyle(() => ({
-    height: height.value,
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: lineOpacity.value,
   }));
 
   return (
-    <View style={styles.lineWrap}>
-      <Animated.View style={[styles.line, lineStyle]} />
+    <View style={styles.lineContainer}>
+      <Animated.View style={[styles.line, animStyle]} />
     </View>
   );
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
+// ── Main component ──────────────────────────────────────────────────────────
 
 export function BeatLadder({ onComplete }: Props) {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [visibleCount, setVisibleCount] = useState(0);
-  const pulseOpacity = useSharedValue(0);
+  const [showButton, setShowButton] = useState(false);
+  const btnOpacity = useSharedValue(0);
 
-  // Reversed order: bottom (initiate) → top (titan)
-  const ranksBottomUp = [...RANK_ORDER];
+  // Display order: bottom (initiate, index 0) to top (titan, index 7)
+  // We render top-to-bottom in JSX but reverse the array so titan is at top
+  const ranksBottomUp = [...RANK_ORDER]; // initiate first, titan last
 
   useEffect(() => {
     const t = (fn: () => void, ms: number) => {
@@ -197,35 +254,32 @@ export function BeatLadder({ onComplete }: Props) {
       return id;
     };
 
-    // Play rank narration
+    // Play rank narration voice line
     playVoiceLineAsync("ONBO-010");
 
-    // Stagger rank appearances bottom→top at 1500ms intervals
+    // Stagger rank appearances synced with voice narration
     for (let i = 0; i < ranksBottomUp.length; i++) {
       t(() => {
         setVisibleCount(i + 1);
         if (i < ranksBottomUp.length - 1) {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
-      }, 500 + i * 1500);
+      }, RANK_APPEAR_TIMES[i]);
     }
 
-    // After all visible: pulse the line once
-    const allVisibleTime = 500 + ranksBottomUp.length * 1500 + 500;
+    // Show CONTINUE button after all ranks visible + short delay
     t(() => {
-      pulseOpacity.value = withSequence(
-        withTiming(0.6, { duration: 400 }),
-        withTiming(0, { duration: 600 }),
-      );
-    }, allVisibleTime);
+      setShowButton(true);
+      btnOpacity.value = withTiming(1, { duration: 500 });
+    }, RANK_APPEAR_TIMES[RANK_APPEAR_TIMES.length - 1] + 1500);
 
     return () => {
       timers.current.forEach(clearTimeout);
     };
   }, []);
 
-  const pulseStyle = useAnimatedStyle(() => ({
-    opacity: pulseOpacity.value,
+  const btnAnimStyle = useAnimatedStyle(() => ({
+    opacity: btnOpacity.value,
   }));
 
   const handleContinue = () => {
@@ -233,86 +287,98 @@ export function BeatLadder({ onComplete }: Props) {
     onComplete();
   };
 
+  // Build the ladder: reversed so titan renders at the top of the list
+  const ladderItems = ranksBottomUp
+    .map((rank, i) => {
+      const isVisible = i < visibleCount;
+      const isTitan = rank === "titan";
+      const isFirst = rank === "initiate";
+
+      return (
+        <React.Fragment key={rank}>
+          {/* Connection line above each rank except the top-most (titan) */}
+          {i > 0 && <ConnectionLine visible={isVisible} />}
+          <RankNode
+            rank={rank}
+            visible={isVisible}
+            isTitan={isTitan}
+            isFirst={isFirst}
+          />
+        </React.Fragment>
+      );
+    })
+    .reverse(); // Titan at top, Initiate at bottom
+
   return (
     <View style={styles.container}>
-      {/* Ladder container — rendered bottom-to-top visually */}
-      <View style={styles.ladder}>
-        {/* Energy pulse overlay on the line */}
-        <Animated.View style={[styles.energyPulse, pulseStyle]} />
-
-        {ranksBottomUp.map((rank, i) => {
-          const isVisible = i < visibleCount;
-          const isTitan = rank === "titan";
-          const isFirst = rank === "initiate";
-          // Render bottom-to-top: reverse the visual position
-          const reverseIndex = ranksBottomUp.length - 1 - i;
-
-          return (
-            <React.Fragment key={rank}>
-              {/* Connection line above (not for the bottom-most rank) */}
-              {i > 0 && (
-                <ConnectionLine visible={isVisible} index={i} />
-              )}
-              <RankNode
-                rank={rank}
-                index={i}
-                visible={isVisible}
-                isTitan={isTitan}
-                isFirst={isFirst}
-              />
-            </React.Fragment>
-          );
-        }).reverse()}
+      {/* Ladder fills center area */}
+      <View style={styles.ladderSection}>
+        <View style={styles.ladder}>{ladderItems}</View>
       </View>
 
-      {/* Continue button */}
-      <Pressable
-        style={styles.btn}
-        onPress={handleContinue}
-      >
-        <Text style={styles.btnText}>CONTINUE</Text>
-      </Pressable>
+      {/* Continue button pinned at bottom */}
+      <View style={styles.buttonSection}>
+        {showButton && (
+          <Animated.View style={btnAnimStyle}>
+            <Pressable style={styles.btn} onPress={handleContinue}>
+              <Text style={styles.btnText}>CONTINUE</Text>
+            </Pressable>
+          </Animated.View>
+        )}
+      </View>
     </View>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
+// ── Styles ──────────────────────────────────────────────────────────────────
+
+// Calculate the center column offset for the connection line
+const ABBR_WIDTH = 36;
+const NODE_COL_WIDTH = TITAN_NODE_SIZE + 12;
+const LINE_LEFT = ABBR_WIDTH + spacing.sm + NODE_COL_WIDTH / 2 - LINE_WIDTH / 2;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000000",
+    zIndex: 10,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing["3xl"],
-    paddingBottom: spacing["3xl"],
-    justifyContent: "space-between",
+  },
+
+  // ── Ladder area: centered vertically, takes up most of the screen ──
+
+  ladderSection: {
+    flex: 1,
+    justifyContent: "center",
+    paddingTop: 60, // safe area top offset
   },
 
   ladder: {
-    flex: 1,
-    justifyContent: "center",
     alignItems: "stretch",
-    paddingVertical: spacing.lg,
   },
+
+  // ── Individual rank row ──
 
   rankRow: {
     flexDirection: "row",
     alignItems: "center",
-    height: ROW_HEIGHT,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
 
   abbreviation: {
-    ...fonts.mono,
-    fontSize: 10,
-    width: 32,
+    fontFamily: "monospace",
+    fontSize: 9,
+    fontWeight: "600",
+    width: ABBR_WIDTH,
     textAlign: "right",
     marginRight: spacing.sm,
-    letterSpacing: 1,
+    letterSpacing: 1.2,
+    color: "rgba(255,255,255,0.30)",
+    textTransform: "uppercase",
   },
 
   nodeWrap: {
-    width: TITAN_NODE_SIZE + 8,
+    width: NODE_COL_WIDTH,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -323,81 +389,86 @@ const styles = StyleSheet.create({
 
   titanGlow: {
     position: "absolute",
-    width: TITAN_NODE_SIZE + 16,
-    height: TITAN_NODE_SIZE + 16,
-    borderRadius: (TITAN_NODE_SIZE + 16) / 2,
+    width: TITAN_NODE_SIZE + 20,
+    height: TITAN_NODE_SIZE + 20,
+    borderRadius: (TITAN_NODE_SIZE + 20) / 2,
     zIndex: 0,
   },
 
   rankInfo: {
     flex: 1,
     marginLeft: spacing.sm,
+    justifyContent: "center",
   },
 
   rankName: {
-    ...fonts.mono,
-    fontSize: 13,
+    fontFamily: "monospace",
+    fontSize: 12,
     fontWeight: "700",
     letterSpacing: 1.5,
     textTransform: "uppercase",
   },
 
   titanName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "800",
-    letterSpacing: 2,
+    letterSpacing: 2.5,
   },
 
   requirement: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.30)",
-    marginTop: 1,
+    fontSize: 9,
+    fontWeight: "400",
+    color: "rgba(255,255,255,0.25)",
+    marginTop: 2,
   },
+
+  // ── "YOU ARE HERE" badge ──
 
   youAreHereWrap: {
     position: "absolute",
-    right: 0,
-    paddingHorizontal: spacing.sm,
+    right: spacing.xs,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.20)",
-    borderRadius: radius.sm,
+    borderColor: "rgba(255,255,255,0.18)",
+    borderRadius: 4,
   },
 
   youAreHere: {
-    ...fonts.mono,
-    fontSize: 8,
+    fontFamily: "monospace",
+    fontSize: 7,
     fontWeight: "700",
     color: "#FFFFFF",
     letterSpacing: 2,
     textTransform: "uppercase",
   },
 
-  lineWrap: {
-    paddingLeft: 32 + spacing.sm + (TITAN_NODE_SIZE + 8) / 2 - LINE_WIDTH / 2,
+  // ── Connection line between nodes ──
+
+  lineContainer: {
+    height: LINE_HEIGHT_PX,
+    paddingLeft: LINE_LEFT,
+    justifyContent: "center",
   },
 
   line: {
     width: LINE_WIDTH,
+    height: LINE_HEIGHT_PX,
     backgroundColor: "rgba(255,255,255,0.12)",
   },
 
-  energyPulse: {
-    position: "absolute",
-    left: 32 + spacing.sm + (TITAN_NODE_SIZE + 8) / 2 - 2,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    backgroundColor: "rgba(255,255,255,0.40)",
-    borderRadius: 2,
+  // ── Button area pinned at bottom ──
+
+  buttonSection: {
+    paddingBottom: 50, // safe area bottom offset
+    minHeight: 80,
   },
 
   btn: {
     backgroundColor: colors.primary,
     borderRadius: radius.md,
-    paddingVertical: spacing.lg,
+    paddingVertical: 14,
     alignItems: "center",
-    marginTop: spacing.lg,
   },
 
   btnText: {

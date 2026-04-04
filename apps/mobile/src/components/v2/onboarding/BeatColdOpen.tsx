@@ -123,7 +123,7 @@ export function BeatColdOpen({ onComplete }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000000",
     justifyContent: "center",
     alignItems: "center",

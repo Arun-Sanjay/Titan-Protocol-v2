@@ -1,12 +1,26 @@
-import React, { useEffect, useRef, useState } from "react";
-import { View, StyleSheet } from "react-native";
-import { initAudio } from "../../../lib/protocol-audio";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+} from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+  runOnJS,
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { initAudio, stopCurrentAudio } from "../../../lib/protocol-audio";
 import { useStoryStore } from "../../../stores/useStoryStore";
 import { useModeStore, type IdentityArchetype } from "../../../stores/useModeStore";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import type { EngineKey } from "../../../db/schema";
 
-// ── Beat components ──────────────────────────────────────────────────────────
+// -- Beat components ----------------------------------------------------------
 
 import { BeatColdOpen } from "./BeatColdOpen";
 import { BeatWhatIsThis } from "./BeatWhatIsThis";
@@ -20,13 +34,13 @@ import { BeatScheduleMode } from "./BeatScheduleMode";
 import { BeatTaskSelection } from "./BeatTaskSelection";
 import { BeatBriefing } from "./BeatBriefing";
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// -- Types --------------------------------------------------------------------
 
 type Props = {
   onComplete: () => void;
 };
 
-// ── Default tasks for the briefing (Beat 11) ────────────────────────────────
+// -- Default tasks for the briefing (Beat 11) ---------------------------------
 
 const DEFAULT_BRIEFING_TASKS = [
   { title: "Complete your first workout", engine: "body" },
@@ -35,10 +49,23 @@ const DEFAULT_BRIEFING_TASKS = [
   { title: "Start a conversation with someone new", engine: "charisma" },
 ];
 
-// ── Component ────────────────────────────────────────────────────────────────
+// -- Crossfade timing constants -----------------------------------------------
+
+const FADE_OUT_MS = 400;
+const BLACK_PAUSE_MS = 200;
+const FADE_IN_MS = 400;
+
+// -- Component ----------------------------------------------------------------
 
 export function CinematicOnboarding({ onComplete }: Props) {
-  const [currentBeat, setCurrentBeat] = useState(1);
+  const [currentBeat, setCurrentBeat] = useState(0);
+  const isTransitioning = useRef(false);
+
+  // Crossfade animation
+  const fadeOpacity = useSharedValue(1);
+  const animatedFadeStyle = useAnimatedStyle(() => ({
+    opacity: fadeOpacity.value,
+  }));
 
   // Inter-beat data refs (survive re-renders without triggering them)
   const nameRef = useRef("");
@@ -58,20 +85,71 @@ export function CinematicOnboarding({ onComplete }: Props) {
   const setEnginePriority = useOnboardingStore((s) => s.setEnginePriority);
   const setSchedule = useOnboardingStore((s) => s.setSchedule);
 
-  // Initialize audio on mount
+  // Initialize audio on mount, stop on unmount
   useEffect(() => {
     initAudio();
+    return () => {
+      stopCurrentAudio();
+    };
   }, []);
 
-  // ── Beat rendering ─────────────────────────────────────────────────────────
+  // -- Crossfade advance function ---------------------------------------------
+
+  const advanceBeat = useCallback(
+    (nextBeat: number, preAdvanceCallback?: () => void) => {
+      if (isTransitioning.current) return;
+      isTransitioning.current = true;
+
+      // Phase 1: Fade out current beat
+      fadeOpacity.value = withTiming(0, {
+        duration: FADE_OUT_MS,
+        easing: Easing.out(Easing.ease),
+      });
+
+      // Phase 2: After fade-out + black pause, switch beat and fade in
+      setTimeout(() => {
+        if (preAdvanceCallback) preAdvanceCallback();
+        setCurrentBeat(nextBeat);
+
+        setTimeout(() => {
+          fadeOpacity.value = withTiming(1, {
+            duration: FADE_IN_MS,
+            easing: Easing.in(Easing.ease),
+          });
+          isTransitioning.current = false;
+        }, BLACK_PAUSE_MS);
+      }, FADE_OUT_MS);
+    },
+    [fadeOpacity],
+  );
+
+  // -- Beat rendering ---------------------------------------------------------
 
   const renderBeat = () => {
     switch (currentBeat) {
+      // Beat 0: Audio Prompt
+      case 0:
+        return (
+          <View style={styles.audioPromptContainer}>
+            <Ionicons name="volume-high" size={48} color="rgba(255,255,255,0.6)" />
+            <Text style={styles.audioPromptText}>
+              INCREASE AUDIO FOR BEST EXPERIENCE
+            </Text>
+            <TouchableOpacity
+              style={styles.beginButton}
+              onPress={() => advanceBeat(1)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.beginButtonText}>BEGIN</Text>
+            </TouchableOpacity>
+          </View>
+        );
+
       // Beat 1: Cold Open
       case 1:
         return (
           <BeatColdOpen
-            onComplete={() => setCurrentBeat(2)}
+            onComplete={() => advanceBeat(2)}
           />
         );
 
@@ -79,7 +157,7 @@ export function CinematicOnboarding({ onComplete }: Props) {
       case 2:
         return (
           <BeatWhatIsThis
-            onComplete={() => setCurrentBeat(3)}
+            onComplete={() => advanceBeat(3)}
           />
         );
 
@@ -87,7 +165,7 @@ export function CinematicOnboarding({ onComplete }: Props) {
       case 3:
         return (
           <BeatFourEngines
-            onComplete={() => setCurrentBeat(4)}
+            onComplete={() => advanceBeat(4)}
           />
         );
 
@@ -96,9 +174,10 @@ export function CinematicOnboarding({ onComplete }: Props) {
         return (
           <BeatIdentify
             onComplete={(name: string) => {
-              nameRef.current = name;
-              setUserName(name);
-              setCurrentBeat(5);
+              advanceBeat(5, () => {
+                nameRef.current = name;
+                setUserName(name);
+              });
             }}
           />
         );
@@ -108,9 +187,10 @@ export function CinematicOnboarding({ onComplete }: Props) {
         return (
           <BeatQuiz
             onComplete={(archetype: string) => {
-              archetypeRef.current = archetype;
-              setIdentity(archetype as IdentityArchetype);
-              setCurrentBeat(6);
+              advanceBeat(6, () => {
+                archetypeRef.current = archetype;
+                setIdentity(archetype as IdentityArchetype);
+              });
             }}
           />
         );
@@ -120,7 +200,7 @@ export function CinematicOnboarding({ onComplete }: Props) {
         return (
           <BeatReveal
             archetype={archetypeRef.current}
-            onComplete={() => setCurrentBeat(7)}
+            onComplete={() => advanceBeat(7)}
           />
         );
 
@@ -128,7 +208,7 @@ export function CinematicOnboarding({ onComplete }: Props) {
       case 7:
         return (
           <BeatLadder
-            onComplete={() => setCurrentBeat(8)}
+            onComplete={() => advanceBeat(8)}
           />
         );
 
@@ -138,10 +218,11 @@ export function CinematicOnboarding({ onComplete }: Props) {
           <BeatEnginePriority
             archetype={archetypeRef.current}
             onComplete={(engines: string[]) => {
-              enginePriorityRef.current = engines;
-              setEnginePriority(engines as EngineKey[]);
-              setFocusEngines(engines);
-              setCurrentBeat(9);
+              advanceBeat(9, () => {
+                enginePriorityRef.current = engines;
+                setEnginePriority(engines as EngineKey[]);
+                setFocusEngines(engines);
+              });
             }}
           />
         );
@@ -155,25 +236,25 @@ export function CinematicOnboarding({ onComplete }: Props) {
               mode: string,
               focusEngs?: string[],
             ) => {
-              scheduleRef.current = schedule;
-              modeRef.current = mode;
-              focusEnginesRef.current = focusEngs;
+              advanceBeat(10, () => {
+                scheduleRef.current = schedule;
+                modeRef.current = mode;
+                focusEnginesRef.current = focusEngs;
 
-              // Persist schedule as Record<string, boolean>
-              const dayKeys = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-              const scheduleRecord: Record<string, boolean> = {};
-              dayKeys.forEach((key, i) => {
-                scheduleRecord[key] = schedule[i] ?? false;
+                // Persist schedule as Record<string, boolean>
+                const dayKeys = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+                const scheduleRecord: Record<string, boolean> = {};
+                dayKeys.forEach((key, i) => {
+                  scheduleRecord[key] = schedule[i] ?? false;
+                });
+                setSchedule(scheduleRecord);
+
+                // Persist mode
+                setMode(mode as any);
+                if (focusEngs) {
+                  setFocusEngines(focusEngs);
+                }
               });
-              setSchedule(scheduleRecord);
-
-              // Persist mode
-              setMode(mode as any);
-              if (focusEngs) {
-                setFocusEngines(focusEngs);
-              }
-
-              setCurrentBeat(10);
             }}
           />
         );
@@ -191,11 +272,12 @@ export function CinematicOnboarding({ onComplete }: Props) {
             archetype={archetypeRef.current}
             activeEngines={activeEngines}
             onComplete={(tasks) => {
-              selectedTasksRef.current = tasks.map((t) => ({
-                title: t.title,
-                engine: t.engine,
-              }));
-              setCurrentBeat(11);
+              advanceBeat(11, () => {
+                selectedTasksRef.current = tasks.map((t) => ({
+                  title: t.title,
+                  engine: t.engine,
+                }));
+              });
             }}
           />
         );
@@ -211,15 +293,15 @@ export function CinematicOnboarding({ onComplete }: Props) {
                 : DEFAULT_BRIEFING_TASKS
             }
             onComplete={() => {
-              setCurrentBeat(12);
+              advanceBeat(12);
             }}
           />
         );
 
       // Beat 12: Done -- mark onboarding complete and exit
       case 12: {
-        // Finalize onboarding
         finishOnboarding();
+        stopCurrentAudio();
         onComplete();
         return null;
       }
@@ -230,17 +312,65 @@ export function CinematicOnboarding({ onComplete }: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      {renderBeat()}
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <View style={styles.overlay}>
+        <SafeAreaView style={styles.safeArea}>
+          <Animated.View style={[styles.content, animatedFadeStyle]}>
+            {renderBeat()}
+          </Animated.View>
+        </SafeAreaView>
+      </View>
     </View>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
+// -- Styles -------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  container: {
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+    backgroundColor: "#000000",
+  },
+  safeArea: {
     flex: 1,
     backgroundColor: "#000000",
+  },
+  content: {
+    flex: 1,
+  },
+  audioPromptContainer: {
+    flex: 1,
+    backgroundColor: "#000000",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 24,
+  },
+  audioPromptText: {
+    fontFamily: "monospace",
+    fontSize: 12,
+    color: "rgba(255,255,255,0.6)",
+    letterSpacing: 3,
+    textAlign: "center",
+    marginTop: 16,
+  },
+  beginButton: {
+    marginTop: 32,
+    paddingHorizontal: 48,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    borderRadius: 4,
+  },
+  beginButtonText: {
+    fontFamily: "monospace",
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    letterSpacing: 4,
+    textAlign: "center",
   },
 });

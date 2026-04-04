@@ -1,10 +1,9 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withDelay,
   withSequence,
   Easing,
 } from "react-native-reanimated";
@@ -26,8 +25,60 @@ const ENGINES = [
   { key: "charisma", label: "CHARISMA", icon: "flash" as const, color: "#60A5FA", offsetY: 70 },
 ] as const;
 
-// Timing: when each engine illuminates (ms from mount)
-const ENGINE_TIMINGS = [2000, 4000, 6000, 8000];
+// Timing: synced to ONBO-004 voice line when each engine name is spoken (ms)
+// "Body" ~3.0s, "Mind" ~5.5s, "Money" ~8.0s, "Charisma" ~10.0s
+const ENGINE_TIMINGS = [3000, 5500, 8000, 10000];
+
+// ── Typewriter label that types out character by character ──
+function TypewriterLabel({
+  text,
+  color,
+  active,
+  charDelayMs = 30,
+}: {
+  text: string;
+  color: string;
+  active: boolean;
+  charDelayMs?: number;
+}) {
+  const [displayed, setDisplayed] = useState("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!active) {
+      setDisplayed("");
+      return;
+    }
+
+    let index = 0;
+    setDisplayed("");
+
+    intervalRef.current = setInterval(() => {
+      index++;
+      setDisplayed(text.slice(0, index));
+      if (index >= text.length && intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    }, charDelayMs);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [active, text, charDelayMs]);
+
+  if (!active && displayed === "") return null;
+
+  return (
+    <View style={styles.labelContainer}>
+      <Text style={[styles.typewriterLabel, { color }]}>
+        {displayed}
+        {displayed.length < text.length && (
+          <Text style={styles.cursor}>_</Text>
+        )}
+      </Text>
+    </View>
+  );
+}
 
 function EngineIcon({
   icon,
@@ -47,18 +98,32 @@ function EngineIcon({
   const opacity = useSharedValue(0.15);
   const glowOpacity = useSharedValue(0);
   const scale = useSharedValue(0.9);
+  const [isLit, setIsLit] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      opacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
+      // Haptic feedback on illumination
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      setIsLit(true);
+
+      opacity.value = withTiming(1, {
+        duration: 400,
+        easing: Easing.out(Easing.cubic),
+      });
       glowOpacity.value = withSequence(
-        withTiming(0.5, { duration: 200 }),
-        withTiming(0.15, { duration: 400 }),
+        withTiming(0.6, { duration: 200 }),
+        withTiming(0.2, { duration: 400 }),
       );
       scale.value = withSequence(
-        withTiming(1.1, { duration: 200, easing: Easing.out(Easing.cubic) }),
-        withTiming(1.0, { duration: 300, easing: Easing.inOut(Easing.cubic) }),
+        withTiming(1.15, {
+          duration: 200,
+          easing: Easing.out(Easing.cubic),
+        }),
+        withTiming(1.0, {
+          duration: 300,
+          easing: Easing.inOut(Easing.cubic),
+        }),
       );
     }, delayMs);
 
@@ -76,12 +141,13 @@ function EngineIcon({
     backgroundColor: color,
   }));
 
-  const labelStyle = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-  }));
-
   return (
-    <View style={[styles.engineNode, { transform: [{ translateX: offsetX }, { translateY: offsetY }] }]}>
+    <View
+      style={[
+        styles.engineNode,
+        { transform: [{ translateX: offsetX }, { translateY: offsetY }] },
+      ]}
+    >
       {/* Glow behind circle */}
       <Animated.View style={[styles.engineGlow, glowStyle]} />
 
@@ -90,10 +156,8 @@ function EngineIcon({
         <Ionicons name={icon} size={24} color={color} />
       </Animated.View>
 
-      {/* Label below */}
-      <Animated.Text style={[styles.engineLabel, { color }, labelStyle]}>
-        {label}
-      </Animated.Text>
+      {/* Typewriter label below icon -- appears on illumination */}
+      <TypewriterLabel text={label} color={color} active={isLit} />
     </View>
   );
 }
@@ -122,20 +186,30 @@ export function BeatFourEngines({ onComplete }: Props) {
     // Play the four engines voice line
     playVoiceLineAsync("ONBO-004");
 
-    // After all 4 lit (~10s): draw network lines + center glow
+    // After all 4 lit (~10.5s): draw network lines + center glow
     t(() => {
-      networkOpacity.value = withTiming(0.5, { duration: 800, easing: Easing.out(Easing.cubic) });
-      centerGlowOpacity.value = withTiming(0.4, { duration: 800, easing: Easing.out(Easing.cubic) });
-    }, 10000);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      networkOpacity.value = withTiming(0.5, {
+        duration: 800,
+        easing: Easing.out(Easing.cubic),
+      });
+      centerGlowOpacity.value = withTiming(0.4, {
+        duration: 800,
+        easing: Easing.out(Easing.cubic),
+      });
+    }, 10500);
 
-    // "TITAN SCORE" fades in at 11s
+    // "TITAN SCORE" fades in at ~11s
     t(() => {
-      titanScoreOpacity.value = withTiming(1, { duration: 500, easing: Easing.out(Easing.cubic) });
+      titanScoreOpacity.value = withTiming(1, {
+        duration: 500,
+        easing: Easing.out(Easing.cubic),
+      });
     }, 11000);
 
     // Tap hint at 5s
     t(() => {
-      tapHintOpacity.value = withTiming(0.10, { duration: 600 });
+      tapHintOpacity.value = withTiming(0.1, { duration: 600 });
     }, 5000);
 
     // Auto-advance at 15s
@@ -172,13 +246,53 @@ export function BeatFourEngines({ onComplete }: Props) {
         {/* Network lines (SVG-free: just 4 thin rotated View lines) */}
         <Animated.View style={[styles.networkLines, networkStyle]}>
           {/* Top to left */}
-          <View style={[styles.netLine, { width: 100, transform: [{ rotate: "45deg" }], top: -5, left: -50 }]} />
+          <View
+            style={[
+              styles.netLine,
+              {
+                width: 100,
+                transform: [{ rotate: "45deg" }],
+                top: -5,
+                left: -50,
+              },
+            ]}
+          />
           {/* Top to right */}
-          <View style={[styles.netLine, { width: 100, transform: [{ rotate: "-45deg" }], top: -5, right: -50 }]} />
+          <View
+            style={[
+              styles.netLine,
+              {
+                width: 100,
+                transform: [{ rotate: "-45deg" }],
+                top: -5,
+                right: -50,
+              },
+            ]}
+          />
           {/* Bottom to left */}
-          <View style={[styles.netLine, { width: 100, transform: [{ rotate: "-45deg" }], bottom: -5, left: -50 }]} />
+          <View
+            style={[
+              styles.netLine,
+              {
+                width: 100,
+                transform: [{ rotate: "-45deg" }],
+                bottom: -5,
+                left: -50,
+              },
+            ]}
+          />
           {/* Bottom to right */}
-          <View style={[styles.netLine, { width: 100, transform: [{ rotate: "45deg" }], bottom: -5, right: -50 }]} />
+          <View
+            style={[
+              styles.netLine,
+              {
+                width: 100,
+                transform: [{ rotate: "45deg" }],
+                bottom: -5,
+                right: -50,
+              },
+            ]}
+          />
         </Animated.View>
 
         {/* Center glow dot */}
@@ -246,12 +360,22 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
   },
-  engineLabel: {
+
+  // ── Typewriter label ──
+  labelContainer: {
     marginTop: 6,
+    height: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  typewriterLabel: {
     fontSize: 9,
     fontWeight: "700",
     letterSpacing: 2,
     textTransform: "uppercase",
+  },
+  cursor: {
+    opacity: 0.6,
   },
 
   // ── Network lines ──
