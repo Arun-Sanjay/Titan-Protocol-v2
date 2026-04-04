@@ -36,11 +36,14 @@ import { useSkillTreeStore, SKILL_TREES } from "../../src/stores/useSkillTreeSto
 import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdentityStore";
 import { useHabitStore } from "../../src/stores/useHabitStore";
 import { useFieldOpStore } from "../../src/stores/useFieldOpStore";
+import { useStoryStore } from "../../src/stores/useStoryStore";
+import { useProgressionStore } from "../../src/stores/useProgressionStore";
 import { getTodayKey } from "../../src/lib/date";
 import { getDailyRank } from "../../src/db/gamification";
 import { getCurrentChapter, getDayNumber } from "../../src/data/chapters";
 import { evaluateAllTrees, initializeAllTrees } from "../../src/lib/skill-tree-evaluator";
 import { getStoryForDay, addEntry } from "../../src/lib/narrative-engine";
+import { generateDailyOperation } from "../../src/lib/operation-engine";
 import type { EngineKey } from "../../src/db/schema";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -124,6 +127,13 @@ export default function HQScreen() {
   const activeFieldOp = useFieldOpStore((s) => s.activeFieldOp);
   const fieldOpClearedCount = useFieldOpStore((s) => s.getClearedCount());
 
+  // Story + Progression stores (for operation engine)
+  const userName = useStoryStore((s) => s.userName);
+  const phase = useProgressionStore((s) => s.currentPhase);
+
+  // Task completion flash state
+  const [lastCompletedId, setLastCompletedId] = useState<number | null>(null);
+
   // Derived data
   const tasks = useMemo(
     () => selectAllTasksForDate(storeTasks, storeCompletions, analytics.today),
@@ -137,6 +147,12 @@ export default function HQScreen() {
   const firstActiveDate = getJSON<string | null>("first_active_date", null);
   const dayNumber = getDayNumber(firstActiveDate);
   const chapter = getCurrentChapter(dayNumber);
+
+  // Daily operation (for codename banner)
+  const operation = useMemo(
+    () => generateDailyOperation(userName, dayNumber, protocolStreak, phase),
+    [dayNumber],
+  );
 
   // Skill tree ready count
   const readyToClaimCount = useMemo(() => {
@@ -201,10 +217,16 @@ export default function HQScreen() {
 
   // Mission toggle
   const handleToggle = useCallback((task: TaskWithStatus) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const completed = toggleTask(task.engine, task.id!, analytics.today);
     const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
     if (completed) {
+      // [Game-feel #2] Satisfying success haptic instead of plain medium
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // [Game-feel #2] Flash the completed row green
+      setLastCompletedId(task.id!);
+      setTimeout(() => setLastCompletedId(null), 600);
+
       awardXP(analytics.today, "task_complete", xp);
       updateStreak(analytics.today);
       evaluateAllTrees();
@@ -222,10 +244,18 @@ export default function HQScreen() {
         title: `+${xp} XP`,
         subtitle: task.title,
       });
+
+      // [Game-feel #4] All-tasks-complete celebration
+      if (completedCount + 1 === tasks.length) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 200);
+        notify({ type: "system", title: "ALL TASKS COMPLETE", subtitle: "Protocol objectives cleared." });
+      }
     } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       awardXP(analytics.today, "task_uncomplete", -xp);
     }
-  }, [analytics.today, toggleTask, awardXP, updateStreak, notify]);
+  }, [analytics.today, toggleTask, awardXP, updateStreak, notify, completedCount, tasks.length]);
 
   // Protocol pulse animation
   const protocolPulse = useSharedValue(0.4);
@@ -243,6 +273,30 @@ export default function HQScreen() {
   const protocolBorderStyle = useAnimatedStyle(() => ({
     borderColor: `rgba(247, 250, 255, ${protocolPulse.value})`,
   }));
+
+  // [Game-feel #3] Streak glow animation (streak >= 30 pulses)
+  const streakGlowOpacity = useSharedValue(0.6);
+  useEffect(() => {
+    if (protocolStreak >= 30) {
+      streakGlowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.8, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.4, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1, false,
+      );
+    }
+  }, [protocolStreak]);
+  const streakGlowStyle = useAnimatedStyle(() => {
+    if (protocolStreak < 7) return {};
+    const intensity = protocolStreak >= 14 ? 12 : 8;
+    return {
+      shadowColor: colors.warning,
+      shadowRadius: intensity,
+      shadowOpacity: protocolStreak >= 30 ? streakGlowOpacity.value : 0.6,
+      shadowOffset: { width: 0, height: 0 },
+    };
+  });
 
   // Mission expand state
   const [missionsExpanded, setMissionsExpanded] = useState(false);
@@ -313,7 +367,7 @@ export default function HQScreen() {
         }
       >
         {/* ══════════════ SECTION 1: CHARACTER HUD ══════════════ */}
-        <Animated.View entering={FadeInDown.delay(0).duration(400)} style={s.hudSection}>
+        <Animated.View entering={FadeInDown.delay(0).duration(500).springify().damping(20)} style={s.hudSection}>
           <Text style={s.hudKicker}>
             DAY {dayNumber} {"\u00B7"} CH.{chapter.number}: {chapter.name.toUpperCase()}
           </Text>
@@ -332,9 +386,11 @@ export default function HQScreen() {
                 <View style={s.hudMetaDot} />
                 <Text style={[s.hudMetaText, { color: rank.color }]}>{rank.letter}</Text>
                 <View style={s.hudMetaDot} />
-                <Text style={[s.hudStreakText, { color: getIntegrityColor(loadIntegrity().level) }]}>
-                  {"\uD83D\uDD25"}{protocolStreak}
-                </Text>
+                <Animated.View style={[protocolStreak >= 7 && s.streakGlowWrap, streakGlowStyle]}>
+                  <Text style={[s.hudStreakText, { color: getIntegrityColor(loadIntegrity().level) }]}>
+                    {"\uD83D\uDD25"}{protocolStreak}
+                  </Text>
+                </Animated.View>
                 {getMomentum(protocolStreak).multiplier > 1 && (
                   <>
                     <View style={s.hudMetaDot} />
@@ -352,8 +408,17 @@ export default function HQScreen() {
           </View>
         </Animated.View>
 
+        {/* ══════════════ OPERATION CODENAME BANNER ══════════════ */}
+        <Animated.View entering={FadeInDown.delay(30).duration(500).springify().damping(20)}>
+          <View style={s.operationBanner}>
+            <Text style={s.operationKicker}>ACTIVE OPERATION</Text>
+            <Text style={s.operationName}>{operation.displayName}</Text>
+            <Text style={s.operationSubtitle}>{operation.subtitle}</Text>
+          </View>
+        </Animated.View>
+
         {/* ══════════════ SECTION 2: RADAR + ENGINE STATS (merged) ══════════════ */}
-        <Animated.View entering={FadeInDown.delay(60).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(90).duration(500).springify().damping(20)}>
           <Panel style={s.card} tone="hero" delay={60}>
             <Text style={s.kicker}>ENGINE OVERVIEW</Text>
             <View style={s.radarEngineRow}>
@@ -390,10 +455,10 @@ export default function HQScreen() {
         </Animated.View>
 
         {/* ══════════════ SECTION 3: DAILY QUEST ══════════════ */}
-        <QuestCard delay={120} />
+        <QuestCard delay={150} />
 
         {/* ══════════════ SECTION 4: TODAY'S MISSIONS ══════════════ */}
-        <Animated.View entering={FadeInDown.delay(180).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(210).duration(500).springify().damping(20)}>
           <View style={s.missionHeader}>
             <Text style={s.kicker}>TODAY'S MISSIONS</Text>
             <Pressable
@@ -422,6 +487,7 @@ export default function HQScreen() {
                   kind={task.kind}
                   engine={task.engine}
                   onToggle={() => handleToggle(task)}
+                  highlighted={task.id === lastCompletedId}
                 />
               ))}
 
@@ -438,7 +504,7 @@ export default function HQScreen() {
         </Animated.View>
 
         {/* ══════════════ SECTION 5: HABITS + SKILL TREES (side-by-side) ══════════════ */}
-        <Animated.View entering={FadeInDown.delay(240).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(270).duration(500).springify().damping(20)}>
           <View style={s.sideBySideRow}>
             {/* Left: Habits card */}
             <Pressable
@@ -500,7 +566,7 @@ export default function HQScreen() {
         </Animated.View>
 
         {/* ══════════════ SECTION 6: BOTTOM NAV ROW ══════════════ */}
-        <Animated.View entering={FadeInDown.delay(300).duration(400)}>
+        <Animated.View entering={FadeInDown.delay(330).duration(500).springify().damping(20)}>
           <View style={s.bottomNavRow}>
             <Pressable
               style={s.bottomNavCard}
@@ -696,6 +762,42 @@ const s = StyleSheet.create({
     fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
     color: "rgba(247,250,255,0.96)",
     fontVariant: ["tabular-nums"] as any,
+  },
+
+  // ══════════════ OPERATION CODENAME BANNER ══════════════
+  operationBanner: {
+    backgroundColor: "rgba(0,255,136,0.04)",
+    borderLeftWidth: 3,
+    borderLeftColor: "#00FF88",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    borderRadius: 0,
+  },
+  operationKicker: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#00FF88",
+    letterSpacing: 2.5,
+    fontFamily: Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" }),
+    marginBottom: 4,
+  },
+  operationName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "rgba(247,250,255,0.96)",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  operationSubtitle: {
+    fontSize: 12,
+    color: "rgba(247,250,255,0.50)",
+  },
+
+  // ══════════════ STREAK GLOW ══════════════
+  streakGlowWrap: {
+    borderRadius: 4,
+    paddingHorizontal: 2,
   },
 
   // ══════════════ SECTION 2: RADAR + ENGINE STATS ══════════════

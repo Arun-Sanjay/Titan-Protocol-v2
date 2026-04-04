@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -28,12 +28,25 @@ type Props = {
   engine?: EngineKey;
   onToggle: () => void;
   onDelete?: () => void;
+  highlighted?: boolean;
 };
 
-export const MissionRow = React.memo(function MissionRow({ title, xp, completed, kind, engine, onToggle, onDelete }: Props) {
+export const MissionRow = React.memo(function MissionRow({ title, xp, completed, kind, engine, onToggle, onDelete, highlighted }: Props) {
   const translateX = useSharedValue(0);
   const checkScale = useSharedValue(completed ? 1 : 0);
   const cardScale = useSharedValue(1);
+
+  // Flash green on highlight
+  const flashOpacity = useSharedValue(0);
+  useEffect(() => {
+    if (highlighted) {
+      flashOpacity.value = 0.25;
+      flashOpacity.value = withTiming(0, { duration: 600 });
+    }
+  }, [highlighted]);
+  const flashStyle = useAnimatedStyle(() => ({
+    backgroundColor: `rgba(0, 255, 136, ${flashOpacity.value})`,
+  }));
 
   // XP popup animation values
   const xpPopupY = useSharedValue(0);
@@ -112,6 +125,8 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
   return (
     <GestureDetector gesture={swipeGesture}>
       <Animated.View style={[styles.container, rowStyle, cardPulseStyle]}>
+        {/* Green flash overlay on completion */}
+        <Animated.View style={[styles.flashOverlay, flashStyle]} pointerEvents="none" />
         <Pressable
           onPress={handleToggle}
           style={[
@@ -166,6 +181,12 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
 const styles = StyleSheet.create({
   container: {
     marginBottom: spacing.sm,
+    overflow: "hidden",
+  },
+  flashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.md,
+    zIndex: 1,
   },
   row: {
     flexDirection: "row",
