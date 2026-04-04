@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
 } from "react-native";
 import Animated, {
   FadeIn,
-  FadeOut,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
@@ -17,7 +16,6 @@ import Animated, {
   withSequence,
   withRepeat,
   Easing,
-  runOnJS,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
@@ -27,14 +25,14 @@ import {
   getArchetypeVoiceId,
 } from "../../../lib/protocol-audio";
 
-// ─── Props ───────────────────────────────────────────────────────────────────
+// ── Props ───────────────────────────────────────────────────────────────────
 
 type Props = {
   archetype: string;
   onComplete: () => void;
 };
 
-// ─── Data ────────────────────────────────────────────────────────────────────
+// ── Data ────────────────────────────────────────────────────────────────────
 
 const SUBTITLES: Record<string, string> = {
   titan: "MASTER OF ALL DOMAINS",
@@ -74,7 +72,7 @@ const ENGINE_COLORS: Record<string, string> = {
 
 const ENGINE_ORDER = ["body", "mind", "money", "charisma"];
 
-// ─── Timing Constants ────────────────────────────────────────────────────────
+// ── Timing Constants ────────────────────────────────────────────────────────
 
 const PHASE_1_START = 0;
 const PHASE_2_START = 2000;
@@ -84,7 +82,91 @@ const BAR_FILL_MS = 500;
 const BAR_STAGGER_MS = 400;
 const CONTINUE_APPEAR_MS = 3000; // After phase 3 start
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ── Particle burst constants ────────────────────────────────────────────────
+
+const BURST_PARTICLE_COUNT = 30;
+
+function generateBurstParticles() {
+  const particles: Array<{
+    angle: number;
+    speed: number;
+    size: number;
+  }> = [];
+  for (let i = 0; i < BURST_PARTICLE_COUNT; i++) {
+    const angle = (Math.PI * 2 * i) / BURST_PARTICLE_COUNT + (Math.random() - 0.5) * 0.5;
+    particles.push({
+      angle,
+      speed: 60 + Math.random() * 100,
+      size: 2 + Math.random() * 3,
+    });
+  }
+  return particles;
+}
+
+// ── Single burst particle ───────────────────────────────────────────────────
+
+function BurstParticle({
+  angle,
+  speed,
+  size,
+  color,
+  active,
+}: {
+  angle: number;
+  speed: number;
+  size: number;
+  color: string;
+  active: boolean;
+}) {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (active) {
+      const targetX = Math.cos(angle) * speed;
+      const targetY = Math.sin(angle) * speed;
+
+      opacity.value = withSequence(
+        withTiming(0.8, { duration: 80 }),
+        withDelay(200, withTiming(0, { duration: 1200, easing: Easing.out(Easing.cubic) })),
+      );
+      translateX.value = withTiming(targetX, {
+        duration: 1500,
+        easing: Easing.out(Easing.cubic),
+      });
+      translateY.value = withTiming(targetY, {
+        duration: 1500,
+        easing: Easing.out(Easing.cubic),
+      });
+    }
+  }, [active]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: "absolute",
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+// ── Component ───────────────────────────────────────────────────────────────
 
 export function BeatReveal({ archetype, onComplete }: Props) {
   const [phase, setPhase] = useState(1);
@@ -92,11 +174,22 @@ export function BeatReveal({ archetype, onComplete }: Props) {
   const [showName, setShowName] = useState(false);
   const [showBars, setShowBars] = useState(false);
   const [showContinue, setShowContinue] = useState(false);
+  const [burstActive, setBurstActive] = useState(false);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const archetypeKey = archetype.toLowerCase();
   const subtitle = SUBTITLES[archetypeKey] ?? "THE PROTOCOL ADAPTS";
   const weights = WEIGHTS[archetypeKey] ?? WEIGHTS.titan;
+
+  // Compute primary engine color
+  const primaryEngineColor = ENGINE_COLORS[
+    ENGINE_ORDER.reduce((a, b) =>
+      (weights[a] ?? 0) >= (weights[b] ?? 0) ? a : b,
+    )
+  ] ?? colors.body;
+
+  // Pre-generate burst particles
+  const burstParticles = useMemo(() => generateBurstParticles(), []);
 
   // Name slam animation
   const nameScale = useSharedValue(1.3);
@@ -107,7 +200,17 @@ export function BeatReveal({ archetype, onComplete }: Props) {
     opacity: nameOpacity.value,
   }));
 
-  // Particle burst shared values
+  // Radial glow burst behind archetype name
+  const radialGlowOpacity = useSharedValue(0);
+  const radialGlowScale = useSharedValue(0);
+
+  const radialGlowStyle = useAnimatedStyle(() => ({
+    opacity: radialGlowOpacity.value,
+    transform: [{ scale: radialGlowScale.value }],
+    backgroundColor: primaryEngineColor,
+  }));
+
+  // Old particle burst shared values (kept for backward compat)
   const particleOpacity = useSharedValue(0);
   const particleScale = useSharedValue(0.5);
 
@@ -173,7 +276,17 @@ export function BeatReveal({ archetype, onComplete }: Props) {
       // Heavy haptic
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-      // Particle burst in archetype color
+      // Radial glow burst: scales from 0 to 2.0 over 400ms then fades
+      radialGlowOpacity.value = withSequence(
+        withTiming(0.15, { duration: 100 }),
+        withDelay(300, withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) })),
+      );
+      radialGlowScale.value = withTiming(2.0, {
+        duration: 400,
+        easing: Easing.out(Easing.cubic),
+      });
+
+      // Legacy particle burst (background ring)
       particleOpacity.value = withSequence(
         withTiming(1, { duration: 150 }),
         withDelay(400, withTiming(0, { duration: 600 })),
@@ -182,6 +295,9 @@ export function BeatReveal({ archetype, onComplete }: Props) {
         withTiming(1.0, { duration: 150 }),
         withTiming(2.5, { duration: 800, easing: Easing.out(Easing.cubic) }),
       );
+
+      // Activate burst particles (30 dots flying outward)
+      setBurstActive(true);
 
       // Play archetype voice line
       playVoiceLineAsync(getArchetypeVoiceId(archetypeKey));
@@ -222,7 +338,7 @@ export function BeatReveal({ archetype, onComplete }: Props) {
     onComplete();
   };
 
-  // ─── Phase 1: IDENTITY CONFIRMED typing ────────────────────────────────
+  // ── Phase 1: IDENTITY CONFIRMED typing ────────────────────────────────
 
   if (phase === 1) {
     return (
@@ -239,7 +355,7 @@ export function BeatReveal({ archetype, onComplete }: Props) {
     );
   }
 
-  // ─── Phase 2: Black screen tension ─────────────────────────────────────
+  // ── Phase 2: Black screen tension ─────────────────────────────────────
 
   if (phase === 2) {
     return (
@@ -250,18 +366,15 @@ export function BeatReveal({ archetype, onComplete }: Props) {
     );
   }
 
-  // ─── Phase 3+: Name slam, bars, continue ───────────────────────────────
-
-  const primaryEngineColor = ENGINE_COLORS[
-    ENGINE_ORDER.reduce((a, b) =>
-      (weights[a] ?? 0) >= (weights[b] ?? 0) ? a : b,
-    )
-  ] ?? colors.body;
+  // ── Phase 3+: Name slam, bars, continue ───────────────────────────────
 
   return (
     <View style={styles.container}>
       <View style={styles.center}>
-        {/* Particle burst behind name */}
+        {/* Radial glow burst behind name (archetype primary engine color) */}
+        <Animated.View style={[styles.radialGlow, radialGlowStyle]} />
+
+        {/* Legacy particle burst behind name */}
         <Animated.View
           style={[
             styles.particleBurst,
@@ -269,6 +382,22 @@ export function BeatReveal({ archetype, onComplete }: Props) {
             { backgroundColor: primaryEngineColor },
           ]}
         />
+
+        {/* 30 burst particle dots flying outward from center */}
+        {burstActive && (
+          <View style={styles.burstContainer}>
+            {burstParticles.map((p, i) => (
+              <BurstParticle
+                key={i}
+                angle={p.angle}
+                speed={p.speed}
+                size={p.size}
+                color={primaryEngineColor}
+                active={burstActive}
+              />
+            ))}
+          </View>
+        )}
 
         {/* Archetype name */}
         {showName && (
@@ -289,7 +418,7 @@ export function BeatReveal({ archetype, onComplete }: Props) {
           </Animated.Text>
         )}
 
-        {/* Engine weight bars */}
+        {/* Engine weight bars with shimmer */}
         {showBars && (
           <Animated.View
             entering={FadeIn.duration(300)}
@@ -302,6 +431,7 @@ export function BeatReveal({ archetype, onComplete }: Props) {
                 color={ENGINE_COLORS[engine] ?? colors.text}
                 weight={weights[engine] ?? 0}
                 progress={barWidths[i]}
+                shimmerDelay={i * BAR_STAGGER_MS}
               />
             ))}
           </Animated.View>
@@ -325,36 +455,67 @@ export function BeatReveal({ archetype, onComplete }: Props) {
   );
 }
 
-// ─── Engine Bar Sub-component ────────────────────────────────────────────────
+// ── Engine Bar Sub-component with shimmer ───────────────────────────────────
 
 function EngineBar({
   label,
   color,
   weight,
   progress,
+  shimmerDelay,
 }: {
   label: string;
   color: string;
   weight: number;
   progress: Animated.SharedValue<number>;
+  shimmerDelay: number;
 }) {
+  // Shimmer: a white highlight sweeps left to right across the bar
+  const shimmerX = useSharedValue(-1);
+
+  useEffect(() => {
+    // Start shimmer after the bar has filled
+    const timer = setTimeout(() => {
+      shimmerX.value = withDelay(
+        BAR_FILL_MS + 200,
+        withTiming(1, {
+          duration: 600,
+          easing: Easing.inOut(Easing.cubic),
+        }),
+      );
+    }, shimmerDelay);
+    return () => clearTimeout(timer);
+  }, []);
+
   const fillStyle = useAnimatedStyle(() => ({
     width: `${progress.value}%`,
     backgroundColor: color,
   }));
 
+  const shimmerStyle = useAnimatedStyle(() => {
+    // Map shimmerX from [-1, 1] to a left percentage for the highlight
+    const leftPct = ((shimmerX.value + 1) / 2) * 100;
+    return {
+      left: `${leftPct}%`,
+      opacity: shimmerX.value > -0.9 && shimmerX.value < 0.9 ? 0.4 : 0,
+    };
+  });
+
   return (
     <View style={styles.barRow}>
       <Text style={[styles.barLabel, { color }]}>{label}</Text>
       <View style={styles.barTrack}>
-        <Animated.View style={[styles.barFill, fillStyle]} />
+        <Animated.View style={[styles.barFill, fillStyle]}>
+          {/* Shimmer highlight */}
+          <Animated.View style={[styles.shimmer, shimmerStyle]} />
+        </Animated.View>
       </View>
       <Text style={styles.barPct}>{weight}%</Text>
     </View>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ── Styles ──────────────────────────────────────────────────────────────────
 
 const monoFont = Platform.select({
   ios: "Menlo",
@@ -387,13 +548,30 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // Phase 3: particle burst
+  // Radial glow burst (new premium effect)
+  radialGlow: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+  },
+
+  // Phase 3: legacy particle burst
   particleBurst: {
     position: "absolute",
     width: 120,
     height: 120,
     borderRadius: 60,
     opacity: 0,
+  },
+
+  // Burst particles container (centered)
+  burstContainer: {
+    position: "absolute",
+    width: 0,
+    height: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Archetype name
@@ -445,6 +623,7 @@ const styles = StyleSheet.create({
   barFill: {
     height: "100%",
     borderRadius: 3,
+    overflow: "hidden",
   },
   barPct: {
     fontFamily: monoFont,
@@ -452,6 +631,16 @@ const styles = StyleSheet.create({
     color: "rgba(255, 255, 255, 0.50)",
     width: 32,
     textAlign: "right",
+  },
+
+  // Shimmer highlight on bars
+  shimmer: {
+    position: "absolute",
+    top: 0,
+    width: 20,
+    height: "100%",
+    backgroundColor: "rgba(255, 255, 255, 0.40)",
+    borderRadius: 3,
   },
 
   // Continue button

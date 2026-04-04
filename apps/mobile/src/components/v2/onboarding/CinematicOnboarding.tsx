@@ -10,7 +10,6 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   Easing,
-  runOnJS,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,6 +20,8 @@ import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import type { EngineKey } from "../../../db/schema";
 
 // -- Beat components ----------------------------------------------------------
+// NOTE: BeatTaskSelection has been REMOVED from the flow.
+// The operation engine handles task generation after onboarding completes.
 
 import { BeatColdOpen } from "./BeatColdOpen";
 import { BeatWhatIsThis } from "./BeatWhatIsThis";
@@ -31,7 +32,6 @@ import { BeatReveal } from "./BeatReveal";
 import { BeatLadder } from "./BeatLadder";
 import { BeatEnginePriority } from "./BeatEnginePriority";
 import { BeatScheduleMode } from "./BeatScheduleMode";
-import { BeatTaskSelection } from "./BeatTaskSelection";
 import { BeatBriefing } from "./BeatBriefing";
 
 // -- Types --------------------------------------------------------------------
@@ -40,13 +40,15 @@ type Props = {
   onComplete: () => void;
 };
 
-// -- Default tasks for the briefing (Beat 11) ---------------------------------
+// -- Default tasks for the briefing (Beat 10) ---------------------------------
+// These are hardcoded preview tasks. The REAL tasks come from the operation
+// engine after onboarding is complete and the Day 1 flow begins.
 
 const DEFAULT_BRIEFING_TASKS = [
-  { title: "Complete your first workout", engine: "body" },
-  { title: "30 minutes deep work session", engine: "mind" },
-  { title: "Review your monthly budget", engine: "money" },
-  { title: "Start a conversation with someone new", engine: "charisma" },
+  { title: "Complete a workout", engine: "body" },
+  { title: "Deep work \u2014 30 min", engine: "mind" },
+  { title: "Track one expense", engine: "money" },
+  { title: "Call a friend", engine: "charisma" },
 ];
 
 // -- Crossfade timing constants -----------------------------------------------
@@ -56,6 +58,22 @@ const BLACK_PAUSE_MS = 200;
 const FADE_IN_MS = 400;
 
 // -- Component ----------------------------------------------------------------
+
+/*
+ * Beat flow (BeatTaskSelection removed):
+ *   0  Audio prompt (volume up)
+ *   1  Cold open
+ *   2  What is this
+ *   3  Four engines
+ *   4  Identify (name input)
+ *   5  Quiz (archetype determination)
+ *   6  Reveal (archetype reveal cinematic)
+ *   7  Ladder (rank progression)
+ *   8  Engine priority (drag to reorder)
+ *   9  Schedule + mode
+ *  10  Briefing (preview tasks)
+ *  11  Complete -- mark onboarding finished, exit
+ */
 
 export function CinematicOnboarding({ onComplete }: Props) {
   const [currentBeat, setCurrentBeat] = useState(0);
@@ -74,7 +92,6 @@ export function CinematicOnboarding({ onComplete }: Props) {
   const scheduleRef = useRef<boolean[]>([true, true, true, true, true, false, false]);
   const modeRef = useRef<string>("titan");
   const focusEnginesRef = useRef<string[] | undefined>(undefined);
-  const selectedTasksRef = useRef<Array<{ title: string; engine: string }>>([]);
 
   // Store actions
   const setUserName = useStoryStore((s) => s.setUserName);
@@ -259,47 +276,21 @@ export function CinematicOnboarding({ onComplete }: Props) {
           />
         );
 
-      // Beat 10: Task Selection
-      case 10: {
-        // Determine active engines: all 4 for titan mode, or focus-selected
-        const activeEngines =
-          modeRef.current === "titan"
-            ? ["body", "mind", "money", "charisma"]
-            : (focusEnginesRef.current ?? ["body", "mind", "money", "charisma"]);
-
-        return (
-          <BeatTaskSelection
-            archetype={archetypeRef.current}
-            activeEngines={activeEngines}
-            onComplete={(tasks) => {
-              advanceBeat(11, () => {
-                selectedTasksRef.current = tasks.map((t) => ({
-                  title: t.title,
-                  engine: t.engine,
-                }));
-              });
-            }}
-          />
-        );
-      }
-
-      // Beat 11: First Op Briefing
-      case 11:
+      // Beat 10: Briefing (with default preview tasks)
+      case 10:
         return (
           <BeatBriefing
-            tasks={
-              selectedTasksRef.current.length > 0
-                ? selectedTasksRef.current
-                : DEFAULT_BRIEFING_TASKS
-            }
+            tasks={DEFAULT_BRIEFING_TASKS}
             onComplete={() => {
-              advanceBeat(12);
+              advanceBeat(11);
             }}
           />
         );
 
-      // Beat 12: Done -- mark onboarding complete and exit
-      case 12: {
+      // Beat 11: Done -- mark onboarding complete and exit
+      // The _layout.tsx overlay logic will then trigger the normal Day 1 flow:
+      // FirstLaunchCinematic followed by DailyBriefing.
+      case 11: {
         finishOnboarding();
         stopCurrentAudio();
         onComplete();

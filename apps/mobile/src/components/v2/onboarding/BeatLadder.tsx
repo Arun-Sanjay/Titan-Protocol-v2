@@ -47,17 +47,18 @@ const ROW_HEIGHT = 52; // each rank row
 const TITAN_ROW_HEIGHT = 58; // titan gets a bit more
 
 // ── Voice-sync timings (ms from mount) ──────────────────────────────────────
-// Matches ONBO-010 narration: each rank name spoken at these approximate times
+// UPDATED: Tightened timing to match faster speech in ONBO-010
+// Previous timings were too slow (1.5s, 4.0s, 6.0s, ..., 16.0s)
 
 const RANK_APPEAR_TIMES: number[] = [
-  1500, // initiate
-  4000, // operative
-  6000, // agent
-  8000, // specialist
-  10000, // commander
-  12000, // vanguard
-  14000, // sentinel
-  16000, // titan
+  1000, // initiate
+  2500, // operative
+  4000, // agent
+  5500, // specialist
+  7000, // commander
+  8500, // vanguard
+  10000, // sentinel
+  12000, // titan
 ];
 
 // ── Requirement labels ──────────────────────────────────────────────────────
@@ -84,25 +85,40 @@ function RankNode({
   isFirst: boolean;
 }) {
   const opacity = useSharedValue(0);
-  const translateY = useSharedValue(20);
+  const translateY = useSharedValue(12);
   const glowOpacity = useSharedValue(0);
   const youAreHereOpacity = useSharedValue(0);
+  // Glow pulse on appear
+  const appearGlowOpacity = useSharedValue(0);
+  const appearGlowScale = useSharedValue(1.0);
 
   useEffect(() => {
     if (visible) {
+      // FASTER appearance: 150ms slide-up instead of 500ms
       opacity.value = withTiming(1, {
-        duration: 350,
+        duration: 150,
         easing: Easing.out(Easing.cubic),
       });
       translateY.value = withTiming(0, {
-        duration: 400,
+        duration: 150,
         easing: Easing.out(Easing.cubic),
       });
+
+      // Brief glow pulse on appear
+      const color = RANK_COLORS[rank];
+      appearGlowOpacity.value = withSequence(
+        withTiming(0.5, { duration: 100 }),
+        withTiming(0, { duration: 400, easing: Easing.out(Easing.cubic) }),
+      );
+      appearGlowScale.value = withSequence(
+        withTiming(1.0, { duration: 0 }),
+        withTiming(1.8, { duration: 400, easing: Easing.out(Easing.cubic) }),
+      );
 
       if (isTitan) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         glowOpacity.value = withDelay(
-          200,
+          150,
           withRepeat(
             withSequence(
               withTiming(0.7, { duration: 900 }),
@@ -116,7 +132,7 @@ function RankNode({
 
       if (isFirst) {
         youAreHereOpacity.value = withDelay(
-          300,
+          200,
           withRepeat(
             withSequence(
               withTiming(1, { duration: 700 }),
@@ -143,6 +159,11 @@ function RankNode({
     opacity: youAreHereOpacity.value,
   }));
 
+  const appearGlowStyle = useAnimatedStyle(() => ({
+    opacity: appearGlowOpacity.value,
+    transform: [{ scale: appearGlowScale.value }],
+  }));
+
   const size = isTitan ? TITAN_NODE_SIZE : NODE_SIZE;
   const color = RANK_COLORS[rank];
   const height = isTitan ? TITAN_ROW_HEIGHT : ROW_HEIGHT;
@@ -161,6 +182,14 @@ function RankNode({
 
       {/* Node circle (center column, fixed width) */}
       <View style={styles.nodeWrap}>
+        {/* Appear glow pulse */}
+        <Animated.View
+          style={[
+            styles.appearGlow,
+            { backgroundColor: color },
+            appearGlowStyle,
+          ]}
+        />
         {isTitan && (
           <Animated.View
             style={[
@@ -218,7 +247,7 @@ function ConnectionLine({ visible }: { visible: boolean }) {
   useEffect(() => {
     if (visible) {
       lineOpacity.value = withTiming(1, {
-        duration: 250,
+        duration: 150,
         easing: Easing.out(Easing.cubic),
       });
     }
@@ -385,6 +414,15 @@ const styles = StyleSheet.create({
 
   node: {
     zIndex: 1,
+  },
+
+  // Appear glow pulse on each rank
+  appearGlow: {
+    position: "absolute",
+    width: NODE_SIZE + 16,
+    height: NODE_SIZE + 16,
+    borderRadius: (NODE_SIZE + 16) / 2,
+    zIndex: 0,
   },
 
   titanGlow: {

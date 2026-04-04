@@ -26,8 +26,9 @@ const ENGINES = [
 ] as const;
 
 // Timing: synced to ONBO-004 voice line when each engine name is spoken (ms)
-// "Body" ~3.0s, "Mind" ~5.5s, "Money" ~8.0s, "Charisma" ~10.0s
-const ENGINE_TIMINGS = [3000, 5500, 8000, 10000];
+// UPDATED: Speech is faster than highlights, so triggers are earlier now
+// "Body" ~2.0s, "Mind" ~3.5s, "Money" ~5.0s, "Charisma" ~6.5s
+const ENGINE_TIMINGS = [2000, 3500, 5000, 6500];
 
 // ── Typewriter label that types out character by character ──
 function TypewriterLabel({
@@ -98,6 +99,9 @@ function EngineIcon({
   const opacity = useSharedValue(0.15);
   const glowOpacity = useSharedValue(0);
   const scale = useSharedValue(0.9);
+  // Pulse ring for flash effect on light-up
+  const pulseRingScale = useSharedValue(1.0);
+  const pulseRingOpacity = useSharedValue(0);
   const [isLit, setIsLit] = useState(false);
 
   useEffect(() => {
@@ -107,23 +111,34 @@ function EngineIcon({
 
       setIsLit(true);
 
+      // INSTANT light-up: 150ms instead of 600ms
       opacity.value = withTiming(1, {
-        duration: 400,
+        duration: 150,
         easing: Easing.out(Easing.cubic),
       });
       glowOpacity.value = withSequence(
-        withTiming(0.6, { duration: 200 }),
-        withTiming(0.2, { duration: 400 }),
+        withTiming(0.6, { duration: 100 }),
+        withTiming(0.2, { duration: 300 }),
       );
       scale.value = withSequence(
         withTiming(1.15, {
-          duration: 200,
+          duration: 150,
           easing: Easing.out(Easing.cubic),
         }),
         withTiming(1.0, {
-          duration: 300,
+          duration: 200,
           easing: Easing.inOut(Easing.cubic),
         }),
+      );
+
+      // Flash pulse ring: scales from 1.0 to 1.5 and fades out
+      pulseRingOpacity.value = withSequence(
+        withTiming(0.6, { duration: 80 }),
+        withTiming(0, { duration: 400, easing: Easing.out(Easing.cubic) }),
+      );
+      pulseRingScale.value = withSequence(
+        withTiming(1.0, { duration: 0 }),
+        withTiming(1.5, { duration: 400, easing: Easing.out(Easing.cubic) }),
       );
     }, delayMs);
 
@@ -141,6 +156,12 @@ function EngineIcon({
     backgroundColor: color,
   }));
 
+  const pulseRingStyle = useAnimatedStyle(() => ({
+    opacity: pulseRingOpacity.value,
+    transform: [{ scale: pulseRingScale.value }],
+    borderColor: color,
+  }));
+
   return (
     <View
       style={[
@@ -150,6 +171,9 @@ function EngineIcon({
     >
       {/* Glow behind circle */}
       <Animated.View style={[styles.engineGlow, glowStyle]} />
+
+      {/* Pulse ring (flash effect on light-up) */}
+      <Animated.View style={[styles.pulseRing, pulseRingStyle]} />
 
       {/* Circle with icon */}
       <Animated.View style={[styles.engineCircle, circleStyle]}>
@@ -186,7 +210,7 @@ export function BeatFourEngines({ onComplete }: Props) {
     // Play the four engines voice line
     playVoiceLineAsync("ONBO-004");
 
-    // After all 4 lit (~10.5s): draw network lines + center glow
+    // After all 4 lit (~7.5s with new timings): draw network lines + center glow
     t(() => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       networkOpacity.value = withTiming(0.5, {
@@ -197,26 +221,26 @@ export function BeatFourEngines({ onComplete }: Props) {
         duration: 800,
         easing: Easing.out(Easing.cubic),
       });
-    }, 10500);
+    }, 7500);
 
-    // "TITAN SCORE" fades in at ~11s
+    // "TITAN SCORE" fades in at ~8s
     t(() => {
       titanScoreOpacity.value = withTiming(1, {
         duration: 500,
         easing: Easing.out(Easing.cubic),
       });
-    }, 11000);
+    }, 8000);
 
     // Tap hint at 5s
     t(() => {
       tapHintOpacity.value = withTiming(0.1, { duration: 600 });
     }, 5000);
 
-    // Auto-advance at 15s
+    // Auto-advance at 12s (tighter since voice is faster)
     t(() => {
       stopCurrentAudio();
       onComplete();
-    }, 15000);
+    }, 12000);
 
     return () => {
       timers.current.forEach(clearTimeout);
@@ -359,6 +383,16 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
+  },
+
+  // ── Pulse ring (flash on light-up) ──
+  pulseRing: {
+    position: "absolute",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    backgroundColor: "transparent",
   },
 
   // ── Typewriter label ──
