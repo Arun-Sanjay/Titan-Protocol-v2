@@ -217,7 +217,11 @@ export function CinematicOnboarding({ onComplete }: Props) {
         return (
           <BeatReveal
             archetype={archetypeRef.current}
-            onComplete={() => advanceBeat(7)}
+            onComplete={(finalArchetype: string) => {
+              archetypeRef.current = finalArchetype;
+              setIdentity(finalArchetype as any);
+              advanceBeat(7);
+            }}
           />
         );
 

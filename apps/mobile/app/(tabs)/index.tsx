@@ -372,11 +372,15 @@ export default function HQScreen() {
             DAY {dayNumber} {"\u00B7"} CH.{chapter.number}: {chapter.name.toUpperCase()}
           </Text>
           <View style={s.hudIdentityRow}>
-            <View style={s.avatarCircle}>
+            <Pressable
+              style={s.avatarCircle}
+              onPress={() => router.push("/(tabs)/profile")}
+              hitSlop={8}
+            >
               <Text style={s.avatarInitials}>
                 {(identityMeta?.name ?? "T").charAt(0).toUpperCase()}
               </Text>
-            </View>
+            </Pressable>
             <View style={{ flex: 1 }}>
               <Text style={s.hudArchetypeName}>
                 {identityMeta?.name ?? (identity ? IDENTITY_LABELS[identity] : "TITAN PROTOCOL")}

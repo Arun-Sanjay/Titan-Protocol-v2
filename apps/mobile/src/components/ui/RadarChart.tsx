@@ -22,8 +22,11 @@ function polarToXY(cx: number, cy: number, r: number, angleIndex: number, total:
 }
 
 export const RadarChart = React.memo(function RadarChart({ scores, size = 200 }: Props) {
-  const cx = size / 2;
-  const cy = size / 2;
+  // Add padding so labels at edges aren't clipped
+  const pad = 24;
+  const svgSize = size + pad * 2;
+  const cx = svgSize / 2;
+  const cy = svgSize / 2;
   const maxR = size * 0.32; // chart radius is 32% of total size, leaving room for labels
   const n = AXES.length;
 
@@ -42,7 +45,11 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 200 }:
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      <Svg width={size} height={size}>
+      <Svg
+        width={svgSize}
+        height={svgSize}
+        style={{ overflow: "visible", marginLeft: -pad, marginTop: -pad }}
+      >
         {/* Grid rings */}
         {gridLevels.map((level) => {
           const r = level * maxR;
@@ -85,15 +92,20 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 200 }:
           <Circle key={i} cx={p.x} cy={p.y} r={3} fill="rgba(247, 250, 255, 0.9)" />
         ))}
 
-        {/* Labels rendered as SVG Text — no clipping */}
+        {/* Labels rendered as SVG Text — anchored per-axis to avoid clipping */}
         {AXES.map((axis, i) => {
           const pos = polarToXY(cx, cy, labelR, i, n);
+          // Determine text anchor based on position relative to center
+          const dx = pos.x - cx;
+          let anchor: "start" | "middle" | "end" = "middle";
+          if (dx > 5) anchor = "start";
+          else if (dx < -5) anchor = "end";
           return (
             <SvgText
               key={axis.key}
               x={pos.x}
               y={pos.y + 3}
-              textAnchor="middle"
+              textAnchor={anchor}
               fontSize={10}
               fontWeight="600"
               letterSpacing={1}

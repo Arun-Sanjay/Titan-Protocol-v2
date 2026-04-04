@@ -5,6 +5,7 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  ScrollView,
 } from "react-native";
 import Animated, {
   FadeIn,
@@ -29,7 +30,7 @@ import {
 
 type Props = {
   archetype: string;
-  onComplete: () => void;
+  onComplete: (finalArchetype: string) => void;
 };
 
 // ── Data ────────────────────────────────────────────────────────────────────
@@ -71,6 +72,22 @@ const ENGINE_COLORS: Record<string, string> = {
 };
 
 const ENGINE_ORDER = ["body", "mind", "money", "charisma"];
+
+const ARCHETYPE_ICONS: Record<string, string> = {
+  titan: "\u26A1",
+  athlete: "\uD83D\uDCAA",
+  scholar: "\uD83D\uDCDA",
+  hustler: "\uD83D\uDCB0",
+  showman: "\uD83C\uDFA4",
+  warrior: "\u2694\uFE0F",
+  founder: "\uD83D\uDE80",
+  charmer: "\u2728",
+};
+
+const ALL_ARCHETYPES = [
+  "titan", "athlete", "scholar", "hustler",
+  "showman", "warrior", "founder", "charmer",
+];
 
 // ── Timing Constants ────────────────────────────────────────────────────────
 
@@ -175,9 +192,11 @@ export function BeatReveal({ archetype, onComplete }: Props) {
   const [showBars, setShowBars] = useState(false);
   const [showContinue, setShowContinue] = useState(false);
   const [burstActive, setBurstActive] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
+  const [selectedArchetype, setSelectedArchetype] = useState(archetype);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const archetypeKey = archetype.toLowerCase();
+  const archetypeKey = selectedArchetype.toLowerCase();
   const subtitle = SUBTITLES[archetypeKey] ?? "THE PROTOCOL ADAPTS";
   const weights = WEIGHTS[archetypeKey] ?? WEIGHTS.titan;
 
@@ -335,7 +354,27 @@ export function BeatReveal({ archetype, onComplete }: Props) {
 
   const handleContinue = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    onComplete();
+    onComplete(selectedArchetype);
+  };
+
+  // Handle archetype change from gallery
+  const handleArchetypeChange = (newArchetype: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedArchetype(newArchetype);
+    setShowGallery(false);
+
+    // Replay bar fill animation with new weights
+    const newWeights = WEIGHTS[newArchetype.toLowerCase()] ?? WEIGHTS.titan;
+    ENGINE_ORDER.forEach((engine, i) => {
+      barWidths[i].value = 0;
+      barWidths[i].value = withDelay(
+        i * BAR_STAGGER_MS,
+        withTiming(newWeights[engine] ?? 0, {
+          duration: BAR_FILL_MS,
+          easing: Easing.out(Easing.cubic),
+        }),
+      );
+    });
   };
 
   // ── Phase 1: IDENTITY CONFIRMED typing ────────────────────────────────
@@ -403,7 +442,7 @@ export function BeatReveal({ archetype, onComplete }: Props) {
         {showName && (
           <Animated.View style={nameStyle}>
             <Text style={styles.archetypeName}>
-              {archetype.toUpperCase()}
+              {selectedArchetype.toUpperCase()}
             </Text>
           </Animated.View>
         )}
@@ -448,6 +487,71 @@ export function BeatReveal({ archetype, onComplete }: Props) {
                 <Text style={styles.continueBtnText}>CONTINUE</Text>
               </Animated.View>
             </Pressable>
+
+            {/* Change class link */}
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowGallery(true);
+              }}
+              hitSlop={8}
+              style={styles.changeClassLink}
+            >
+              <Text style={styles.changeClassText}>CHANGE CLASS</Text>
+            </Pressable>
+          </Animated.View>
+        )}
+
+        {/* Archetype gallery overlay */}
+        {showGallery && (
+          <Animated.View
+            entering={FadeIn.duration(250)}
+            style={styles.galleryOverlay}
+          >
+            <ScrollView
+              contentContainerStyle={styles.galleryScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.galleryTitle}>SELECT YOUR CLASS</Text>
+              <View style={styles.galleryGrid}>
+                {ALL_ARCHETYPES.map((a) => {
+                  const key = a.toLowerCase();
+                  const isSelected = key === archetypeKey;
+                  return (
+                    <Pressable
+                      key={a}
+                      style={[
+                        styles.galleryCard,
+                        isSelected && styles.galleryCardSelected,
+                      ]}
+                      onPress={() => handleArchetypeChange(a)}
+                    >
+                      <Text style={styles.galleryIcon}>
+                        {ARCHETYPE_ICONS[key] ?? "\u26A1"}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.galleryName,
+                          isSelected && styles.galleryNameSelected,
+                        ]}
+                      >
+                        {a.toUpperCase()}
+                      </Text>
+                      <Text style={styles.gallerySubtitle}>
+                        {SUBTITLES[key] ?? ""}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Pressable
+                style={styles.galleryClose}
+                onPress={() => setShowGallery(false)}
+              >
+                <Text style={styles.galleryCloseText}>CANCEL</Text>
+              </Pressable>
+            </ScrollView>
           </Animated.View>
         )}
       </View>
@@ -663,5 +767,97 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
     letterSpacing: 3,
+  },
+
+  // Change class link
+  changeClassLink: {
+    marginTop: 14,
+    alignItems: "center",
+  },
+  changeClassText: {
+    fontFamily: monoFont,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.35)",
+    letterSpacing: 2.5,
+    textDecorationLine: "underline",
+  },
+
+  // Archetype gallery overlay
+  galleryOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.96)",
+    zIndex: 100,
+  },
+  galleryScroll: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: 80,
+    paddingBottom: 60,
+    alignItems: "center",
+  },
+  galleryTitle: {
+    fontFamily: monoFont,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "rgba(255, 255, 255, 0.50)",
+    letterSpacing: 3,
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  galleryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
+  },
+  galleryCard: {
+    width: "47%",
+    backgroundColor: "#0A0A0A",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.10)",
+    borderRadius: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: "center",
+  },
+  galleryCardSelected: {
+    borderColor: "rgba(255, 255, 255, 0.50)",
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+  },
+  galleryIcon: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  galleryName: {
+    fontFamily: monoFont,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "rgba(255, 255, 255, 0.80)",
+    letterSpacing: 2,
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  galleryNameSelected: {
+    color: "#FFFFFF",
+  },
+  gallerySubtitle: {
+    fontFamily: monoFont,
+    fontSize: 8,
+    fontWeight: "500",
+    color: "rgba(255, 255, 255, 0.30)",
+    letterSpacing: 1.5,
+    textAlign: "center",
+  },
+  galleryClose: {
+    marginTop: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+  },
+  galleryCloseText: {
+    fontFamily: monoFont,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "rgba(255, 255, 255, 0.35)",
+    letterSpacing: 2,
   },
 });
