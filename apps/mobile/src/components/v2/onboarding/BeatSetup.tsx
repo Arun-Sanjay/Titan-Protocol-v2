@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,14 @@ import {
   StyleSheet,
   Dimensions,
 } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, {
+  FadeInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useEngineStore } from "../../../stores/useEngineStore";
@@ -77,12 +84,12 @@ const SUGGESTED_TASKS: Record<
 // -- Suggested habits -------------------------------------------------------
 
 const DEFAULT_HABITS: HabitItem[] = [
-  { title: "Morning exercise", icon: "\ud83c\udfc3", engine: "body", checked: true },
-  { title: "Drink 2L water", icon: "\ud83d\udca7", engine: "body", checked: true },
-  { title: "Read before bed", icon: "\ud83d\udcd6", engine: "mind", checked: true },
-  { title: "Meditate", icon: "\ud83e\uddd8", engine: "mind", checked: true },
-  { title: "No impulse spending", icon: "\ud83d\udcb0", engine: "money", checked: true },
-  { title: "Reach out to someone", icon: "\ud83d\ude0a", engine: "charisma", checked: true },
+  { title: "Morning exercise", icon: "\ud83c\udfc3", engine: "body", checked: false },
+  { title: "Drink 2L water", icon: "\ud83d\udca7", engine: "body", checked: false },
+  { title: "Read before bed", icon: "\ud83d\udcd6", engine: "mind", checked: false },
+  { title: "Meditate", icon: "\ud83e\uddd8", engine: "mind", checked: false },
+  { title: "No impulse spending", icon: "\ud83d\udcb0", engine: "money", checked: false },
+  { title: "Reach out to someone", icon: "\ud83d\ude0a", engine: "charisma", checked: false },
 ];
 
 // -- Helpers ----------------------------------------------------------------
@@ -100,10 +107,10 @@ function buildInitialTasks(
     if (!suggestions) continue;
 
     for (const title of suggestions.main) {
-      items.push({ title, kind: "main", checked: true, engine: eng as EngineKey });
+      items.push({ title, kind: "main", checked: false, engine: eng as EngineKey });
     }
     for (const title of suggestions.secondary) {
-      items.push({ title, kind: "secondary", checked: true, engine: eng as EngineKey });
+      items.push({ title, kind: "secondary", checked: false, engine: eng as EngineKey });
     }
   }
 
@@ -121,6 +128,140 @@ function hasMinOneMainPerEngine(
     if (!hasMain) return false;
   }
   return true;
+}
+
+// -- Animated task row with toggle pulse ------------------------------------
+
+function AnimatedTaskRow({
+  task,
+  onToggle,
+}: {
+  task: TaskItem & { globalIndex: number };
+  onToggle: (index: number) => void;
+}) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePress = useCallback(() => {
+    // If toggling ON, do a brief scale pulse
+    if (!task.checked) {
+      scale.value = withSequence(
+        withTiming(1.04, { duration: 100, easing: Easing.out(Easing.cubic) }),
+        withTiming(1.0, { duration: 150, easing: Easing.inOut(Easing.cubic) }),
+      );
+    }
+    onToggle(task.globalIndex);
+  }, [task.checked, task.globalIndex, onToggle]);
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Pressable
+        style={styles.taskRow}
+        onPress={handlePress}
+      >
+        <View
+          style={[
+            styles.checkbox,
+            task.checked && styles.checkboxChecked,
+          ]}
+        >
+          {task.checked && <Text style={styles.checkmark}>{"\u2713"}</Text>}
+        </View>
+        <Text
+          style={[
+            styles.taskTitle,
+            !task.checked && styles.taskTitleUnchecked,
+          ]}
+          numberOfLines={1}
+        >
+          {task.title}
+        </Text>
+        <View
+          style={[
+            styles.kindBadge,
+            task.kind === "main"
+              ? styles.kindBadgeMain
+              : styles.kindBadgeSide,
+          ]}
+        >
+          <Text
+            style={[
+              styles.kindBadgeText,
+              task.kind === "main"
+                ? styles.kindBadgeTextMain
+                : styles.kindBadgeTextSide,
+            ]}
+          >
+            {task.kind === "main" ? "MAIN" : "SIDE"}
+          </Text>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// -- Animated habit row with toggle pulse -----------------------------------
+
+function AnimatedHabitRow({
+  habit,
+  index,
+  onToggle,
+}: {
+  habit: HabitItem;
+  index: number;
+  onToggle: (index: number) => void;
+}) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePress = useCallback(() => {
+    if (!habit.checked) {
+      scale.value = withSequence(
+        withTiming(1.04, { duration: 100, easing: Easing.out(Easing.cubic) }),
+        withTiming(1.0, { duration: 150, easing: Easing.inOut(Easing.cubic) }),
+      );
+    }
+    onToggle(index);
+  }, [habit.checked, index, onToggle]);
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <Pressable
+        style={styles.taskRow}
+        onPress={handlePress}
+      >
+        <View
+          style={[
+            styles.checkbox,
+            habit.checked && styles.checkboxChecked,
+          ]}
+        >
+          {habit.checked && (
+            <Text style={styles.checkmark}>{"\u2713"}</Text>
+          )}
+        </View>
+        <Text style={styles.habitIcon}>{habit.icon}</Text>
+        <Text
+          style={[
+            styles.taskTitle,
+            !habit.checked && styles.taskTitleUnchecked,
+          ]}
+          numberOfLines={1}
+        >
+          {habit.title}
+        </Text>
+        <Text style={styles.habitEngine}>
+          {habit.engine.toUpperCase()}
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
 }
 
 // -- Component --------------------------------------------------------------
@@ -226,64 +367,32 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
       .map((t, i) => ({ ...t, globalIndex: i }))
       .filter((t) => t.engine === engine);
 
+    const engineColor = ENGINE_COLORS[engine] ?? colors.textSecondary;
+
     return (
       <Animated.View
         key={engine}
-        entering={FadeInDown.delay(sectionIndex * 80).duration(400)}
-        style={styles.engineSection}
+        entering={FadeInDown.delay(100 + sectionIndex * 100).duration(400)}
+        style={[
+          styles.engineSection,
+          { borderLeftWidth: 3, borderLeftColor: engineColor },
+        ]}
       >
         <Text
           style={[
             styles.sectionHeader,
-            { color: ENGINE_COLORS[engine] ?? colors.textSecondary },
+            { color: engineColor },
           ]}
         >
           {engine.toUpperCase()}
         </Text>
 
         {engineTasks.map((task) => (
-          <Pressable
+          <AnimatedTaskRow
             key={`${engine}-${task.globalIndex}`}
-            style={styles.taskRow}
-            onPress={() => toggleTask(task.globalIndex)}
-          >
-            <View
-              style={[
-                styles.checkbox,
-                task.checked && styles.checkboxChecked,
-              ]}
-            >
-              {task.checked && <Text style={styles.checkmark}>{"\u2713"}</Text>}
-            </View>
-            <Text
-              style={[
-                styles.taskTitle,
-                !task.checked && styles.taskTitleUnchecked,
-              ]}
-              numberOfLines={1}
-            >
-              {task.title}
-            </Text>
-            <View
-              style={[
-                styles.kindBadge,
-                task.kind === "main"
-                  ? styles.kindBadgeMain
-                  : styles.kindBadgeSide,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.kindBadgeText,
-                  task.kind === "main"
-                    ? styles.kindBadgeTextMain
-                    : styles.kindBadgeTextSide,
-                ]}
-              >
-                {task.kind === "main" ? "MAIN" : "SIDE"}
-              </Text>
-            </View>
-          </Pressable>
+            task={task}
+            onToggle={toggleTask}
+          />
         ))}
 
         {/* Add custom task */}
@@ -330,34 +439,11 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
           key={`habit-${index}`}
           entering={FadeInDown.delay(index * 60).duration(400)}
         >
-          <Pressable
-            style={styles.taskRow}
-            onPress={() => toggleHabit(index)}
-          >
-            <View
-              style={[
-                styles.checkbox,
-                habit.checked && styles.checkboxChecked,
-              ]}
-            >
-              {habit.checked && (
-                <Text style={styles.checkmark}>{"\u2713"}</Text>
-              )}
-            </View>
-            <Text style={styles.habitIcon}>{habit.icon}</Text>
-            <Text
-              style={[
-                styles.taskTitle,
-                !habit.checked && styles.taskTitleUnchecked,
-              ]}
-              numberOfLines={1}
-            >
-              {habit.title}
-            </Text>
-            <Text style={styles.habitEngine}>
-              {habit.engine.toUpperCase()}
-            </Text>
-          </Pressable>
+          <AnimatedHabitRow
+            habit={habit}
+            index={index}
+            onToggle={toggleHabit}
+          />
         </Animated.View>
       ))}
 
@@ -396,9 +482,18 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
 
   return (
     <View style={styles.container}>
+      {/* Header with entrance animation */}
+      <Animated.View
+        entering={FadeInDown.delay(0).duration(400)}
+        style={styles.headerWrap}
+      >
+        <Text style={styles.headerTitle}>BUILD YOUR PROTOCOL</Text>
+        <Text style={styles.headerSubtitle}>Select the tasks and habits you want to track</Text>
+      </Animated.View>
+
       {/* Tab bar */}
       <Animated.View
-        entering={FadeInDown.duration(400)}
+        entering={FadeInDown.delay(50).duration(400)}
         style={styles.tabBar}
       >
         <Pressable
@@ -465,7 +560,7 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
         </Pressable>
         {!canConfirm && (
           <Text style={styles.hintText}>
-            At least 1 main task per engine required
+            Select at least 1 main task per engine
           </Text>
         )}
       </Animated.View>
@@ -481,6 +576,28 @@ const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000",
+  },
+
+  // Header
+  headerWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  headerTitle: {
+    fontFamily: "monospace",
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 3,
+    color: "rgba(255,255,255,0.90)",
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontFamily: "monospace",
+    fontSize: 11,
+    color: "rgba(255,255,255,0.40)",
+    letterSpacing: 0.5,
   },
 
   // Tab bar
@@ -522,6 +639,7 @@ const styles = StyleSheet.create({
   // Engine section
   engineSection: {
     marginBottom: spacing["2xl"],
+    paddingLeft: spacing.md,
   },
   sectionHeader: {
     fontFamily: "monospace",
@@ -566,8 +684,7 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.88)",
   },
   taskTitleUnchecked: {
-    color: "rgba(255,255,255,0.30)",
-    textDecorationLine: "line-through",
+    color: "rgba(255,255,255,0.45)",
   },
 
   // Kind badge

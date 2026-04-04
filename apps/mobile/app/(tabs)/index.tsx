@@ -95,6 +95,11 @@ export default function HQScreen() {
     useFieldOpStore.getState().load();
   }, []);
 
+  // Load profile on mount so streak is up to date
+  useEffect(() => {
+    useProfileStore.getState().load();
+  }, []);
+
   // Stores
   const storeTasks = useEngineStore((s) => s.tasks);
   const storeCompletions = useEngineStore((s) => s.completions);
@@ -277,7 +282,7 @@ export default function HQScreen() {
   // [Game-feel #3] Streak glow animation (streak >= 30 pulses)
   const streakGlowOpacity = useSharedValue(0.6);
   useEffect(() => {
-    if (protocolStreak >= 30) {
+    if (profileStreak >= 30) {
       streakGlowOpacity.value = withRepeat(
         withSequence(
           withTiming(0.8, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
@@ -286,14 +291,14 @@ export default function HQScreen() {
         -1, false,
       );
     }
-  }, [protocolStreak]);
+  }, [profileStreak]);
   const streakGlowStyle = useAnimatedStyle(() => {
-    if (protocolStreak < 7) return {};
-    const intensity = protocolStreak >= 14 ? 12 : 8;
+    if (profileStreak < 7) return {};
+    const intensity = profileStreak >= 14 ? 12 : 8;
     return {
       shadowColor: colors.warning,
       shadowRadius: intensity,
-      shadowOpacity: protocolStreak >= 30 ? streakGlowOpacity.value : 0.6,
+      shadowOpacity: profileStreak >= 30 ? streakGlowOpacity.value : 0.6,
       shadowOffset: { width: 0, height: 0 },
     };
   });
@@ -390,16 +395,16 @@ export default function HQScreen() {
                 <View style={s.hudMetaDot} />
                 <Text style={[s.hudMetaText, { color: rank.color }]}>{rank.letter}</Text>
                 <View style={s.hudMetaDot} />
-                <Animated.View style={[protocolStreak >= 7 && s.streakGlowWrap, streakGlowStyle]}>
+                <Animated.View style={[profileStreak >= 7 && s.streakGlowWrap, streakGlowStyle]}>
                   <Text style={[s.hudStreakText, { color: getIntegrityColor(loadIntegrity().level) }]}>
-                    {"\uD83D\uDD25"}{protocolStreak}
+                    {"\uD83D\uDD25"}{profileStreak}
                   </Text>
                 </Animated.View>
-                {getMomentum(protocolStreak).multiplier > 1 && (
+                {getMomentum(profileStreak).multiplier > 1 && (
                   <>
                     <View style={s.hudMetaDot} />
-                    <Text style={[s.hudMetaText, { color: getMomentumColor(getMomentum(protocolStreak).tier) }]}>
-                      {getMomentum(protocolStreak).multiplier}x
+                    <Text style={[s.hudMetaText, { color: getMomentumColor(getMomentum(profileStreak).tier) }]}>
+                      {getMomentum(profileStreak).multiplier}x
                     </Text>
                   </>
                 )}

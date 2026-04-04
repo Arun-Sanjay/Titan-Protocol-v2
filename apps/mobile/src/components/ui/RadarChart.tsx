@@ -9,11 +9,11 @@ type Props = {
   size?: number;
 };
 
-const AXES: { key: EngineKey; label: string }[] = [
-  { key: "body", label: "Body" },
-  { key: "mind", label: "Mind" },
-  { key: "money", label: "Money" },
-  { key: "charisma", label: "Charisma" },
+const AXES: { key: EngineKey; label: string; color: string }[] = [
+  { key: "body", label: "B", color: colors.body },
+  { key: "mind", label: "M", color: colors.mind },
+  { key: "money", label: "$", color: colors.money },
+  { key: "charisma", label: "C", color: colors.charisma },
 ];
 
 function polarToXY(cx: number, cy: number, r: number, angleIndex: number, total: number) {
@@ -41,7 +41,7 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 200 }:
   const dataPolygon = dataPoints.map((p) => `${p.x},${p.y}`).join(" ");
 
   // Label positions — far enough outside the chart
-  const labelR = maxR + 22;
+  const labelR = maxR + 18;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
@@ -92,24 +92,18 @@ export const RadarChart = React.memo(function RadarChart({ scores, size = 200 }:
           <Circle key={i} cx={p.x} cy={p.y} r={3} fill="rgba(247, 250, 255, 0.9)" />
         ))}
 
-        {/* Labels rendered as SVG Text — anchored per-axis to avoid clipping */}
+        {/* Labels: single-character symbols in engine color, bold & larger */}
         {AXES.map((axis, i) => {
           const pos = polarToXY(cx, cy, labelR, i, n);
-          // Determine text anchor based on position relative to center
-          const dx = pos.x - cx;
-          let anchor: "start" | "middle" | "end" = "middle";
-          if (dx > 5) anchor = "start";
-          else if (dx < -5) anchor = "end";
           return (
             <SvgText
               key={axis.key}
               x={pos.x}
-              y={pos.y + 3}
-              textAnchor={anchor}
-              fontSize={10}
-              fontWeight="600"
-              letterSpacing={1}
-              fill={colors.textSecondary}
+              y={pos.y + 4}
+              textAnchor="middle"
+              fontSize={12}
+              fontWeight="700"
+              fill={axis.color}
             >
               {axis.label}
             </SvgText>
