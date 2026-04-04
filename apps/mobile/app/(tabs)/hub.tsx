@@ -62,6 +62,7 @@ function HubCard({ item, cardWidth, index }: { item: HubItem; cardWidth: number;
 }
 
 export default function HubScreen() {
+  const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = (screenWidth - spacing.lg * 2 - spacing.md) / 2;
   const hubMode = useModeStore((s) => s.mode);
@@ -78,7 +79,13 @@ export default function HubScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <PageHeader kicker="TOOLS" title="Hub" subtitle="Tools & utilities" />
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </Pressable>
+          <Text style={styles.title}>HUB</Text>
+          <View style={{ width: 34 }} />
+        </View>
 
         <View style={styles.grid}>
           {visibleItems.map((item, i) => (
@@ -96,6 +103,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.lg, marginBottom: spacing.md },
+  backButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.surfaceBorder },
+  title: { fontSize: 18, fontWeight: "700", color: colors.text, letterSpacing: 1 },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",

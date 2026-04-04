@@ -2,6 +2,7 @@ import React, { useEffect, useCallback, useMemo, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, AppState, useWindowDimensions } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, fonts, shadows } from "../../src/theme";
 import { EngineCard } from "../../src/components/ui/EngineCard";
@@ -65,7 +66,13 @@ export default function EnginesScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <HUDBackground />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <PageHeader kicker="SYSTEM // ENGINES" title="Engines" subtitle="Your life operating system" />
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </Pressable>
+          <Text style={styles.title}>ENGINES</Text>
+          <View style={{ width: 34 }} />
+        </View>
 
         {/* Command Centre Card */}
         <Panel
@@ -119,6 +126,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.lg },
+  backButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.surfaceBorder },
+  title: { fontSize: 18, fontWeight: "700", color: colors.text, letterSpacing: 1 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
 
   // Command Centre card

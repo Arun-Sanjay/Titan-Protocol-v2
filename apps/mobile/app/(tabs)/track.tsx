@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, TOUCH_MIN, fonts, shadows } from "../../src/theme";
@@ -33,6 +34,7 @@ const EMPTY_IDS: number[] = [];
 type Tab = "habits" | "journal" | "goals";
 
 export default function TrackScreen() {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("habits");
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
@@ -47,7 +49,13 @@ export default function TrackScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <HUDBackground />
       <View style={styles.header}>
-        <PageHeader kicker="TRACK" title="Track" />
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </Pressable>
+          <Text style={styles.screenTitle}>TRACK</Text>
+          <View style={{ width: 34 }} />
+        </View>
         <View style={styles.tabs}>
           {(["habits", "journal", "goals"] as Tab[]).map((t) => (
             <Pressable
@@ -747,6 +755,9 @@ function GoalsTab({ dateKey }: { dateKey: string }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: spacing.lg },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.lg, marginBottom: spacing.md },
+  backButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.panelBorder },
+  screenTitle: { fontSize: 18, fontWeight: "700", color: colors.text, letterSpacing: 1 },
   tabs: {
     flexDirection: "row",
     gap: spacing.xs,

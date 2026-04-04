@@ -42,7 +42,13 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Profile</Text>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
+          </Pressable>
+          <Text style={styles.title}>Profile</Text>
+          <View style={{ width: 34 }} />
+        </View>
 
         <View style={styles.rankBadge}>
           <Text style={[styles.rankLetter, { color: rank.color }]}>
@@ -269,7 +275,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.lg },
-  title: { fontSize: 28, fontWeight: "800", color: colors.text, marginTop: spacing.lg },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.lg },
+  backButton: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.surfaceBorder },
+  title: { fontSize: 28, fontWeight: "800", color: colors.text },
   rankBadge: { alignItems: "center", marginTop: spacing["2xl"] },
   rankLetter: { ...fonts.monoValue, fontSize: 32, fontWeight: "900", letterSpacing: 2, textShadowColor: "rgba(56, 189, 248, 0.6)", textShadowRadius: 12 },
   levelText: { ...fonts.kicker, marginTop: spacing.xs },
