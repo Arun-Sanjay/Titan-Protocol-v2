@@ -7,7 +7,7 @@ import * as SystemUI from "expo-system-ui";
 import { colors } from "../src/theme";
 import { SystemNotificationProvider } from "../src/components/ui/SystemNotification";
 import { MotivationalSplash } from "../src/components/ui/MotivationalSplash";
-import { OnboardingShell } from "../src/components/v2/onboarding/OnboardingShell";
+import { CinematicOnboarding } from "../src/components/v2/onboarding/CinematicOnboarding";
 import { useOnboardingStore } from "../src/stores/useOnboardingStore";
 import { useWalkthroughStore } from "../src/stores/useWalkthroughStore";
 import {
@@ -187,7 +187,11 @@ export default function RootLayout() {
       {/* Overlays — order matters (last = on top) */}
       <AchievementToast />
       {showSplash && <MotivationalSplash onDismiss={() => setShowSplash(false)} context={transmissionCtx} />}
-      {!showSplash && !onboardingCompleted && <OnboardingShell />}
+      {!showSplash && !onboardingCompleted && (
+        <CinematicOnboarding onComplete={() => {
+          useOnboardingStore.getState().finish();
+        }} />
+      )}
       {showCinematic && <FirstLaunchCinematic onComplete={handleCinematicComplete} />}
       {DayCinematicComponent && <DayCinematicComponent onComplete={handleDayCinematicComplete} />}
       {showBriefing && <DailyBriefing onEnter={handleBriefingEnter} />}
