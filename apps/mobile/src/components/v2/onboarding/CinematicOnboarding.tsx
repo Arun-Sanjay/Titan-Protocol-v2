@@ -17,6 +17,7 @@ import { BeatReveal } from "./BeatReveal";
 import { BeatLadder } from "./BeatLadder";
 import { BeatEnginePriority } from "./BeatEnginePriority";
 import { BeatScheduleMode } from "./BeatScheduleMode";
+import { BeatTaskSelection } from "./BeatTaskSelection";
 import { BeatBriefing } from "./BeatBriefing";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -46,6 +47,7 @@ export function CinematicOnboarding({ onComplete }: Props) {
   const scheduleRef = useRef<boolean[]>([true, true, true, true, true, false, false]);
   const modeRef = useRef<string>("titan");
   const focusEnginesRef = useRef<string[] | undefined>(undefined);
+  const selectedTasksRef = useRef<Array<{ title: string; engine: string }>>([]);
 
   // Store actions
   const setUserName = useStoryStore((s) => s.setUserName);
@@ -171,19 +173,43 @@ export function CinematicOnboarding({ onComplete }: Props) {
                 setFocusEngines(focusEngs);
               }
 
-              // Skip beat 10 (task selection) -- go straight to briefing
-              setCurrentBeat(11);
+              setCurrentBeat(10);
             }}
           />
         );
 
-      // Beat 10: (Skipped -- task selection deferred)
+      // Beat 10: Task Selection
+      case 10: {
+        // Determine active engines: all 4 for titan mode, or focus-selected
+        const activeEngines =
+          modeRef.current === "titan"
+            ? ["body", "mind", "money", "charisma"]
+            : (focusEnginesRef.current ?? ["body", "mind", "money", "charisma"]);
+
+        return (
+          <BeatTaskSelection
+            archetype={archetypeRef.current}
+            activeEngines={activeEngines}
+            onComplete={(tasks) => {
+              selectedTasksRef.current = tasks.map((t) => ({
+                title: t.title,
+                engine: t.engine,
+              }));
+              setCurrentBeat(11);
+            }}
+          />
+        );
+      }
 
       // Beat 11: First Op Briefing
       case 11:
         return (
           <BeatBriefing
-            tasks={DEFAULT_BRIEFING_TASKS}
+            tasks={
+              selectedTasksRef.current.length > 0
+                ? selectedTasksRef.current
+                : DEFAULT_BRIEFING_TASKS
+            }
             onComplete={() => {
               setCurrentBeat(12);
             }}

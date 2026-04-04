@@ -12,6 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { getJSON, setJSON } from "../../src/db/storage";
+import { playVoiceLineAsync } from "../../src/lib/protocol-audio";
 import { useSystemNotification } from "../../src/components/ui/SystemNotification";
 import { QuestCard } from "../../src/components/ui/QuestCard";
 import { LevelUpOverlay } from "../../src/components/ui/LevelUpOverlay";
@@ -179,6 +180,13 @@ export default function HQScreen() {
         title: `+${xp} XP`,
         subtitle: task.title,
       });
+
+      // Play voice line on the user's very first task completion ever
+      const firstTaskPlayed = getJSON<boolean>("first_task_voice_played", false);
+      if (!firstTaskPlayed) {
+        playVoiceLineAsync("FIRST-TASK");
+        setJSON("first_task_voice_played", true);
+      }
     } else {
       awardXP(analytics.today, "task_uncomplete", -xp);
     }
