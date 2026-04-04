@@ -32,6 +32,7 @@ import { BeatReveal } from "./BeatReveal";
 import { BeatLadder } from "./BeatLadder";
 import { BeatEnginePriority } from "./BeatEnginePriority";
 import { BeatScheduleMode } from "./BeatScheduleMode";
+import { BeatSetup } from "./BeatSetup";
 import { BeatBriefing } from "./BeatBriefing";
 
 // -- Types --------------------------------------------------------------------
@@ -40,7 +41,7 @@ type Props = {
   onComplete: () => void;
 };
 
-// -- Default tasks for the briefing (Beat 10) ---------------------------------
+// -- Default tasks for the briefing (Beat 11) ---------------------------------
 // These are hardcoded preview tasks. The REAL tasks come from the operation
 // engine after onboarding is complete and the Day 1 flow begins.
 
@@ -60,7 +61,7 @@ const FADE_IN_MS = 400;
 // -- Component ----------------------------------------------------------------
 
 /*
- * Beat flow (BeatTaskSelection removed):
+ * Beat flow:
  *   0  Audio prompt (volume up)
  *   1  Cold open
  *   2  What is this
@@ -71,8 +72,9 @@ const FADE_IN_MS = 400;
  *   7  Ladder (rank progression)
  *   8  Engine priority (drag to reorder)
  *   9  Schedule + mode
- *  10  Briefing (preview tasks)
- *  11  Complete -- mark onboarding finished, exit
+ *  10  Setup (task + habit selection)
+ *  11  Briefing (preview tasks)
+ *  12  Complete -- mark onboarding finished, exit
  */
 
 export function CinematicOnboarding({ onComplete }: Props) {
@@ -280,21 +282,33 @@ export function CinematicOnboarding({ onComplete }: Props) {
           />
         );
 
-      // Beat 10: Briefing (with default preview tasks)
+      // Beat 10: Setup (task + habit selection)
       case 10:
         return (
-          <BeatBriefing
-            tasks={DEFAULT_BRIEFING_TASKS}
+          <BeatSetup
+            archetype={archetypeRef.current}
+            engines={enginePriorityRef.current}
             onComplete={() => {
               advanceBeat(11);
             }}
           />
         );
 
-      // Beat 11: Done -- mark onboarding complete and exit
+      // Beat 11: Briefing (with default preview tasks)
+      case 11:
+        return (
+          <BeatBriefing
+            tasks={DEFAULT_BRIEFING_TASKS}
+            onComplete={() => {
+              advanceBeat(12);
+            }}
+          />
+        );
+
+      // Beat 12: Done -- mark onboarding complete and exit
       // The _layout.tsx overlay logic will then trigger the normal Day 1 flow:
       // FirstLaunchCinematic followed by DailyBriefing.
-      case 11: {
+      case 12: {
         finishOnboarding();
         stopCurrentAudio();
         onComplete();
