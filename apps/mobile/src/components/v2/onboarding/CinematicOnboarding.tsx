@@ -17,6 +17,7 @@ import { initAudio, stopCurrentAudio } from "../../../lib/protocol-audio";
 import { useStoryStore } from "../../../stores/useStoryStore";
 import { useModeStore, type IdentityArchetype } from "../../../stores/useModeStore";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
+import { useWalkthroughStore } from "../../../stores/useWalkthroughStore";
 import type { EngineKey } from "../../../db/schema";
 
 // -- Beat components ----------------------------------------------------------
@@ -310,6 +311,8 @@ export function CinematicOnboarding({ onComplete }: Props) {
       // FirstLaunchCinematic followed by DailyBriefing.
       case 12: {
         finishOnboarding();
+        // Also mark walkthrough as completed so _layout.tsx daily flow triggers
+        useWalkthroughStore.getState().finish();
         stopCurrentAudio();
         onComplete();
         return null;

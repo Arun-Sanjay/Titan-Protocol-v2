@@ -317,10 +317,12 @@ export default function HQScreen() {
     if (story) {
       addEntry({ date: today, text: story.text, type: "story" });
     }
+    // Clear today's briefing flag so it shows again on next app open
+    setJSON(`briefing_seen_${today}`, false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Alert.alert(
       `Day ${simulatedDayNumber} Simulated`,
-      "Close and reopen the app to see the cinematic for this day.",
+      "Close and reopen the app to see the briefing and missions for this day.",
       [{ text: "OK" }],
     );
   };
