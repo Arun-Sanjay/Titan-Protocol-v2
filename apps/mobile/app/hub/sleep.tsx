@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   AppState,
   Alert,
   useWindowDimensions,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -355,6 +357,259 @@ const WeekBarChart = React.memo(function WeekBarChart({
   );
 });
 
+// ─── Time Wheel Picker ─────────────────────────────────────────────────────
+
+const WHEEL_ITEM_HEIGHT = 40;
+const WHEEL_VISIBLE_ITEMS = 3;
+const WHEEL_HEIGHT = WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_ITEMS;
+
+const HOURS_12 = Array.from({ length: 12 }, (_, i) => i + 1); // 1-12
+const MINUTES_5 = Array.from({ length: 12 }, (_, i) => i * 5); // 0,5,...,55
+const PERIODS = ["AM", "PM"] as const;
+
+function parse24hTo12h(value: string): { hour12: number; minute: number; period: "AM" | "PM" } {
+  const [hStr, mStr] = value.split(":");
+  let h = parseInt(hStr, 10) || 0;
+  const m = parseInt(mStr, 10) || 0;
+  // Round minute to nearest 5
+  const roundedMin = Math.round(m / 5) * 5 >= 60 ? 55 : Math.round(m / 5) * 5;
+  let period: "AM" | "PM" = h >= 12 ? "PM" : "AM";
+  let hour12 = h % 12;
+  if (hour12 === 0) hour12 = 12;
+  return { hour12, minute: roundedMin, period };
+}
+
+function to24h(hour12: number, minute: number, period: "AM" | "PM"): string {
+  let h = hour12;
+  if (period === "AM" && h === 12) h = 0;
+  if (period === "PM" && h !== 12) h += 12;
+  return `${String(h).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function WheelColumn({
+  data,
+  selectedIndex,
+  onSelect,
+  formatItem,
+}: {
+  data: readonly (number | string)[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  formatItem: (item: number | string) => string;
+}) {
+  const scrollRef = useRef<ScrollView>(null);
+  const isUserScrolling = useRef(false);
+
+  // Scroll to the selected index on mount and when it changes externally
+  useEffect(() => {
+    if (!isUserScrolling.current) {
+      scrollRef.current?.scrollTo({
+        y: selectedIndex * WHEEL_ITEM_HEIGHT,
+        animated: false,
+      });
+    }
+  }, [selectedIndex]);
+
+  const handleScrollEnd = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offsetY = e.nativeEvent.contentOffset.y;
+      const index = Math.round(offsetY / WHEEL_ITEM_HEIGHT);
+      const clamped = Math.max(0, Math.min(index, data.length - 1));
+      isUserScrolling.current = false;
+      if (clamped !== selectedIndex) {
+        onSelect(clamped);
+      }
+    },
+    [data.length, selectedIndex, onSelect],
+  );
+
+  const handleScrollBegin = useCallback(() => {
+    isUserScrolling.current = true;
+  }, []);
+
+  return (
+    <View style={wheelStyles.columnContainer}>
+      <ScrollView
+        ref={scrollRef}
+        style={wheelStyles.column}
+        contentContainerStyle={{
+          paddingVertical: WHEEL_ITEM_HEIGHT, // 1 item padding top and bottom
+        }}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={WHEEL_ITEM_HEIGHT}
+        decelerationRate="fast"
+        nestedScrollEnabled
+        onScrollBeginDrag={handleScrollBegin}
+        onMomentumScrollEnd={handleScrollEnd}
+        onScrollEndDrag={(e) => {
+          // If no momentum, treat drag end as final
+          if (
+            Math.abs(e.nativeEvent.velocity?.y ?? 0) < 0.1
+          ) {
+            handleScrollEnd(e);
+          }
+        }}
+      >
+        {data.map((item, i) => {
+          const isSelected = i === selectedIndex;
+          return (
+            <View key={`${item}`} style={wheelStyles.item}>
+              <Text
+                style={[
+                  wheelStyles.itemText,
+                  isSelected && wheelStyles.itemTextSelected,
+                ]}
+              >
+                {formatItem(item)}
+              </Text>
+            </View>
+          );
+        })}
+      </ScrollView>
+      {/* Selection indicator lines */}
+      <View style={wheelStyles.selectorTop} pointerEvents="none" />
+      <View style={wheelStyles.selectorBottom} pointerEvents="none" />
+    </View>
+  );
+}
+
+function TimeWheelPicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  label: string;
+}) {
+  const parsed = useMemo(() => parse24hTo12h(value), [value]);
+
+  const hourIndex = HOURS_12.indexOf(parsed.hour12);
+  const minuteIndex = MINUTES_5.indexOf(parsed.minute);
+  const periodIndex = PERIODS.indexOf(parsed.period);
+
+  const emitChange = useCallback(
+    (h12: number, min: number, per: "AM" | "PM") => {
+      onChange(to24h(h12, min, per));
+    },
+    [onChange],
+  );
+
+  const onHourSelect = useCallback(
+    (i: number) => emitChange(HOURS_12[i], MINUTES_5[minuteIndex], PERIODS[periodIndex]),
+    [emitChange, minuteIndex, periodIndex],
+  );
+
+  const onMinuteSelect = useCallback(
+    (i: number) => emitChange(HOURS_12[hourIndex], MINUTES_5[i], PERIODS[periodIndex]),
+    [emitChange, hourIndex, periodIndex],
+  );
+
+  const onPeriodSelect = useCallback(
+    (i: number) => emitChange(HOURS_12[hourIndex], MINUTES_5[minuteIndex], PERIODS[i]),
+    [emitChange, hourIndex, minuteIndex],
+  );
+
+  return (
+    <View style={wheelStyles.pickerContainer}>
+      <Text style={wheelStyles.label}>{label}</Text>
+      <View style={wheelStyles.columnsRow}>
+        <WheelColumn
+          data={HOURS_12}
+          selectedIndex={hourIndex >= 0 ? hourIndex : 0}
+          onSelect={onHourSelect}
+          formatItem={(item) => String(item)}
+        />
+        <Text style={wheelStyles.separator}>:</Text>
+        <WheelColumn
+          data={MINUTES_5}
+          selectedIndex={minuteIndex >= 0 ? minuteIndex : 0}
+          onSelect={onMinuteSelect}
+          formatItem={(item) => String(item).padStart(2, "0")}
+        />
+        <WheelColumn
+          data={PERIODS}
+          selectedIndex={periodIndex >= 0 ? periodIndex : 0}
+          onSelect={onPeriodSelect}
+          formatItem={(item) => String(item)}
+        />
+      </View>
+    </View>
+  );
+}
+
+const wheelStyles = StyleSheet.create({
+  pickerContainer: {
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  label: {
+    ...fonts.kicker,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  columnsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.inputBg,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    overflow: "hidden",
+  },
+  separator: {
+    fontFamily: MONO_FONT,
+    fontSize: 20,
+    fontWeight: "700",
+    color: colors.body,
+    marginHorizontal: 2,
+  },
+  columnContainer: {
+    height: WHEEL_HEIGHT,
+    width: 52,
+    overflow: "hidden",
+    position: "relative",
+  },
+  column: {
+    height: WHEEL_HEIGHT,
+  },
+  item: {
+    height: WHEEL_ITEM_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemText: {
+    fontFamily: MONO_FONT,
+    fontSize: 18,
+    fontWeight: "500",
+    color: colors.textMuted,
+  },
+  itemTextSelected: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: colors.body,
+  },
+  selectorTop: {
+    position: "absolute",
+    top: WHEEL_ITEM_HEIGHT,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: colors.body,
+    opacity: 0.4,
+  },
+  selectorBottom: {
+    position: "absolute",
+    top: WHEEL_ITEM_HEIGHT * 2,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: colors.body,
+    opacity: 0.4,
+  },
+});
+
 // ─── Screen ─────────────────────────────────────────────────────────────────
 
 export default function SleepScreen() {
@@ -377,8 +632,8 @@ export default function SleepScreen() {
   const deleteEntry = useSleepStore((s) => s.deleteEntry);
 
   // Form state
-  const [bedtime, setBedtime] = useState("");
-  const [wakeTime, setWakeTime] = useState("");
+  const [bedtime, setBedtime] = useState("22:00");
+  const [wakeTime, setWakeTime] = useState("07:00");
   const [quality, setQuality] = useState<1 | 2 | 3 | 4 | 5>(3);
   const [notes, setNotes] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -487,8 +742,8 @@ export default function SleepScreen() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setShowForm(false);
-    setBedtime("");
-    setWakeTime("");
+    setBedtime("22:00");
+    setWakeTime("07:00");
     setQuality(3);
     setNotes("");
   }, [bedtime, wakeTime, quality, notes, todayKey, addEntry]);
@@ -633,30 +888,12 @@ export default function SleepScreen() {
               <SectionHeader title="Log Sleep" />
               <Panel>
                 {/* Bedtime */}
-                <Text style={styles.fieldLabel}>Bedtime</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="22:30"
-                  placeholderTextColor={colors.textMuted}
-                  value={bedtime}
-                  onChangeText={setBedtime}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={5}
-                />
+                <TimeWheelPicker label="BEDTIME" value={bedtime} onChange={setBedtime} />
+
+                <View style={{ height: spacing.lg }} />
 
                 {/* Wake Time */}
-                <Text style={[styles.fieldLabel, { marginTop: spacing.lg }]}>
-                  Wake Time
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="06:30"
-                  placeholderTextColor={colors.textMuted}
-                  value={wakeTime}
-                  onChangeText={setWakeTime}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={5}
-                />
+                <TimeWheelPicker label="WAKE TIME" value={wakeTime} onChange={setWakeTime} />
 
                 {/* Duration preview */}
                 {previewDuration !== null && (
@@ -723,8 +960,8 @@ export default function SleepScreen() {
                     style={styles.cancelFormBtn}
                     onPress={() => {
                       setShowForm(false);
-                      setBedtime("");
-                      setWakeTime("");
+                      setBedtime("22:00");
+                      setWakeTime("07:00");
                       setQuality(3);
                       setNotes("");
                     }}

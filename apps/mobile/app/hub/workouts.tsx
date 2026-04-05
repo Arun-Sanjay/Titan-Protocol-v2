@@ -9,6 +9,7 @@ import {
   View,
   Text,
   FlatList,
+  ScrollView,
   StyleSheet,
   Pressable,
   TextInput,
@@ -684,8 +685,13 @@ const ExercisePicker = React.memo(function ExercisePicker({
         )}
       />
 
-      {/* Exercise list */}
-      <View style={s.exerciseList}>
+      {/* Exercise list — scrollable independently */}
+      <ScrollView
+        style={s.exerciseList}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={true}
+        keyboardShouldPersistTaps="handled"
+      >
         {filtered.map((ex) => {
           const selected = selectedIds.has(ex.id);
           return (
@@ -718,7 +724,7 @@ const ExercisePicker = React.memo(function ExercisePicker({
         {filtered.length === 0 && (
           <Text style={s.emptyText}>No exercises found</Text>
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 });
@@ -1846,7 +1852,7 @@ const s = StyleSheet.create({
   groupTabTextActive: {
     color: colors.body,
   },
-  exerciseList: { maxHeight: 300 },
+  exerciseList: { maxHeight: 400, borderRadius: radius.md, overflow: "hidden" },
   exercisePickerRow: {
     flexDirection: "row",
     alignItems: "center",

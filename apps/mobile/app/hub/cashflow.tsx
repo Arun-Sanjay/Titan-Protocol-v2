@@ -42,7 +42,7 @@ import {
   type CategoryTotal,
 } from "../../src/stores/useMoneyStore";
 import { getTodayKey, getMonthKey, getMonthLabel, addDays } from "../../src/lib/date";
-import { formatCurrency } from "../../src/lib/format";
+import { formatCurrency, CURRENCIES, getSelectedCurrency, setSelectedCurrency, type CurrencyCode } from "../../src/lib/format";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -98,6 +98,119 @@ const MonthNav = React.memo(function MonthNav({
         />
       </Pressable>
     </View>
+  );
+});
+
+// ─── Day Navigation Component ───────────────────────────────────────────────
+
+const DayNav = React.memo(function DayNav({
+  label,
+  onPrev,
+  onNext,
+  canGoNext,
+}: {
+  label: string;
+  onPrev: () => void;
+  onNext: () => void;
+  canGoNext: boolean;
+}) {
+  return (
+    <View style={styles.monthNav}>
+      <Pressable
+        onPress={() => { onPrev(); Haptics.selectionAsync(); }}
+        hitSlop={12}
+      >
+        <Ionicons name="chevron-back" size={22} color={colors.money} />
+      </Pressable>
+      <Text style={styles.monthLabel}>{label}</Text>
+      <Pressable
+        onPress={() => { if (canGoNext) { onNext(); Haptics.selectionAsync(); } }}
+        disabled={!canGoNext}
+        hitSlop={12}
+      >
+        <Ionicons
+          name="chevron-forward"
+          size={22}
+          color={canGoNext ? colors.money : colors.textMuted}
+        />
+      </Pressable>
+    </View>
+  );
+});
+
+// ─── View Mode Toggle ───────────────────────────────────────────────────────
+
+const ViewModeToggle = React.memo(function ViewModeToggle({
+  viewMode,
+  onToggle,
+}: {
+  viewMode: "monthly" | "daily";
+  onToggle: (mode: "monthly" | "daily") => void;
+}) {
+  return (
+    <View style={styles.viewModeRow}>
+      <Pressable
+        style={[styles.viewModeBtn, viewMode === "monthly" && styles.viewModeBtnActive]}
+        onPress={() => { onToggle("monthly"); Haptics.selectionAsync(); }}
+      >
+        <Text style={[styles.viewModeBtnText, viewMode === "monthly" && styles.viewModeBtnTextActive]}>
+          MONTHLY
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[styles.viewModeBtn, viewMode === "daily" && styles.viewModeBtnActive]}
+        onPress={() => { onToggle("daily"); Haptics.selectionAsync(); }}
+      >
+        <Text style={[styles.viewModeBtnText, viewMode === "daily" && styles.viewModeBtnTextActive]}>
+          DAILY
+        </Text>
+      </Pressable>
+    </View>
+  );
+});
+
+// ─── Daily Summary Panel ────────────────────────────────────────────────────
+
+const DailySummary = React.memo(function DailySummary({
+  earned,
+  spent,
+  net,
+}: {
+  earned: number;
+  spent: number;
+  net: number;
+}) {
+  return (
+    <Panel style={styles.heroPanel} delay={50} tone="hero">
+      <View style={styles.heroMetrics}>
+        <View style={styles.heroMetric}>
+          <MetricValue
+            label="EARNED"
+            value={formatCurrency(earned)}
+            size="sm"
+            color={INCOME_COLOR}
+          />
+        </View>
+        <View style={styles.heroDivider} />
+        <View style={styles.heroMetric}>
+          <MetricValue
+            label="SPENT"
+            value={formatCurrency(spent)}
+            size="sm"
+            color={EXPENSE_COLOR}
+          />
+        </View>
+        <View style={styles.heroDivider} />
+        <View style={styles.heroMetric}>
+          <MetricValue
+            label="NET"
+            value={formatCurrency(net)}
+            size="sm"
+            color={net >= 0 ? colors.money : EXPENSE_COLOR}
+          />
+        </View>
+      </View>
+    </Panel>
   );
 });
 
@@ -586,6 +699,10 @@ export default function CashflowScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loansExpanded, setLoansExpanded] = useState(false);
 
+  // View mode: monthly or daily
+  const [viewMode, setViewMode] = useState<"monthly" | "daily">("monthly");
+  const [selectedDate, setSelectedDate] = useState(getTodayKey());
+
   // Month navigation
   const [monthOffset, setMonthOffset] = useState(0);
   const currentMonth = useMemo(() => {
@@ -618,11 +735,39 @@ export default function CashflowScreen() {
 
   const maxCategoryTotal = categoryTotals.length > 0 ? categoryTotals[0].total : 0;
 
-  // Filter by selected category
+  // Daily mode data
+  const dayTxs = useMemo(
+    () => transactions.filter((tx) => tx.dateISO === selectedDate),
+    [transactions, selectedDate],
+  );
+
+  const dayTotals = useMemo(() => {
+    let earned = 0;
+    let spent = 0;
+    for (const tx of dayTxs) {
+      if (tx.type === "income") earned += tx.amount;
+      else spent += tx.amount;
+    }
+    return { earned, spent, net: earned - spent };
+  }, [dayTxs]);
+
+  const selectedDateLabel = useMemo(() => {
+    const today = getTodayKey();
+    const yesterday = addDays(today, -1);
+    if (selectedDate === today) return "Today";
+    if (selectedDate === yesterday) return "Yesterday";
+    const d = new Date(selectedDate + "T00:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  }, [selectedDate]);
+
+  const canGoNextDay = selectedDate < getTodayKey();
+
+  // Filter by selected category (uses daily or monthly list depending on view mode)
+  const baseTxs = viewMode === "daily" ? dayTxs : monthTxs;
   const filteredTxs = useMemo(() => {
-    if (!selectedCategory) return monthTxs;
-    return monthTxs.filter((tx) => tx.category === selectedCategory);
-  }, [monthTxs, selectedCategory]);
+    if (!selectedCategory) return baseTxs;
+    return baseTxs.filter((tx) => tx.category === selectedCategory);
+  }, [baseTxs, selectedCategory]);
 
   // Group filtered transactions by date for SectionList
   const sections = useMemo(() => {
@@ -681,22 +826,42 @@ export default function CashflowScreen() {
         {/* Page Header */}
         <PageHeader kicker="MONEY ENGINE" title="Cashflow" />
 
-        {/* Month Navigation */}
-        <MonthNav
-          label={monthLabel}
-          onPrev={() => setMonthOffset((o) => o - 1)}
-          onNext={() => setMonthOffset((o) => o + 1)}
-          canGoNext={monthOffset < 0}
-        />
+        {/* View Mode Toggle */}
+        <ViewModeToggle viewMode={viewMode} onToggle={setViewMode} />
 
-        {/* Monthly Summary Hero */}
-        <MonthlySummary
-          earned={comparison.earned}
-          spent={comparison.spent}
-          net={comparison.net}
-          earnedDelta={comparison.earnedDelta}
-          spentDelta={comparison.spentDelta}
-        />
+        {/* Navigation — Monthly or Daily */}
+        {viewMode === "monthly" ? (
+          <MonthNav
+            label={monthLabel}
+            onPrev={() => setMonthOffset((o) => o - 1)}
+            onNext={() => setMonthOffset((o) => o + 1)}
+            canGoNext={monthOffset < 0}
+          />
+        ) : (
+          <DayNav
+            label={selectedDateLabel}
+            onPrev={() => setSelectedDate((d) => addDays(d, -1))}
+            onNext={() => setSelectedDate((d) => addDays(d, 1))}
+            canGoNext={canGoNextDay}
+          />
+        )}
+
+        {/* Summary Hero — Monthly or Daily */}
+        {viewMode === "monthly" ? (
+          <MonthlySummary
+            earned={comparison.earned}
+            spent={comparison.spent}
+            net={comparison.net}
+            earnedDelta={comparison.earnedDelta}
+            spentDelta={comparison.spentDelta}
+          />
+        ) : (
+          <DailySummary
+            earned={dayTotals.earned}
+            spent={dayTotals.spent}
+            net={dayTotals.net}
+          />
+        )}
 
         {/* Category Breakdown */}
         {categoryTotals.length > 0 && (
@@ -822,15 +987,20 @@ export default function CashflowScreen() {
         {/* Transaction List Header */}
         <SectionHeader
           title="Transactions"
-          right={`${filteredTxs.length} ${selectedCategory ? "in " + selectedCategory : "this month"}`}
+          right={`${filteredTxs.length} ${selectedCategory ? "in " + selectedCategory : viewMode === "daily" ? "today" : "this month"}`}
           accentColor={colors.money}
         />
       </>
     ),
     [
+      viewMode,
       monthLabel,
       monthOffset,
+      selectedDate,
+      selectedDateLabel,
+      canGoNextDay,
       comparison,
+      dayTotals,
       categoryTotals,
       maxCategoryTotal,
       selectedCategory,
@@ -853,6 +1023,8 @@ export default function CashflowScreen() {
         <Text style={styles.emptyText}>
           {selectedCategory
             ? `No ${selectedCategory} transactions`
+            : viewMode === "daily"
+            ? "No transactions this day"
             : "No transactions this month"}
         </Text>
         <Text style={styles.emptySubtext}>
@@ -862,7 +1034,7 @@ export default function CashflowScreen() {
         </Text>
       </Panel>
     ),
-    [selectedCategory],
+    [selectedCategory, viewMode],
   );
 
   const renderTxItem = useCallback(
@@ -942,6 +1114,34 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1, paddingHorizontal: spacing.lg },
   bodyContent: { paddingBottom: spacing["5xl"] },
+
+  // ── View Mode Toggle ──
+  viewModeRow: {
+    flexDirection: "row",
+    alignSelf: "center",
+    backgroundColor: colors.inputBg,
+    borderRadius: radius.full,
+    padding: 3,
+    gap: 3,
+    marginBottom: spacing.sm,
+  },
+  viewModeBtn: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+  },
+  viewModeBtnActive: {
+    backgroundColor: colors.money,
+  },
+  viewModeBtnText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.textMuted,
+    letterSpacing: 1,
+  },
+  viewModeBtnTextActive: {
+    color: "#000",
+  },
 
   // ── Month Navigation ──
   monthNav: {
