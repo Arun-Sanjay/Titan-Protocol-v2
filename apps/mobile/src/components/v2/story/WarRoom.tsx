@@ -28,6 +28,7 @@ import { HUDBackground } from "../../ui/AnimatedBackground";
 import { MissionBoard } from "../../ui/MissionBoard";
 import { useQuestStore } from "../../../stores/useQuestStore";
 import { playRandomTaskAck } from "../../../lib/protocol-audio";
+import { trackOperationCompletion } from "../../../lib/operation-engine";
 
 /* ─── Constants ────────────────────────────────────────────────────── */
 const CARD_GAP = 12;
@@ -134,10 +135,19 @@ export function WarRoom() {
       setJustCompleted((prev) => {
         const next = new Set(prev);
         next.add(task.id!);
+
+        // Track operation completion for consistency calculation
+        // Collect all completed task IDs (existing + the one just toggled)
+        const allCompletedIds = allTasks
+          .filter((t) => t.completed || t.id === task.id)
+          .map((t) => t.id!)
+          .filter(Boolean);
+        trackOperationCompletion(allCompletedIds);
+
         return next;
       });
     },
-    [dateKey, toggleTask, awardXP]
+    [dateKey, toggleTask, awardXP, allTasks]
   );
 
   return (

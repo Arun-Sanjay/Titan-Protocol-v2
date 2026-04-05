@@ -81,14 +81,17 @@ export function Day6Cinematic({ onComplete }: Props) {
     ];
   }, [userName, trajectory]);
 
-  // Play trajectory-specific voice line
+  // Play trajectory-specific voice line (only stop on unmount, not phase change)
   useEffect(() => {
-    if (phase === "speech") {
-      const voiceId = trajectory === "up" ? "CIN-D6-UP" : trajectory === "down" ? "CIN-D6-DOWN" : "CIN-D6-FLAT";
-      playVoiceLineAsync(voiceId);
-    }
-    return () => { stopCurrentAudio(); };
+    if (phase !== "speech") return;
+    const voiceId = trajectory === "up" ? "CIN-D6-UP" : trajectory === "down" ? "CIN-D6-DOWN" : "CIN-D6-FLAT";
+    playVoiceLineAsync(voiceId);
   }, [phase, trajectory]);
+
+  // Stop audio on unmount only
+  useEffect(() => {
+    return () => { stopCurrentAudio(); };
+  }, []);
 
   const handleNarrationComplete = () => {
     setTimeout(() => setPhase("operation"), 1200);

@@ -14,15 +14,19 @@ export function Day5Cinematic({ onComplete }: Props) {
   const [phase, setPhase] = useState<"speech" | "operation">("speech");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Play voice at speech phase start (only stop on unmount, not phase change)
   useEffect(() => {
-    if (phase === "speech") {
-      playSequence([
-        { id: "CIN-D5-001", delayAfter: 400 },
-        { id: "CIN-D5-002" },
-      ]).catch(() => {});
-    }
-    return () => { stopCurrentAudio(); };
+    if (phase !== "speech") return;
+    playSequence([
+      { id: "CIN-D5-001", delayAfter: 400 },
+      { id: "CIN-D5-002" },
+    ]).catch(() => {});
   }, [phase]);
+
+  // Stop audio on unmount only
+  useEffect(() => {
+    return () => { stopCurrentAudio(); };
+  }, []);
 
   const narrationLines: NarrationLine[] = useMemo(
     () => [

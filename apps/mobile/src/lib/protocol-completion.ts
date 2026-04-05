@@ -33,6 +33,7 @@ import { useFieldOpStore } from "../stores/useFieldOpStore";
 import achievementDefsJson from "../data/achievements.json";
 import { speakFieldOp, speakAchievement } from "./voice";
 import { playVoiceLineAsync, getDayDoneVoiceId } from "./protocol-audio";
+import { trackOperationCompletion } from "./operation-engine";
 
 /**
  * Handle all post-protocol side effects.
@@ -100,6 +101,15 @@ export function handleProtocolCompletion(protocolScore: number, xpEarned: number
   for (const engine of ENGINES) {
     engineScores[engine] = scores[`${engine}:${today}`] ?? 0;
   }
+
+  // 4b. Track operation completion for consistency calculation
+  const allCompletions = useEngineStore.getState().completions;
+  const completedTaskIds: number[] = [];
+  for (const engine of ENGINES) {
+    const ids = allCompletions[`${engine}:${today}`] ?? [];
+    completedTaskIds.push(...ids);
+  }
+  trackOperationCompletion(completedTaskIds);
 
   // 5. Calculate weighted Titan Score (respecting Focus mode active engines)
   const archetype = useIdentityStore.getState().archetype;

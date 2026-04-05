@@ -30,16 +30,19 @@ export function Day2Cinematic({ onComplete }: Props) {
     [userName],
   );
 
-  // Play voice at speech phase start
+  // Play voice at speech phase start (only stop on unmount, not phase change)
   useEffect(() => {
-    if (phase === "speech") {
-      playSequence([
-        { id: "CIN-D2-001", delayAfter: 400 },
-        { id: "CIN-D2-002" },
-      ]).catch(() => {});
-    }
-    return () => { stopCurrentAudio(); };
+    if (phase !== "speech") return;
+    playSequence([
+      { id: "CIN-D2-001", delayAfter: 400 },
+      { id: "CIN-D2-002" },
+    ]).catch(() => {});
   }, [phase]);
+
+  // Stop audio on unmount only
+  useEffect(() => {
+    return () => { stopCurrentAudio(); };
+  }, []);
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleNarrationComplete = useCallback(() => {
