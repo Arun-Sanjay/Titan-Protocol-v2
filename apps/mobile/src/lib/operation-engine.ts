@@ -417,10 +417,16 @@ export function generateDailyOperation(
   phase: string,
 ): DailyOperation {
   // Return cached operation for today if available (prevents tasks changing on restart)
+  // BUT invalidate cache if streak changed significantly (e.g., profile loaded after first render)
   const today = getTodayKey();
-  const cached = getJSON<{ dateKey: string; operation: DailyOperation } | null>(CACHED_OP_KEY, null);
+  const cached = getJSON<{ dateKey: string; streak: number; operation: DailyOperation } | null>(CACHED_OP_KEY, null);
   if (cached && cached.dateKey === today && cached.operation) {
-    return cached.operation;
+    // Invalidate if streak changed from 0 to non-zero (profile wasn't loaded on first call)
+    // or from non-zero to 0 (streak broke)
+    const streakMismatch = (cached.streak === 0 && streak > 0) || (cached.streak > 0 && streak === 0);
+    if (!streakMismatch) {
+      return cached.operation;
+    }
   }
 
   const { rate: consistencyRate, level: consistency } = calculateConsistency();
@@ -475,7 +481,7 @@ export function generateDailyOperation(
   };
 
   // Cache for today so operation stays stable across app restarts
-  setJSON(CACHED_OP_KEY, { dateKey: today, operation });
+  setJSON(CACHED_OP_KEY, { dateKey: today, streak, operation });
 
   return operation;
 }

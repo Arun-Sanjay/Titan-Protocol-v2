@@ -11,7 +11,7 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
-import { useProfileStore } from "../../../stores/useProfileStore";
+import { useProtocolStore } from "../../../stores/useProtocolStore";
 import { generateDailyOperation, type DailyOperation } from "../../../lib/operation-engine";
 import {
   playVoiceLineAsync,
@@ -52,7 +52,8 @@ export function OperationBriefing({
 }: Props) {
   const userName = useStoryStore((s) => s.userName) || "Recruit";
   const storyAct = useStoryStore((s) => s.currentAct);
-  const streak = useProfileStore((s) => s.profile.streak);
+  // Use protocol store streak (loaded from MMKV on init) — profile.streak defaults to 0 before async load
+  const streak = useProtocolStore((s) => s.streakCurrent);
 
   // Generate the operation with real tasks
   const operation = useMemo(
@@ -65,7 +66,9 @@ export function OperationBriefing({
   const accent = accentColor ?? "#FBBF24";
 
   // Play operation voice line synced with header fade-in (200ms delay + 500ms duration)
+  // Skip voice if operationName is overridden — the parent cinematic already handles voice
   useEffect(() => {
+    if (operationName) return; // Day cinematic override — cinematic speech already played
     const timer = setTimeout(() => {
       playVoiceLineAsync(getOperationVoiceId(operation.name));
     }, 800);
@@ -73,7 +76,7 @@ export function OperationBriefing({
       clearTimeout(timer);
       stopCurrentAudio();
     };
-  }, [operation.name]);
+  }, [operation.name, operationName]);
 
   const handleAccept = () => {
     stopCurrentAudio();

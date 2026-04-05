@@ -21,6 +21,7 @@ import { getCurrentChapter, getDayNumber } from "../../../data/chapters";
 import { getLatestNarrative, getStoryForDay } from "../../../lib/narrative-engine";
 import { generateDailyOperation, type DailyOperation } from "../../../lib/operation-engine";
 import { useStoryStore } from "../../../stores/useStoryStore";
+import { useProtocolStore } from "../../../stores/useProtocolStore";
 import { checkIntegrityStatus, getIntegrityColor } from "../../../lib/protocol-integrity";
 import {
   playSequence,
@@ -120,13 +121,16 @@ export function DailyBriefing({ onEnter }: Props) {
   const narrative = getLatestNarrative();
 
   // Generate today's operation
+  // Use protocol store streak (loaded from MMKV on init, available immediately)
+  // instead of profile.streak (requires async loadProfile, defaults to 0 on first render)
   const userName = useStoryStore((s) => s.userName) || "Recruit";
   const storyAct = useStoryStore((s) => s.currentAct);
+  const protocolStreak = useProtocolStore((s) => s.streakCurrent);
   const operation = useMemo(
     () => dayNumber > 1
-      ? generateDailyOperation(userName, dayNumber, profile.streak, storyAct)
+      ? generateDailyOperation(userName, dayNumber, protocolStreak, storyAct)
       : null,
-    [dayNumber, userName, profile.streak, storyAct],
+    [dayNumber, userName, protocolStreak, storyAct],
   );
 
   // Meta
