@@ -554,7 +554,7 @@ export default function HQScreen() {
               style={[s.halfCard, { width: halfCardWidth }]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/skill-tree/body");
+                router.push("/skill-tree");
               }}
             >
               <Text style={s.halfCardKicker}>SKILL TREES</Text>

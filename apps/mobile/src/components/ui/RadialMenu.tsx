@@ -45,7 +45,7 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Command", icon: "\uD83C\uDFAE", route: "/(tabs)" },
   { label: "War Room", icon: "\u2694\uFE0F", route: "/war-room" },
   { label: "Engines", icon: "\uD83D\uDD25", route: "/(tabs)/engines" },
-  { label: "Skills", icon: "\uD83C\uDF33", route: "/skill-tree/body" },
+  { label: "Skills", icon: "\uD83C\uDF33", route: "/skill-tree" },
   { label: "Profile", icon: "\uD83D\uDC64", route: "/(tabs)/profile" },
 ];
 
