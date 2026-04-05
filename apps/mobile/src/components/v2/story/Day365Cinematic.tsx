@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -14,6 +14,13 @@ export function Day365Cinematic({ onComplete }: Props) {
   const markPlayed = useStoryStore((s) => s.markCinematicPlayed);
 
   const [phase, setPhase] = useState<Phase>("stats");
+  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+    };
+  }, []);
 
   // Phase 1: Terminal (types slowly)
   const statsLines: TerminalLine[] = useMemo(
@@ -43,11 +50,11 @@ export function Day365Cinematic({ onComplete }: Props) {
   );
 
   const handleStatsComplete = () => {
-    setTimeout(() => setPhase("speech"), 2000);
+    phaseTimerRef.current = setTimeout(() => setPhase("speech"), 2000);
   };
 
   const handleSpeechComplete = () => {
-    setTimeout(() => setPhase("legacy"), 2000);
+    phaseTimerRef.current = setTimeout(() => setPhase("legacy"), 2000);
   };
 
   const handleDone = () => {

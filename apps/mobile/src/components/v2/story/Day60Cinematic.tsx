@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -38,6 +38,13 @@ export function Day60Cinematic({ onComplete }: Props) {
   const archetypeName = IDENTITY_LABELS[identity as IdentityArchetype] ?? "THE TITAN";
 
   const [phase, setPhase] = useState<Phase>("stats");
+  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+    };
+  }, []);
 
   // Compute scores for Day 1, Day 30, and Day 60 windows
   const { avgDay1, avgDay30, avgDay60, rank } = useMemo(() => {
@@ -115,11 +122,11 @@ export function Day60Cinematic({ onComplete }: Props) {
   );
 
   const handleStatsComplete = () => {
-    setTimeout(() => setPhase("speech"), 1500);
+    phaseTimerRef.current = setTimeout(() => setPhase("speech"), 1500);
   };
 
   const handleSpeechComplete = () => {
-    setTimeout(() => setPhase("transition"), 1500);
+    phaseTimerRef.current = setTimeout(() => setPhase("transition"), 1500);
   };
 
   const handleAccept = () => {

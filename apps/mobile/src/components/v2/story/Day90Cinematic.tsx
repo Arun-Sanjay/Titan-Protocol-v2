@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -28,6 +28,13 @@ export function Day90Cinematic({ onComplete }: Props) {
   const archetypeName = IDENTITY_LABELS[identity as IdentityArchetype] ?? "THE TITAN";
 
   const [phase, setPhase] = useState<Phase>("stats");
+  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+    };
+  }, []);
 
   const averageScore = useMemo(() => {
     const today = getTodayKey();
@@ -78,15 +85,15 @@ export function Day90Cinematic({ onComplete }: Props) {
   );
 
   const handleStatsComplete = () => {
-    setTimeout(() => setPhase("speech"), 1500);
+    phaseTimerRef.current = setTimeout(() => setPhase("speech"), 1500);
   };
 
   const handleSpeechComplete = () => {
-    setTimeout(() => setPhase("wellDone"), 2000);
+    phaseTimerRef.current = setTimeout(() => setPhase("wellDone"), 2000);
   };
 
   const handleWellDoneTimeout = () => {
-    setTimeout(() => setPhase("transition"), 4000);
+    phaseTimerRef.current = setTimeout(() => setPhase("transition"), 4000);
   };
 
   const handleAccept = () => {

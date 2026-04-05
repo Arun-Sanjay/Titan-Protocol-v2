@@ -27,7 +27,7 @@ import { evaluateAllTrees } from "../../../lib/skill-tree-evaluator";
 import { HUDBackground } from "../../ui/AnimatedBackground";
 import { MissionBoard } from "../../ui/MissionBoard";
 import { useQuestStore } from "../../../stores/useQuestStore";
-import { playRandomTaskAck } from "../../../lib/protocol-audio";
+import { playRandomTaskAck, stopCurrentAudio } from "../../../lib/protocol-audio";
 import { trackOperationCompletion } from "../../../lib/operation-engine";
 
 /* ─── Constants ────────────────────────────────────────────────────── */
@@ -90,6 +90,11 @@ export function WarRoom() {
     for (const e of ENGINES) load(e, dateKey);
     useProfileStore.getState().load();
   }, [dateKey]);
+
+  /* Stop audio on unmount */
+  useEffect(() => {
+    return () => { void stopCurrentAudio(); };
+  }, []);
 
   /* Derive all tasks */
   const allTasks = useMemo(

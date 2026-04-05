@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -15,6 +15,13 @@ export function Day45Cinematic({ onComplete }: Props) {
   const setFlag = useStoryStore((s) => s.setFlag);
 
   const [phase, setPhase] = useState<Phase>("speech");
+  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+    };
+  }, []);
 
   const speechLines: NarrationLine[] = useMemo(
     () => [
@@ -31,7 +38,7 @@ export function Day45Cinematic({ onComplete }: Props) {
   );
 
   const handleSpeechComplete = () => {
-    setTimeout(() => setPhase("operation"), 1500);
+    phaseTimerRef.current = setTimeout(() => setPhase("operation"), 1500);
   };
 
   const handleAccept = () => {
