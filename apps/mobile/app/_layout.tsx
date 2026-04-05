@@ -24,6 +24,12 @@ import { Day4Cinematic } from "../src/components/v2/story/Day4Cinematic";
 import { Day5Cinematic } from "../src/components/v2/story/Day5Cinematic";
 import { Day6Cinematic } from "../src/components/v2/story/Day6Cinematic";
 import { Day7Cinematic } from "../src/components/v2/story/Day7Cinematic";
+import { Day8Cinematic } from "../src/components/v2/story/Day8Cinematic";
+import { Day9Cinematic } from "../src/components/v2/story/Day9Cinematic";
+import { Day10Cinematic } from "../src/components/v2/story/Day10Cinematic";
+import { Day11Cinematic } from "../src/components/v2/story/Day11Cinematic";
+import { Day12Cinematic } from "../src/components/v2/story/Day12Cinematic";
+import { Day13Cinematic } from "../src/components/v2/story/Day13Cinematic";
 import { Day14Cinematic } from "../src/components/v2/story/Day14Cinematic";
 import { Day30Cinematic } from "../src/components/v2/story/Day30Cinematic";
 import { Day45Cinematic } from "../src/components/v2/story/Day45Cinematic";
@@ -34,11 +40,21 @@ import { getStoryForDay, addEntry } from "../src/lib/narrative-engine";
 import { useIdentityStore } from "../src/stores/useIdentityStore";
 import { useStoryStore } from "../src/stores/useStoryStore";
 import { useProtocolStore } from "../src/stores/useProtocolStore";
-import { getJSON } from "../src/db/storage";
+import { getJSON, setJSON } from "../src/db/storage";
 import { getDayNumber } from "../src/data/chapters";
 import { getTodayKey } from "../src/lib/date";
 import { AchievementToast } from "../src/components/ui/AchievementToast";
 import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider";
+import { SurpriseOverlay } from "../src/components/v2/story/SurpriseOverlay";
+import { StreakBreakCinematic } from "../src/components/v2/story/StreakBreakCinematic";
+import { BossDefeatCinematic } from "../src/components/v2/story/BossDefeatCinematic";
+import { BossFailCinematic } from "../src/components/v2/story/BossFailCinematic";
+import { useQuestStore, type BossChallenge } from "../src/stores/useQuestStore";
+import { ComebackCinematic } from "../src/components/v2/story/ComebackCinematic";
+import { IntegrityWarningOverlay } from "../src/components/v2/story/IntegrityWarningOverlay";
+import { useSurpriseStore } from "../src/stores/useSurpriseStore";
+import { calculateConsistency } from "../src/lib/operation-engine";
+import { checkIntegrityStatus, loadIntegrity, type IntegrityStatus } from "../src/lib/protocol-integrity";
 import type { TransmissionContext } from "../src/lib/transmissions";
 
 import "../src/db/database";
@@ -51,6 +67,12 @@ const DAY_CINEMATICS: Record<number, React.ComponentType<{ onComplete: () => voi
   5: Day5Cinematic,
   6: Day6Cinematic,
   7: Day7Cinematic,
+  8: Day8Cinematic,
+  9: Day9Cinematic,
+  10: Day10Cinematic,
+  11: Day11Cinematic,
+  12: Day12Cinematic,
+  13: Day13Cinematic,
   14: Day14Cinematic,
   30: Day30Cinematic,
   45: Day45Cinematic,
@@ -64,6 +86,33 @@ export default function RootLayout() {
   const [showCinematic, setShowCinematic] = useState(false);
   const [showDayCinematic, setShowDayCinematic] = useState<number | null>(null);
   const [showBriefing, setShowBriefing] = useState(false);
+  // Integrity overlays
+  const [showStreakBreak, setShowStreakBreak] = useState<{
+    status: "BREACH" | "RESET";
+    oldStreak: number;
+    newStreak: number;
+    missedDays: number;
+  } | null>(null);
+  const [showComeback, setShowComeback] = useState<{
+    preBreakStreak: number;
+    currentStreak: number;
+    restoredStreak: number;
+  } | null>(null);
+  const [showWarning, setShowWarning] = useState(false);
+  const [integrityChecked, setIntegrityChecked] = useState(false);
+  // Boss cinematics
+  const [showBossDefeat, setShowBossDefeat] = useState<{
+    title: string;
+    daysRequired: number;
+    dayResults: boolean[];
+    xpReward: number;
+  } | null>(null);
+  const [showBossFail, setShowBossFail] = useState<{
+    title: string;
+    dayNumber: number;
+    dayResults: boolean[];
+  } | null>(null);
+
   const onboardingCompleted = useOnboardingStore((s) => s.completed);
   const walkthroughCompleted = useWalkthroughStore((s) => s.completed);
   const archetype = useIdentityStore((s) => s.archetype);
@@ -86,6 +135,77 @@ export default function RootLayout() {
   // After splash dismissal, determine what to show
   useEffect(() => {
     if (!showSplash && onboardingCompleted && walkthroughCompleted) {
+      // ─── Step 1: Integrity check (runs BEFORE cinematics/briefing) ───
+      const integrityCheckKey = `integrity_cinematic_${getTodayKey()}`;
+      const alreadyShownToday = getJSON<boolean>(integrityCheckKey, false);
+
+      if (!alreadyShownToday && isFirstLaunchSeen()) {
+        const integrity = checkIntegrityStatus();
+        const integrityState = loadIntegrity();
+
+        if (integrity.status === "BREACH" || integrity.status === "RESET") {
+          const oldStreak = integrityState.streak;
+          const newStreak = integrity.status === "BREACH"
+            ? Math.max(1, Math.floor(oldStreak * 0.5))
+            : 0;
+          setShowStreakBreak({
+            status: integrity.status,
+            oldStreak,
+            newStreak,
+            missedDays: integrity.missedDays,
+          });
+          setIntegrityChecked(true);
+          return; // Block everything else until acknowledged
+        }
+
+        if (integrity.status === "WARNING") {
+          setShowWarning(true);
+          // Don't return — warning is non-blocking, continues to normal flow
+        }
+
+        // Check for comeback: user in RECOVERING state and just hit 3 recovery days
+        if (integrityState.status === "RECOVERING" && integrityState.recoveryDays >= 3) {
+          const comebackShownKey = `comeback_shown_${getTodayKey()}`;
+          if (!getJSON<boolean>(comebackShownKey, false)) {
+            setShowComeback({
+              preBreakStreak: integrityState.preBreakStreak,
+              currentStreak: integrityState.streak,
+              restoredStreak: Math.floor(integrityState.preBreakStreak * 0.75),
+            });
+            setIntegrityChecked(true);
+            return; // Block until acknowledged
+          }
+        }
+      }
+
+      setIntegrityChecked(true);
+
+      // ─── Step 1b: Boss defeat/fail check ─────────────────────────────
+      const bossState = useQuestStore.getState().bossChallenge;
+      const bossShownKey = `boss_cinematic_${getTodayKey()}`;
+      if (bossState && !getJSON<boolean>(bossShownKey, false)) {
+        if (bossState.completed) {
+          setShowBossDefeat({
+            title: bossState.title,
+            daysRequired: bossState.daysRequired,
+            dayResults: bossState.dayResults,
+            xpReward: bossState.xpReward,
+          });
+          setJSON(bossShownKey, true);
+          return; // Block until claimed
+        }
+        if (bossState.failed) {
+          setShowBossFail({
+            title: bossState.title,
+            dayNumber: bossState.dayResults.length,
+            dayResults: bossState.dayResults,
+          });
+          setJSON(bossShownKey, true);
+          // Don't return — fail cinematic leads to normal flow after
+        }
+      }
+
+      // ─── Step 2: Normal cinematic/briefing flow ──────────────────────
       if (!isFirstLaunchSeen()) {
         // Day 1 cinematic
         setShowCinematic(true);
@@ -115,6 +235,8 @@ export default function RootLayout() {
     // After Day 1 cinematic, show daily briefing if needed
     if (!isBriefingSeenToday()) {
       setShowBriefing(true);
+    } else {
+      triggerSurpriseCheck();
     }
   };
 
@@ -129,11 +251,89 @@ export default function RootLayout() {
         addEntry({ date: getTodayKey(), text: story.text, type: "story" });
       }
       setShowBriefing(true);
+    } else {
+      triggerSurpriseCheck();
     }
+  };
+
+  // ─── Integrity cinematic handlers ────────────────────────────────────────
+  const handleStreakBreakContinue = () => {
+    // Mark as shown today so it doesn't repeat
+    setJSON(`integrity_cinematic_${getTodayKey()}`, true);
+    setShowStreakBreak(null);
+
+    // Now proceed to normal cinematic/briefing flow
+    const firstActiveDate = getJSON<string | null>("first_active_date", null);
+    const dayNum = getDayNumber(firstActiveDate);
+    const cinematicKey = getCinematicForDay(dayNum);
+    if (cinematicKey && DAY_CINEMATICS[dayNum]) {
+      setShowDayCinematic(dayNum);
+    } else if (!isBriefingSeenToday()) {
+      const story = getStoryForDay(archetype, dayNum);
+      if (story) {
+        addEntry({ date: getTodayKey(), text: story.text, type: "story" });
+      }
+      setShowBriefing(true);
+    }
+  };
+
+  const handleComebackContinue = () => {
+    setJSON(`comeback_shown_${getTodayKey()}`, true);
+    setShowComeback(null);
+
+    // Proceed to normal flow
+    const firstActiveDate = getJSON<string | null>("first_active_date", null);
+    const dayNum = getDayNumber(firstActiveDate);
+    const cinematicKey = getCinematicForDay(dayNum);
+    if (cinematicKey && DAY_CINEMATICS[dayNum]) {
+      setShowDayCinematic(dayNum);
+    } else if (!isBriefingSeenToday()) {
+      const story = getStoryForDay(archetype, dayNum);
+      if (story) {
+        addEntry({ date: getTodayKey(), text: story.text, type: "story" });
+      }
+      setShowBriefing(true);
+    }
+  };
+
+  const handleWarningDismiss = () => {
+    setShowWarning(false);
+  };
+
+  const handleBossDefeatClaim = () => {
+    setShowBossDefeat(null);
+    // Proceed to normal flow
+    const firstActiveDate = getJSON<string | null>("first_active_date", null);
+    const dayNum = getDayNumber(firstActiveDate);
+    if (!isBriefingSeenToday()) {
+      const story = getStoryForDay(archetype, dayNum);
+      if (story) {
+        addEntry({ date: getTodayKey(), text: story.text, type: "story" });
+      }
+      setShowBriefing(true);
+    }
+  };
+
+  const handleBossFailContinue = () => {
+    setShowBossFail(null);
+  };
+
+  // ─── Surprise system ────────────────────────────────────────────────────
+  const activeSurprise = useSurpriseStore((s) => s.activeSurprise);
+  const checkSurprise = useSurpriseStore((s) => s.check);
+  const acceptSurprise = useSurpriseStore((s) => s.accept);
+  const dismissSurprise = useSurpriseStore((s) => s.dismiss);
+
+  const triggerSurpriseCheck = () => {
+    // Check for surprise after all overlays are dismissed
+    const consistency = calculateConsistency();
+    checkSurprise(streakCurrent, consistency.rate);
   };
 
   const handleBriefingEnter = () => {
     setShowBriefing(false);
+    // After briefing closes, check for surprise
+    triggerSurpriseCheck();
   };
 
   // Resolve the day cinematic component
@@ -195,6 +395,50 @@ export default function RootLayout() {
       {showCinematic && <FirstLaunchCinematic onComplete={handleCinematicComplete} />}
       {DayCinematicComponent && <DayCinematicComponent onComplete={handleDayCinematicComplete} />}
       {showBriefing && <DailyBriefing onEnter={handleBriefingEnter} />}
+      {activeSurprise && (
+        <SurpriseOverlay
+          surprise={activeSurprise}
+          onAccept={acceptSurprise}
+          onDismiss={dismissSurprise}
+        />
+      )}
+      {/* Boss cinematics */}
+      {showBossDefeat && (
+        <BossDefeatCinematic
+          bossTitle={showBossDefeat.title}
+          daysRequired={showBossDefeat.daysRequired}
+          dayResults={showBossDefeat.dayResults}
+          xpReward={showBossDefeat.xpReward}
+          onClaim={handleBossDefeatClaim}
+        />
+      )}
+      {showBossFail && (
+        <BossFailCinematic
+          bossTitle={showBossFail.title}
+          dayNumber={showBossFail.dayNumber}
+          dayResults={showBossFail.dayResults}
+          onContinue={handleBossFailContinue}
+        />
+      )}
+      {/* Integrity overlays — highest priority, render on top */}
+      {showWarning && <IntegrityWarningOverlay onDismiss={handleWarningDismiss} />}
+      {showStreakBreak && (
+        <StreakBreakCinematic
+          status={showStreakBreak.status}
+          oldStreak={showStreakBreak.oldStreak}
+          newStreak={showStreakBreak.newStreak}
+          missedDays={showStreakBreak.missedDays}
+          onContinue={handleStreakBreakContinue}
+        />
+      )}
+      {showComeback && (
+        <ComebackCinematic
+          preBreakStreak={showComeback.preBreakStreak}
+          currentStreak={showComeback.currentStreak}
+          restoredStreak={showComeback.restoredStreak}
+          onContinue={handleComebackContinue}
+        />
+      )}
       </SystemNotificationProvider>
       </SystemWindowProvider>
     </GestureHandlerRootView>

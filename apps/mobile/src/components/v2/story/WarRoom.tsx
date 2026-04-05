@@ -27,6 +27,7 @@ import { evaluateAllTrees } from "../../../lib/skill-tree-evaluator";
 import { HUDBackground } from "../../ui/AnimatedBackground";
 import { MissionBoard } from "../../ui/MissionBoard";
 import { useQuestStore } from "../../../stores/useQuestStore";
+import { playRandomTaskAck } from "../../../lib/protocol-audio";
 
 /* ─── Constants ────────────────────────────────────────────────────── */
 const CARD_GAP = 12;
@@ -126,6 +127,9 @@ export function WarRoom() {
       const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
       awardXP(dateKey, `task:${task.id}`, xp);
       evaluateAllTrees();
+
+      // Protocol voice acknowledgment
+      playRandomTaskAck();
 
       setJustCompleted((prev) => {
         const next = new Set(prev);

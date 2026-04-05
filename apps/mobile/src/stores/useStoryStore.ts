@@ -14,6 +14,12 @@ export type StoryFlags = {
   day5_played: boolean;
   day6_played: boolean;
   day7_played: boolean;
+  day8_played: boolean;
+  day9_played: boolean;
+  day10_played: boolean;
+  day11_played: boolean;
+  day12_played: boolean;
+  day13_played: boolean;
   day14_played: boolean;
   day21_played: boolean;
   day30_played: boolean;
@@ -39,6 +45,12 @@ const DEFAULT_FLAGS: StoryFlags = {
   day5_played: false,
   day6_played: false,
   day7_played: false,
+  day8_played: false,
+  day9_played: false,
+  day10_played: false,
+  day11_played: false,
+  day12_played: false,
+  day13_played: false,
   day14_played: false,
   day21_played: false,
   day30_played: false,
@@ -177,6 +189,12 @@ export const useStoryStore = create<StoryState>()((set, get) => {
         5: { flag: "day5_played", component: "Day5Cinematic" },
         6: { flag: "day6_played", component: "Day6Cinematic" },
         7: { flag: "day7_played", component: "Day7Cinematic" },
+        8: { flag: "day8_played", component: "Day8Cinematic" },
+        9: { flag: "day9_played", component: "Day9Cinematic" },
+        10: { flag: "day10_played", component: "Day10Cinematic" },
+        11: { flag: "day11_played", component: "Day11Cinematic" },
+        12: { flag: "day12_played", component: "Day12Cinematic" },
+        13: { flag: "day13_played", component: "Day13Cinematic" },
         14: { flag: "day14_played", component: "Day14Cinematic" },
         30: { flag: "day30_played", component: "Day30Cinematic" },
         45: { flag: "day45_played", component: "Day45Cinematic" },

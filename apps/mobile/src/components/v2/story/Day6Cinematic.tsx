@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { colors, spacing } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
@@ -6,6 +6,7 @@ import { ProtocolNarration, type NarrationLine } from "./ProtocolTerminal";
 import { OperationBriefing } from "./OperationBriefing";
 import { useEngineStore, selectTotalScore } from "../../../stores/useEngineStore";
 import { getTodayKey, addDays } from "../../../lib/date";
+import { playVoiceLineAsync, stopCurrentAudio } from "../../../lib/protocol-audio";
 
 type Props = { onComplete: () => void };
 
@@ -80,11 +81,21 @@ export function Day6Cinematic({ onComplete }: Props) {
     ];
   }, [userName, trajectory]);
 
+  // Play trajectory-specific voice line
+  useEffect(() => {
+    if (phase === "speech") {
+      const voiceId = trajectory === "up" ? "CIN-D6-UP" : trajectory === "down" ? "CIN-D6-DOWN" : "CIN-D6-FLAT";
+      playVoiceLineAsync(voiceId);
+    }
+    return () => { stopCurrentAudio(); };
+  }, [phase, trajectory]);
+
   const handleNarrationComplete = () => {
     setTimeout(() => setPhase("operation"), 1200);
   };
 
   const handleAccept = () => {
+    stopCurrentAudio();
     markPlayed(6);
     onComplete();
   };

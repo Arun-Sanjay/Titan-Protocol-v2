@@ -11,6 +11,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
+import { playVoiceLineAsync, stopCurrentAudio } from "../../../lib/protocol-audio";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { titanColors } from "../../../theme/colors";
 import { getJSON, setJSON } from "../../../db/storage";
@@ -50,6 +51,14 @@ export function FirstLaunchCinematic({ onComplete }: Props) {
   const markPlayed = useStoryStore((s) => s.markCinematicPlayed);
 
   const [phase, setPhase] = useState<Phase>("scan");
+
+  // ─── Voice playback per phase ─────────────────────────────────────────────
+  useEffect(() => {
+    if (phase === "scan") playVoiceLineAsync("CIN-D1-001");
+    else if (phase === "declaration") playVoiceLineAsync("CIN-D1-002");
+    else if (phase === "briefing") playVoiceLineAsync("CIN-D1-003");
+    return () => stopCurrentAudio();
+  }, [phase]);
 
   // Screen shake for INITIATING
   const shakeX = useSharedValue(0);
@@ -148,6 +157,7 @@ export function FirstLaunchCinematic({ onComplete }: Props) {
   };
 
   const handleAcceptMission = () => {
+    stopCurrentAudio();
     markFirstLaunchSeen();
     markPlayed(1);
     // Set first_active_date for day counting

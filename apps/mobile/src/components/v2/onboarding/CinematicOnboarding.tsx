@@ -18,6 +18,10 @@ import { useStoryStore } from "../../../stores/useStoryStore";
 import { useModeStore, type IdentityArchetype } from "../../../stores/useModeStore";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { useWalkthroughStore } from "../../../stores/useWalkthroughStore";
+import { markFirstLaunchSeen } from "../../../components/v2/story/FirstLaunchCinematic";
+import { markBriefingSeen } from "../../../components/v2/story/DailyBriefing";
+import { getJSON, setJSON } from "../../../db/storage";
+import { getTodayKey } from "../../../lib/date";
 import type { EngineKey } from "../../../db/schema";
 
 // -- Beat components ----------------------------------------------------------
@@ -104,6 +108,28 @@ export function CinematicOnboarding({ onComplete }: Props) {
   const finishOnboarding = useOnboardingStore((s) => s.finish);
   const setEnginePriority = useOnboardingStore((s) => s.setEnginePriority);
   const setSchedule = useOnboardingStore((s) => s.setSchedule);
+
+  // Beat 12: complete onboarding (runs as effect, not during render)
+  useEffect(() => {
+    if (currentBeat !== 12) return;
+
+    finishOnboarding();
+    useWalkthroughStore.getState().finish();
+
+    // Skip FirstLaunchCinematic — onboarding already covered it
+    markFirstLaunchSeen();
+
+    // Skip Day 1 DailyBriefing — user already saw the operation in BeatBriefing
+    markBriefingSeen();
+
+    // Set first_active_date if not already set (needed for day counting)
+    if (!getJSON("first_active_date", null)) {
+      setJSON("first_active_date", getTodayKey());
+    }
+
+    stopCurrentAudio();
+    onComplete();
+  }, [currentBeat]);
 
   // Initialize audio on mount, stop on unmount
   useEffect(() => {
@@ -306,17 +332,9 @@ export function CinematicOnboarding({ onComplete }: Props) {
           />
         );
 
-      // Beat 12: Done -- mark onboarding complete and exit
-      // The _layout.tsx overlay logic will then trigger the normal Day 1 flow:
-      // FirstLaunchCinematic followed by DailyBriefing.
-      case 12: {
-        finishOnboarding();
-        // Also mark walkthrough as completed so _layout.tsx daily flow triggers
-        useWalkthroughStore.getState().finish();
-        stopCurrentAudio();
-        onComplete();
+      // Beat 12: Done — side effects handled in useEffect above (avoids setState during render)
+      case 12:
         return null;
-      }
 
       default:
         return null;

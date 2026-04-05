@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getJSON, setJSON } from "../db/storage";
+import { isDoubleXPActive } from "../lib/surprise-engine";
 import type { UserProfile } from "../db/schema";
 
 const PROFILE_KEY = "user_profile";
@@ -40,8 +41,10 @@ export const useProfileStore = create<ProfileState>()((set, get) => ({
 
   awardXP: (_dateKey, _source, amount) => {
     if (!Number.isFinite(amount)) return;
+    // Double XP window from surprise system
+    const finalAmount = isDoubleXPActive() ? amount * 2 : amount;
     const profile = { ...get().profile };
-    profile.xp = Math.max(0, profile.xp + amount); // Clamp to 0 minimum
+    profile.xp = Math.max(0, profile.xp + finalAmount); // Clamp to 0 minimum
     profile.level = Math.max(1, Math.floor(profile.xp / XP_PER_LEVEL) + 1);
     setJSON(PROFILE_KEY, profile);
     set({ profile });

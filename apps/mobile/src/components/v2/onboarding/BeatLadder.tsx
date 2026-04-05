@@ -47,17 +47,17 @@ const ROW_HEIGHT = 52; // each rank row
 const TITAN_ROW_HEIGHT = 58; // titan gets a bit more
 
 // ── Voice-sync timings (ms from mount) ──────────────────────────────────────
-// Audio analysis timestamps for each rank word in ONBO-010
+// Audio analysis timestamps for each rank word in ONBO-010 (synced version)
 
 const RANK_APPEAR_TIMES: number[] = [
-  720,  // initiate (0.720s)
-  4110, // operative (4.110s)
-  4876, // agent (4.876s)
-  5399, // specialist (5.399s)
-  6153, // commander (6.153s)
-  6815, // vanguard (6.815s)
-  7523, // sentinel (7.523s)
-  9102, // titan (9.102s)
+  2148, // initiate (2.148s)
+  5433, // operative (5.433s)
+  6118, // agent (6.118s)
+  6618, // specialist (6.618s)
+  7256, // commander (7.256s)
+  7825, // vanguard (7.825s)
+  8429, // sentinel (8.429s)
+  9857, // titan (9.857s)
 ];
 
 // ── Requirement labels ──────────────────────────────────────────────────────
@@ -295,11 +295,11 @@ export function BeatLadder({ onComplete }: Props) {
       }, RANK_APPEAR_TIMES[i]);
     }
 
-    // Show CONTINUE button at 11s (after all ranks revealed)
+    // Show CONTINUE button at 15.4s (after voice ends ~14.9s + buffer)
     t(() => {
       setShowButton(true);
       btnOpacity.value = withTiming(1, { duration: 500 });
-    }, 11000);
+    }, 15400);
 
     return () => {
       timers.current.forEach(clearTimeout);

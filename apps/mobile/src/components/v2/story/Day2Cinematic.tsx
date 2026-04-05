@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from "react";
+import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
 import { spacing } from "../../../theme";
@@ -6,6 +6,7 @@ import { useStoryStore } from "../../../stores/useStoryStore";
 import { ProtocolNarration, type NarrationLine } from "./ProtocolTerminal";
 import { OperationBriefing } from "./OperationBriefing";
 import { colors } from "../../../theme";
+import { playSequence, stopCurrentAudio } from "../../../lib/protocol-audio";
 
 type Props = { onComplete: () => void };
 
@@ -29,12 +30,24 @@ export function Day2Cinematic({ onComplete }: Props) {
     [userName],
   );
 
+  // Play voice at speech phase start
+  useEffect(() => {
+    if (phase === "speech") {
+      playSequence([
+        { id: "CIN-D2-001", delayAfter: 400 },
+        { id: "CIN-D2-002" },
+      ]).catch(() => {});
+    }
+    return () => { stopCurrentAudio(); };
+  }, [phase]);
+
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleNarrationComplete = useCallback(() => {
     timerRef.current = setTimeout(() => setPhase("operation"), 1200);
   }, []);
 
   const handleAccept = () => {
+    stopCurrentAudio();
     markPlayed(2);
     onComplete();
   };

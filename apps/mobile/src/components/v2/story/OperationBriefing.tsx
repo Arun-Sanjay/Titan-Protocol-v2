@@ -5,7 +5,7 @@
  * Used by ALL Day 2+ cinematics after the Protocol speech phase.
  */
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -13,6 +13,11 @@ import { colors, spacing, fonts, radius } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
 import { useProfileStore } from "../../../stores/useProfileStore";
 import { generateDailyOperation, type DailyOperation } from "../../../lib/operation-engine";
+import {
+  playVoiceLineAsync,
+  stopCurrentAudio,
+  getOperationVoiceId,
+} from "../../../lib/protocol-audio";
 
 const ENGINE_COLORS: Record<string, string> = {
   body: colors.body, mind: colors.mind, money: colors.money, charisma: colors.charisma,
@@ -59,7 +64,19 @@ export function OperationBriefing({
   const displaySubtitle = operationSubtitle ?? operation.subtitle;
   const accent = accentColor ?? "#FBBF24";
 
+  // Play operation voice line synced with header fade-in (200ms delay + 500ms duration)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      playVoiceLineAsync(getOperationVoiceId(operation.name));
+    }, 800);
+    return () => {
+      clearTimeout(timer);
+      stopCurrentAudio();
+    };
+  }, [operation.name]);
+
   const handleAccept = () => {
+    stopCurrentAudio();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onAccept();
   };

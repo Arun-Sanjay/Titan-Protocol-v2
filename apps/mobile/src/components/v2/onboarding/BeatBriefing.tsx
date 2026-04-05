@@ -203,25 +203,25 @@ export function BeatBriefing({ tasks, onComplete }: Props) {
     playVoiceLineAsync("ONBO-015");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    // Phase 2 (4s): Fade out config, darken
+    // Phase 2 (3.5s): Fade out config, darken
     t(() => {
       setPhase(2);
-    }, 4000);
+    }, 3500);
 
-    // Phase 3 (6s): Op title slams in
+    // Phase 3 (5.5s): Op title slams in + voice narration (~14.4s long)
     t(() => {
       setPhase(3);
       playVoiceLineAsync("ONBO-016");
-    }, 6000);
+    }, 5500);
 
-    // Phase 4 (10s): Tasks appear
+    // Phase 4 (9s): Tasks appear (voice: "These are the tasks you selected")
     t(() => {
       setPhase(4);
       setTasksVisible(true);
-    }, 10000);
+    }, 9000);
 
-    // Phase 5: Execute — after all tasks visible (stagger 400ms each + buffer)
-    const executeTime = 10000 + tasks.length * 400 + 1500;
+    // Phase 5: Execute — after ONBO-016 finishes (~14.4s from 5.5s = 20s)
+    const executeTime = 20500;
     t(() => {
       setPhase(5);
       playVoiceLineAsync("ONBO-017");

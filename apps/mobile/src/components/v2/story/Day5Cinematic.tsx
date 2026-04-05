@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useRef, useCallback } from "react";
+import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { View, StyleSheet } from "react-native";
 import { spacing } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
 import { ProtocolNarration, type NarrationLine } from "./ProtocolTerminal";
 import { OperationBriefing } from "./OperationBriefing";
 import { colors } from "../../../theme";
+import { playSequence, stopCurrentAudio } from "../../../lib/protocol-audio";
 
 type Props = { onComplete: () => void };
 
@@ -12,6 +13,16 @@ export function Day5Cinematic({ onComplete }: Props) {
   const markPlayed = useStoryStore((s) => s.markCinematicPlayed);
   const [phase, setPhase] = useState<"speech" | "operation">("speech");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (phase === "speech") {
+      playSequence([
+        { id: "CIN-D5-001", delayAfter: 400 },
+        { id: "CIN-D5-002" },
+      ]).catch(() => {});
+    }
+    return () => { stopCurrentAudio(); };
+  }, [phase]);
 
   const narrationLines: NarrationLine[] = useMemo(
     () => [
@@ -34,6 +45,7 @@ export function Day5Cinematic({ onComplete }: Props) {
   }, []);
 
   const handleAccept = () => {
+    stopCurrentAudio();
     markPlayed(5);
     onComplete();
   };

@@ -32,6 +32,7 @@ import { useTitleStore } from "../stores/useTitleStore";
 import { useFieldOpStore } from "../stores/useFieldOpStore";
 import achievementDefsJson from "../data/achievements.json";
 import { speakFieldOp, speakAchievement } from "./voice";
+import { playVoiceLineAsync, getDayDoneVoiceId } from "./protocol-audio";
 
 /**
  * Handle all post-protocol side effects.
@@ -518,6 +519,12 @@ export function handleProtocolCompletion(protocolScore: number, xpEarned: number
   if (bossDefeated) cancelBossReminder(); // Boss done — no more reminders
   scheduleQuestDeadline(); // Refresh quest deadline with updated progress
   scheduleBossReminder(); // Refresh boss reminder if still active
+
+  // 20. Play end-of-day ElevenLabs voice (performance-based)
+  // Small delay so it doesn't clash with achievement/field-op speech
+  setTimeout(() => {
+    playVoiceLineAsync(getDayDoneVoiceId(titanScore));
+  }, 1500);
 
   return {
     bossDefeated,

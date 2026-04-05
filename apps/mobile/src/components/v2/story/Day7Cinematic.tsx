@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -12,6 +12,7 @@ import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 import { getTodayKey, addDays } from "../../../lib/date";
 import { generateDailyOperation } from "../../../lib/operation-engine";
+import { playVoiceLineAsync, stopCurrentAudio } from "../../../lib/protocol-audio";
 
 type Props = { onComplete: () => void };
 
@@ -113,6 +114,16 @@ export function Day7Cinematic({ onComplete }: Props) {
     ];
   }, [userName, averageScore]);
 
+  // Play voice when speech phase starts
+  useEffect(() => {
+    if (phase === "speech") {
+      const voiceId =
+        averageScore >= 70 ? "CIN-D7-HIGH" : averageScore >= 50 ? "CIN-D7-MID" : "CIN-D7-LOW";
+      playVoiceLineAsync(voiceId);
+    }
+    return () => { stopCurrentAudio(); };
+  }, [phase, averageScore]);
+
   const handleStatsComplete = () => {
     setTimeout(() => setPhase("speech"), 1500);
   };
@@ -122,6 +133,7 @@ export function Day7Cinematic({ onComplete }: Props) {
   };
 
   const handleAccept = () => {
+    stopCurrentAudio();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     markPlayed(7);
     setAct("foundation");

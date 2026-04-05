@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -9,6 +9,7 @@ import { useProtocolStore } from "../../../stores/useProtocolStore";
 import { useEngineStore, selectTotalScore, ENGINES } from "../../../stores/useEngineStore";
 import { ProtocolTerminal, ProtocolNarration, type TerminalLine, type NarrationLine } from "./ProtocolTerminal";
 import { getTodayKey, addDays } from "../../../lib/date";
+import { playVoiceLineAsync, stopCurrentAudio } from "../../../lib/protocol-audio";
 
 type Props = { onComplete: () => void };
 type Phase = "stats" | "speech";
@@ -105,11 +106,22 @@ export function Day14Cinematic({ onComplete }: Props) {
     ];
   }, [userName, averageScore, weakEngine]);
 
+  // Play voice when speech phase starts
+  useEffect(() => {
+    if (phase === "speech") {
+      const voiceId =
+        averageScore >= 70 ? "CIN-D14-HIGH" : averageScore >= 50 ? "CIN-D14-MID" : "CIN-D14-LOW";
+      playVoiceLineAsync(voiceId);
+    }
+    return () => { stopCurrentAudio(); };
+  }, [phase, averageScore]);
+
   const handleStatsComplete = () => {
     setTimeout(() => setPhase("speech"), 1500);
   };
 
   const handleDone = () => {
+    stopCurrentAudio();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     markPlayed(14);
     onComplete();

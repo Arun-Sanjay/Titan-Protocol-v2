@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -11,6 +11,7 @@ import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 import { ProtocolTerminal, ProtocolNarration, type TerminalLine, type NarrationLine } from "./ProtocolTerminal";
 import { getTodayKey, addDays } from "../../../lib/date";
+import { playSequence, stopCurrentAudio } from "../../../lib/protocol-audio";
 
 type Props = { onComplete: () => void };
 type Phase = "stats" | "speech" | "transition";
@@ -90,6 +91,17 @@ export function Day30Cinematic({ onComplete }: Props) {
     [userName],
   );
 
+  // Play voice when speech phase starts
+  useEffect(() => {
+    if (phase === "speech") {
+      playSequence([
+        { id: "CIN-D30-001", delayAfter: 400 },
+        { id: "CIN-D30-002" },
+      ]).catch(() => {});
+    }
+    return () => { stopCurrentAudio(); };
+  }, [phase]);
+
   const handleStatsComplete = () => {
     setTimeout(() => setPhase("speech"), 1500);
   };
@@ -99,6 +111,7 @@ export function Day30Cinematic({ onComplete }: Props) {
   };
 
   const handleAccept = () => {
+    stopCurrentAudio();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setAct("building");
     markPlayed(30);
