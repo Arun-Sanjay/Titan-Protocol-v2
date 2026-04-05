@@ -132,22 +132,26 @@ export function WarRoom() {
       // Protocol voice acknowledgment
       playRandomTaskAck();
 
+      // Track completion state
       setJustCompleted((prev) => {
         const next = new Set(prev);
         next.add(task.id!);
-
-        // Track operation completion for consistency calculation
-        // Collect all completed task IDs (existing + the one just toggled)
-        const allCompletedIds = allTasks
-          .filter((t) => t.completed || t.id === task.id)
-          .map((t) => t.id!)
-          .filter(Boolean);
-        trackOperationCompletion(allCompletedIds);
-
         return next;
       });
+
+      // Track operation completion for consistency calculation (outside setState)
+      // Read fresh state from the store after toggleTask has updated it
+      setTimeout(() => {
+        const freshState = useEngineStore.getState();
+        const completedIds: number[] = [];
+        for (const e of ENGINES) {
+          const ids = freshState.completions[`${e}:${dateKey}`] ?? [];
+          completedIds.push(...ids);
+        }
+        trackOperationCompletion(completedIds);
+      }, 0);
     },
-    [dateKey, toggleTask, awardXP, allTasks]
+    [dateKey, toggleTask, awardXP]
   );
 
   return (
