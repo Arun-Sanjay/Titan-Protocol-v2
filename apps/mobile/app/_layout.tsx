@@ -17,6 +17,7 @@ import {
 import {
   DailyBriefing,
   isBriefingSeenToday,
+  markBriefingSeen,
 } from "../src/components/v2/story/DailyBriefing";
 import { Day2Cinematic } from "../src/components/v2/story/Day2Cinematic";
 import { Day3Cinematic } from "../src/components/v2/story/Day3Cinematic";
@@ -242,18 +243,17 @@ export default function RootLayout() {
 
   const handleDayCinematicComplete = () => {
     setShowDayCinematic(null);
-    // After day cinematic, show briefing
-    if (!isBriefingSeenToday()) {
-      const firstActiveDate = getJSON<string | null>("first_active_date", null);
-      const dayNum = getDayNumber(firstActiveDate);
-      const story = getStoryForDay(archetype, dayNum);
-      if (story) {
-        addEntry({ date: getTodayKey(), text: story.text, type: "story" });
-      }
-      setShowBriefing(true);
-    } else {
-      triggerSurpriseCheck();
+    // Day cinematics already show the OperationBriefing with tasks,
+    // so mark briefing as seen to prevent showing it again
+    markBriefingSeen();
+    // Add story entry for today if available
+    const firstActiveDate = getJSON<string | null>("first_active_date", null);
+    const dayNum = getDayNumber(firstActiveDate);
+    const story = getStoryForDay(archetype, dayNum);
+    if (story) {
+      addEntry({ date: getTodayKey(), text: story.text, type: "story" });
     }
+    triggerSurpriseCheck();
   };
 
   // ─── Integrity cinematic handlers ────────────────────────────────────────

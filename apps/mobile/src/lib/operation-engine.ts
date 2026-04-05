@@ -88,16 +88,26 @@ export function calculateConsistency(): { rate: number; level: ConsistencyLevel 
   let totalAssigned = 0;
   let totalCompleted = 0;
 
-  // Look at last 7 days
+  // Look at last 7 days — only count days where BOTH assigned AND completed tracking exist
   for (let i = 1; i <= 7; i++) {
     const dk = addDays(today, -i);
-    const assigned = getJSON<number>(`${ASSIGNED_KEY_PREFIX}${dk}`, 0);
-    const completed = getJSON<number>(`${COMPLETED_KEY_PREFIX}${dk}`, 0);
+    const assigned = getJSON<number | null>(`${ASSIGNED_KEY_PREFIX}${dk}`, null);
+    const completed = getJSON<number | null>(`${COMPLETED_KEY_PREFIX}${dk}`, null);
+
+    // Skip days with no tracking data (before tracking was enabled)
+    if (assigned === null || assigned === 0) continue;
+    // If assigned exists but completed doesn't, check if protocol was completed that day
+    // (user may have completed via old code path without tracking)
+    if (completed === null) {
+      // Be generous: if tasks were assigned, assume partial completion
+      continue;
+    }
+
     totalAssigned += assigned;
     totalCompleted += completed;
   }
 
-  if (totalAssigned === 0) return { rate: 100, level: "HIGH" }; // No data yet
+  if (totalAssigned === 0) return { rate: 100, level: "HIGH" }; // No tracked data yet
 
   const rate = Math.round((totalCompleted / totalAssigned) * 100);
 
@@ -402,12 +412,21 @@ function generateProtocolMessage(
 
 // ─── Main Function ────────────────────────────────────────────────────────────
 
+const CACHED_OP_KEY = "operation_cached_today";
+
 export function generateDailyOperation(
   userName: string,
   dayNumber: number,
   streak: number,
   phase: string,
 ): DailyOperation {
+  // Return cached operation for today if available (prevents tasks changing on restart)
+  const today = getTodayKey();
+  const cached = getJSON<{ dateKey: string; operation: DailyOperation } | null>(CACHED_OP_KEY, null);
+  if (cached && cached.dateKey === today && cached.operation) {
+    return cached.operation;
+  }
+
   const { rate: consistencyRate, level: consistency } = calculateConsistency();
   const scores = getEngineScores();
   const weakEngine = findWeakEngine(scores);
@@ -433,8 +452,7 @@ export function generateDailyOperation(
 
   const opInfo = OPERATION_NAMES[operationType];
 
-  // Track what was assigned today
-  const today = getTodayKey();
+  // Track what was assigned today (today already declared above from cache check)
   setJSON(`${ASSIGNED_KEY_PREFIX}${today}`, tasks.length);
   setJSON(`${ASSIGNED_KEY_PREFIX}ids:${today}`, tasks.map((t) => t.id));
 
@@ -446,7 +464,7 @@ export function generateDailyOperation(
   }
   setJSON(LAST_ASSIGNED_KEY, newRecent);
 
-  return {
+  const operation: DailyOperation = {
     name: operationType,
     displayName: opInfo.display,
     subtitle: opInfo.subtitle,
@@ -459,6 +477,11 @@ export function generateDailyOperation(
     taskCount,
     dayNumber,
   };
+
+  // Cache for today so operation stays stable across app restarts
+  setJSON(CACHED_OP_KEY, { dateKey: today, operation });
+
+  return operation;
 }
 
 // ─── Track Completion (call after task toggle) ────────────────────────────────

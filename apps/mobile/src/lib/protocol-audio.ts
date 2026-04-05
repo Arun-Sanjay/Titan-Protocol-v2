@@ -355,8 +355,13 @@ const TASK_ACK_IDS = ["TASK-ACK-001", "TASK-ACK-002", "TASK-ACK-003", "TASK-ACK-
 
 /**
  * Play a random task completion acknowledgment voice line (fire-and-forget).
+ * Throttled: won't play if another ack played within the last 2 seconds.
  */
+let lastTaskAckTime = 0;
 export function playRandomTaskAck(): void {
+  const now = Date.now();
+  if (now - lastTaskAckTime < 2000) return; // Throttle: 2s minimum gap
+  lastTaskAckTime = now;
   const id = TASK_ACK_IDS[Math.floor(Math.random() * TASK_ACK_IDS.length)];
   playVoiceLineAsync(id);
 }

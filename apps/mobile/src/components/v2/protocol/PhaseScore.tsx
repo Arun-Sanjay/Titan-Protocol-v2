@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import Animated, {
   FadeIn,
@@ -127,8 +127,10 @@ export function PhaseScore() {
   const [showRankPromotion, setShowRankPromotion] = useState(false);
   const [completionResult, setCompletionResult] = useState<ReturnType<typeof handleProtocolCompletion> | null>(null);
 
-  // Track rank before protocol completion for promotion detection
-  const previousRank = useRankStore((s) => s.rank);
+  // Track rank BEFORE protocol completion for promotion detection.
+  // Must use a ref because evaluateDay() updates the store during handleDone(),
+  // which would change a selector-based value before we can read it.
+  const previousRankRef = useRef(useRankStore.getState().rank);
 
   // Get yesterday's score for rank comparison
   const yesterdayScore = useMemo(() => {
@@ -262,10 +264,10 @@ export function PhaseScore() {
       {/* Rank Promotion Cinematic (progression Initiate→Titan) */}
       {showRankPromotion && completionResult && (
         <RankPromotionCinematic
-          previousRank={previousRank}
+          previousRank={previousRankRef.current}
           newRank={completionResult.rankResult.promoted
-            ? (completionResult.rankResult.newRank ?? previousRank)
-            : (completionResult.rankResult.demotedTo ?? previousRank)}
+            ? (completionResult.rankResult.newRank ?? previousRankRef.current)
+            : (completionResult.rankResult.demotedTo ?? previousRankRef.current)}
           isDemotion={completionResult.rankResult.demoted}
           onDismiss={handleRankPromotionDismiss}
         />
