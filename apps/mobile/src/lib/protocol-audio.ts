@@ -352,7 +352,8 @@ export function getOperationVoiceId(operationType: string): string {
  * @example getDailyGreetingId(14) // => "DAILY-003" (14 % 4 + 1 = 3)
  */
 export function getDailyGreetingId(dayNumber: number): string {
-  const variant = (dayNumber % 4) + 1;
+  // Math.abs handles negative day numbers, +1 makes it 1-indexed (DAILY-001 to DAILY-004)
+  const variant = (Math.abs(dayNumber) % 4) + 1;
   return `DAILY-${String(variant).padStart(3, "0")}`;
 }
 
