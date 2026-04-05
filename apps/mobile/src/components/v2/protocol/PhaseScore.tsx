@@ -19,7 +19,9 @@ import { handleProtocolCompletion } from "../../../lib/protocol-completion";
 import { getTodayKey, addDays } from "../../../lib/date";
 import { ShareButton } from "../celebrations/ShareButton";
 import { RankCeremony } from "../../ui/RankCeremony";
+import { RankPromotionCinematic } from "../story/RankPromotionCinematic";
 import { getJSON } from "../../../db/storage";
+import { useRankStore } from "../../../stores/useRankStore";
 
 function computeProtocolScore(phases: PhaseResult[]): number {
   let score = 0;
@@ -122,7 +124,11 @@ export function PhaseScore() {
 
   // Rank ceremony state
   const [showRankCeremony, setShowRankCeremony] = useState(false);
+  const [showRankPromotion, setShowRankPromotion] = useState(false);
   const [completionResult, setCompletionResult] = useState<ReturnType<typeof handleProtocolCompletion> | null>(null);
+
+  // Track rank before protocol completion for promotion detection
+  const previousRank = useRankStore((s) => s.rank);
 
   // Get yesterday's score for rank comparison
   const yesterdayScore = useMemo(() => {
@@ -142,6 +148,23 @@ export function PhaseScore() {
     setShowRankCeremony(false);
     if (!completionResult) { router.back(); return; }
     const result = completionResult;
+
+    // Check for progression rank promotion/demotion FIRST
+    if (result.rankResult.promoted || result.rankResult.demoted) {
+      setShowRankPromotion(true);
+      return;
+    }
+
+    proceedToCelebrations(result);
+  }
+
+  function handleRankPromotionDismiss() {
+    setShowRankPromotion(false);
+    if (!completionResult) { router.back(); return; }
+    proceedToCelebrations(completionResult);
+  }
+
+  function proceedToCelebrations(result: ReturnType<typeof handleProtocolCompletion>) {
     if (result.titanUnlocked) {
       router.replace("/(modals)/titan-unlock");
     } else if (result.bossDefeated && result.defeatedBoss) {
@@ -227,12 +250,24 @@ export function PhaseScore() {
         <ShareButton type="score" title="Protocol Complete" value={`${finalScore}% — ${rank} Rank`} />
       </Animated.View>
 
-      {/* Rank Ceremony overlay */}
+      {/* Rank Ceremony overlay (daily D-SS) */}
       {showRankCeremony && (
         <RankCeremony
           score={finalScore}
           previousScore={yesterdayScore}
           onDismiss={handleRankCeremonyDismiss}
+        />
+      )}
+
+      {/* Rank Promotion Cinematic (progression Initiate→Titan) */}
+      {showRankPromotion && completionResult && (
+        <RankPromotionCinematic
+          previousRank={previousRank}
+          newRank={completionResult.rankResult.promoted
+            ? (completionResult.rankResult.newRank ?? previousRank)
+            : (completionResult.rankResult.demotedTo ?? previousRank)}
+          isDemotion={completionResult.rankResult.demoted}
+          onDismiss={handleRankPromotionDismiss}
         />
       )}
     </View>

@@ -111,6 +111,16 @@ const AUDIO_FILES: Record<string, any> = {
   "CIN-D30-001": require("../../assets/audio/protocol/cinematics/CIN-D30-001.mp3"),
   "CIN-D30-002": require("../../assets/audio/protocol/cinematics/CIN-D30-002.mp3"),
 
+  // ─── Rank promotion voice lines ────────────────────────────────────────────
+  "RANK-OPERATIVE": require("../../assets/audio/protocol/ranks/RANK-OPERATIVE.mp3"),
+  "RANK-AGENT": require("../../assets/audio/protocol/ranks/RANK-AGENT.mp3"),
+  "RANK-SPECIALIST": require("../../assets/audio/protocol/ranks/RANK-SPECIALIST.mp3"),
+  "RANK-COMMANDER": require("../../assets/audio/protocol/ranks/RANK-COMMANDER.mp3"),
+  "RANK-VANGUARD": require("../../assets/audio/protocol/ranks/RANK-VANGUARD.mp3"),
+  "RANK-SENTINEL": require("../../assets/audio/protocol/ranks/RANK-SENTINEL.mp3"),
+  "RANK-TITAN": require("../../assets/audio/protocol/ranks/RANK-TITAN.mp3"),
+  "RANK-DEMOTED": require("../../assets/audio/protocol/ranks/RANK-DEMOTED.mp3"),
+
   // ─── Boss confrontation voice lines ────────────────────────────────────────
   // Unlock (generic)
   "BOSS-UNLOCK-001": require("../../assets/audio/protocol/bosses/BOSS-UNLOCK-001.mp3"),
@@ -426,4 +436,19 @@ export function getBossDefeatVoiceId(): string {
 /** Get a random boss fail voice line ID. */
 export function getBossFailVoiceId(): string {
   return randomFrom(BOSS_FAIL_IDS);
+}
+
+// ─── Rank promotion voice helpers ──────────────────────────────────────────
+
+/** Get the voice line ID for a rank promotion. */
+export function getRankPromotionVoiceId(rank: string): string {
+  const id = `RANK-${rank.toUpperCase()}`;
+  // Initiate has no promotion line (it's the starting rank)
+  if (rank === "initiate") return "RANK-OPERATIVE";
+  return AUDIO_FILES[id] ? id : "RANK-OPERATIVE";
+}
+
+/** Get the rank demotion voice line ID. */
+export function getRankDemotionVoiceId(): string {
+  return "RANK-DEMOTED";
 }
