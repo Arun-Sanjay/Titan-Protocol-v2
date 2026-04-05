@@ -94,17 +94,13 @@ export function calculateConsistency(): { rate: number; level: ConsistencyLevel 
     const assigned = getJSON<number | null>(`${ASSIGNED_KEY_PREFIX}${dk}`, null);
     const completed = getJSON<number | null>(`${COMPLETED_KEY_PREFIX}${dk}`, null);
 
-    // Skip days with no tracking data (before tracking was enabled)
+    // Skip days with no tracking data at all
     if (assigned === null || assigned === 0) continue;
-    // If assigned exists but completed doesn't, check if protocol was completed that day
-    // (user may have completed via old code path without tracking)
-    if (completed === null) {
-      // Be generous: if tasks were assigned, assume partial completion
-      continue;
-    }
 
     totalAssigned += assigned;
-    totalCompleted += completed;
+    // If completed tracking doesn't exist for this day (pre-tracking era),
+    // assume full completion to avoid penalizing the user
+    totalCompleted += completed ?? assigned;
   }
 
   if (totalAssigned === 0) return { rate: 100, level: "HIGH" }; // No tracked data yet

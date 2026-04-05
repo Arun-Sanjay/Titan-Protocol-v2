@@ -251,10 +251,16 @@ export async function playVoiceLine(id: string): Promise<void> {
     currentSound = sound;
 
     return new Promise<void>((resolve) => {
+      let resolved = false;
       sound.setOnPlaybackStatusUpdate((status) => {
+        if (resolved) return;
         if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync().catch(() => {});
-          if (currentSound === sound) currentSound = null;
+          resolved = true;
+          // Only unload if we're still the active sound
+          if (currentSound === sound) {
+            currentSound = null;
+            sound.unloadAsync().catch(() => {});
+          }
           resolve();
         }
       });

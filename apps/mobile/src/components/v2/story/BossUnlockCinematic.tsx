@@ -25,7 +25,7 @@ import {
   type TerminalLine,
 } from "./ProtocolTerminal";
 import {
-  playSequence,
+  playVoiceLineAsync,
   stopCurrentAudio,
   getBossUnlockVoiceId,
 } from "../../../lib/protocol-audio";
@@ -88,11 +88,8 @@ export function BossUnlockCinematic({
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
     if (phase === "reveal") {
-      // Play generic unlock + boss-specific line
-      playSequence([
-        { id: getBossUnlockVoiceId("generic"), delayAfter: 500 },
-        { id: getBossUnlockVoiceId(bossId) },
-      ]).catch(() => {});
+      // Play boss-specific line (falls back to generic if unknown boss)
+      playVoiceLineAsync(getBossUnlockVoiceId(bossId));
     }
     return () => { stopCurrentAudio(); };
   }, [phase, bossId]);

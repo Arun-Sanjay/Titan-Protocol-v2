@@ -30,7 +30,7 @@ export function formatCurrency(val: number): string {
   const currency = CURRENCIES.find((c) => c.code === code) ?? CURRENCIES[0];
   const noDecimals = code === "JPY";
 
-  if (!Number.isFinite(val)) return currency.symbol + (noDecimals ? "0" : "0.00");
+  if (val == null || !Number.isFinite(val)) return currency.symbol + (noDecimals ? "0" : "0.00");
 
   const abs = Math.abs(val);
   const fixed = noDecimals ? Math.round(abs).toString() : abs.toFixed(2);

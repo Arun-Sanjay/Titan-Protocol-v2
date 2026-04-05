@@ -6,7 +6,7 @@
  * Stern but non-punishing voice line. "UNDERSTOOD" button.
  */
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -37,6 +37,7 @@ export function BossFailCinematic({
   onContinue,
 }: Props) {
   const [phase, setPhase] = useState<"terminal" | "speech">("terminal");
+  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const terminalLines: TerminalLine[] = useMemo(() => {
     const lines: TerminalLine[] = [
@@ -91,8 +92,15 @@ export function BossFailCinematic({
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   }, []);
 
+  // Cleanup phase timer on unmount
+  useEffect(() => {
+    return () => {
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+    };
+  }, []);
+
   const handleTerminalComplete = () => {
-    setTimeout(() => setPhase("speech"), 1200);
+    phaseTimerRef.current = setTimeout(() => setPhase("speech"), 1200);
   };
 
   const handleContinue = () => {

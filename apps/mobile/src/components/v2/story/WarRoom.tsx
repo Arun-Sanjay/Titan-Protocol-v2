@@ -139,17 +139,15 @@ export function WarRoom() {
         return next;
       });
 
-      // Track operation completion for consistency calculation (outside setState)
-      // Read fresh state from the store after toggleTask has updated it
-      setTimeout(() => {
-        const freshState = useEngineStore.getState();
-        const completedIds: number[] = [];
-        for (const e of ENGINES) {
-          const ids = freshState.completions[`${e}:${dateKey}`] ?? [];
-          completedIds.push(...ids);
-        }
-        trackOperationCompletion(completedIds);
-      }, 0);
+      // Track operation completion for consistency calculation
+      // toggleTask is synchronous on Zustand store, so getState() is already fresh
+      const freshState = useEngineStore.getState();
+      const completedIds: number[] = [];
+      for (const e of ENGINES) {
+        const ids = freshState.completions[`${e}:${dateKey}`] ?? [];
+        completedIds.push(...ids);
+      }
+      trackOperationCompletion(completedIds);
     },
     [dateKey, toggleTask, awardXP]
   );

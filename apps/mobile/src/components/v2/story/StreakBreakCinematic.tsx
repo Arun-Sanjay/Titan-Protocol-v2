@@ -8,7 +8,7 @@
  * Requires "CONTINUE" acknowledgment button.
  */
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -99,6 +99,8 @@ export function StreakBreakCinematic({
   }, [isBreach, oldStreak, newStreak, missedDays]);
 
   // Play voice when speech phase starts
+  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (phase === "speech") {
       const voiceId = getFailureVoiceId(status);
@@ -107,13 +109,18 @@ export function StreakBreakCinematic({
     return () => { stopCurrentAudio(); };
   }, [phase, status]);
 
+  // Cleanup phase transition timer on unmount
+  useEffect(() => {
+    return () => { if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current); };
+  }, []);
+
   // Heavy haptic on mount — this is a serious moment
   useEffect(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
   }, []);
 
   const handleTerminalComplete = () => {
-    setTimeout(() => setPhase("speech"), 1500);
+    phaseTimerRef.current = setTimeout(() => setPhase("speech"), 1500);
   };
 
   const handleContinue = () => {

@@ -5,7 +5,7 @@
  * Voice line acknowledges the effort of coming back.
  */
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -80,6 +80,8 @@ export function ComebackCinematic({
   );
 
   // Play voice when speech phase starts
+  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (phase === "speech") {
       playVoiceLineAsync(getComebackVoiceId());
@@ -87,13 +89,18 @@ export function ComebackCinematic({
     return () => { stopCurrentAudio(); };
   }, [phase]);
 
+  // Cleanup phase transition timer on unmount
+  useEffect(() => {
+    return () => { if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current); };
+  }, []);
+
   // Success haptic on mount — this is a positive moment
   useEffect(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, []);
 
   const handleTerminalComplete = () => {
-    setTimeout(() => setPhase("speech"), 1500);
+    phaseTimerRef.current = setTimeout(() => setPhase("speech"), 1500);
   };
 
   const handleContinue = () => {

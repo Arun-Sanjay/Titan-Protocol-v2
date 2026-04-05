@@ -6,7 +6,7 @@
  * XP reward animation. "CLAIM REWARDS" button.
  */
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -37,6 +37,7 @@ export function BossDefeatCinematic({
   onClaim,
 }: Props) {
   const [phase, setPhase] = useState<"terminal" | "celebration">("terminal");
+  const phaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const terminalLines: TerminalLine[] = useMemo(() => {
     const lines: TerminalLine[] = [
@@ -76,8 +77,15 @@ export function BossDefeatCinematic({
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, []);
 
+  // Cleanup phase timer on unmount
+  useEffect(() => {
+    return () => {
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+    };
+  }, []);
+
   const handleTerminalComplete = () => {
-    setTimeout(() => setPhase("celebration"), 1200);
+    phaseTimerRef.current = setTimeout(() => setPhase("celebration"), 1200);
   };
 
   const handleClaim = () => {
