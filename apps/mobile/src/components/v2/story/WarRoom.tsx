@@ -23,7 +23,8 @@ import { useProfileStore, XP_REWARDS } from "../../../stores/useProfileStore";
 import { getTodayKey } from "../../../lib/date";
 import { getCurrentChapter, getDayNumber } from "../../../data/chapters";
 import { getJSON } from "../../../db/storage";
-import { evaluateAllTrees } from "../../../lib/skill-tree-evaluator";
+// evaluateAllTrees removed from per-toggle — too expensive (O(n²) with MMKV scans).
+// Skill tree evaluation runs at protocol completion instead.
 import { HUDBackground } from "../../ui/AnimatedBackground";
 import { MissionBoard } from "../../ui/MissionBoard";
 import { useQuestStore } from "../../../stores/useQuestStore";
@@ -132,7 +133,9 @@ export function WarRoom() {
       toggleTask(task.engine, task.id!, dateKey);
       const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
       awardXP(dateKey, `task:${task.id}`, xp);
-      evaluateAllTrees();
+      // NOTE: evaluateAllTrees() removed from here — it's O(n²) expensive
+      // (scans 365 days × getAllKeys per engine per node). Runs at protocol
+      // completion instead (protocol-completion.ts step 13).
 
       // Protocol voice acknowledgment
       playRandomTaskAck();
@@ -146,13 +149,17 @@ export function WarRoom() {
 
       // Track operation completion for consistency calculation
       // toggleTask is synchronous on Zustand store, so getState() is already fresh
-      const freshState = useEngineStore.getState();
-      const completedIds: number[] = [];
-      for (const e of ENGINES) {
-        const ids = freshState.completions[`${e}:${dateKey}`] ?? [];
-        completedIds.push(...ids);
+      try {
+        const freshState = useEngineStore.getState();
+        const completedIds: number[] = [];
+        for (const e of ENGINES) {
+          const ids = freshState.completions[`${e}:${dateKey}`];
+          if (Array.isArray(ids)) completedIds.push(...ids);
+        }
+        trackOperationCompletion(completedIds);
+      } catch {
+        // Silently ignore tracking errors — don't crash on task completion
       }
-      trackOperationCompletion(completedIds);
     },
     [dateKey, toggleTask, awardXP]
   );
