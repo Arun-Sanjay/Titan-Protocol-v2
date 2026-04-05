@@ -57,7 +57,7 @@ export function FirstLaunchCinematic({ onComplete }: Props) {
     if (phase === "scan") playVoiceLineAsync("CIN-D1-001");
     else if (phase === "declaration") playVoiceLineAsync("CIN-D1-002");
     else if (phase === "briefing") playVoiceLineAsync("CIN-D1-003");
-    return () => stopCurrentAudio();
+    return () => { void stopCurrentAudio(); };
   }, [phase]);
 
   // Screen shake for INITIATING
