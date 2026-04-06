@@ -24,7 +24,7 @@ import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdenti
 import { getSuggestedHabits, type SuggestedHabit } from "../../src/lib/mission-suggester";
 import { HabitChain } from "../../src/components/v2/habits/HabitChain";
 import type { Habit, Goal } from "../../src/db/schema";
-import { getJSON } from "../../src/db/storage";
+import { getJSON, setJSON } from "../../src/db/storage";
 
 const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
 
@@ -33,9 +33,26 @@ const EMPTY_IDS: number[] = [];
 
 type Tab = "habits" | "journal" | "goals";
 
+// Phase 2.3B (partial): persist the active sub-tab to MMKV so navigating
+// away from Track and back restores the user's last selection. The full
+// expo-router route split (track/habits.tsx, track/journal.tsx,
+// track/goals.tsx) is deferred to Phase 2.4 because the existing 1000-line
+// file shares state across tabs and would need a meaningful refactor.
+const TRACK_TAB_KEY = "track_active_tab";
+
+const VALID_TABS: Tab[] = ["habits", "journal", "goals"];
+function loadInitialTab(): Tab {
+  const stored = getJSON<string>(TRACK_TAB_KEY, "habits");
+  return (VALID_TABS as string[]).includes(stored) ? (stored as Tab) : "habits";
+}
+
 export default function TrackScreen() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("habits");
+  const [tab, setTabState] = useState<Tab>(() => loadInitialTab());
+  const setTab = useCallback((next: Tab) => {
+    setTabState(next);
+    setJSON(TRACK_TAB_KEY, next);
+  }, []);
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
