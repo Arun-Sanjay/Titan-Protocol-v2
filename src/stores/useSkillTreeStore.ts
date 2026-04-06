@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getJSON, setJSON } from "../db/storage";
 import type { EngineKey } from "../db/schema";
 import skillTreeData from "../data/skill-trees.json";
+import { SkillTreeDataSchema, parseOrFallback } from "../lib/schemas";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,27 +34,32 @@ export type SkillNodeProgress = {
 
 // ─── Tree Definitions (auto-generated from JSON) ─────────────────────────────
 
+// Phase 2.2C: validate the skill-tree JSON at module load time against
+// a Zod schema. If the file is malformed (bad deploy, schema drift),
+// parseOrFallback logs the error and returns an empty tree — the UI
+// degrades gracefully instead of crashing with "cannot read branches of
+// undefined". Replaces the old (skillTreeData as any) cast.
 function buildSkillTrees(): Record<string, SkillBranch[]> {
+  const validated = parseOrFallback(
+    SkillTreeDataSchema,
+    skillTreeData,
+    {},
+    "src/data/skill-trees.json",
+  );
   const trees: Record<string, SkillBranch[]> = {};
-  const engines = ["body", "mind", "money", "charisma"];
-  for (let i = 0; i < engines.length; i++) {
-    const engine = engines[i];
-    const raw = (skillTreeData as any)[engine];
-    if (!raw || !raw.branches) { trees[engine] = []; continue; }
+  const engines: EngineKey[] = ["body", "mind", "money", "charisma"];
+  for (const engine of engines) {
+    const raw = validated[engine];
+    if (!raw) { trees[engine] = []; continue; }
     const branches: SkillBranch[] = [];
-    for (let b = 0; b < raw.branches.length; b++) {
-      const branch = raw.branches[b];
-      const nodes: SkillNode[] = [];
-      for (let l = 0; l < branch.levels.length; l++) {
-        const lv = branch.levels[l];
-        nodes.push({
-          id: lv.nodeId,
-          name: lv.name,
-          description: lv.description,
-          conditionText: lv.description,
-        });
-      }
-      branches.push({ id: branch.id, name: branch.name, nodes: nodes });
+    for (const branch of raw.branches) {
+      const nodes: SkillNode[] = branch.levels.map((lv) => ({
+        id: lv.nodeId,
+        name: lv.name,
+        description: lv.description,
+        conditionText: lv.description,
+      }));
+      branches.push({ id: branch.id, name: branch.name, nodes });
     }
     trees[engine] = branches;
   }
