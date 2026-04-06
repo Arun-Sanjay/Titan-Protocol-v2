@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Stack } from "expo-router";
+import { Stack, Redirect, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StyleSheet } from "react-native";
 import * as SystemUI from "expo-system-ui";
 import { colors } from "../src/theme";
+import { useAuthStore } from "../src/stores/useAuthStore";
 import { SystemNotificationProvider } from "../src/components/ui/SystemNotification";
 import { MotivationalSplash } from "../src/components/ui/MotivationalSplash";
 import { CinematicOnboarding } from "../src/components/v2/onboarding/CinematicOnboarding";
@@ -105,6 +106,22 @@ export default function RootLayout() {
     JetBrainsMono_700Bold,
     JetBrainsMono_800ExtraBold,
   });
+
+  // Phase 3.2: Auth bootstrap. Initialize reads the persisted session from
+  // AsyncStorage and subscribes to onAuthStateChange. isLoading stays true
+  // until that first read completes so we don't flash the auth screen for
+  // already-signed-in users.
+  const authLoading = useAuthStore((s) => s.isLoading);
+  const authUser = useAuthStore((s) => s.user);
+  const initializeAuth = useAuthStore((s) => s.initialize);
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
+
+  // Phase 3.2: Route-group-aware guard. We compute whether the current
+  // route is inside the (auth) group so we can decide whether to redirect.
+  const segments = useSegments();
+  const inAuthGroup = segments[0] === "(auth)";
 
   const [showSplash, setShowSplash] = useState(true);
   const [showCinematic, setShowCinematic] = useState(false);
@@ -376,6 +393,51 @@ export default function RootLayout() {
     return null;
   }
 
+  // Phase 3.2: Auth gate. Block app render until the auth store has
+  // finished hydrating from AsyncStorage so we don't flash the auth
+  // screen for already-signed-in users. The splash screen (configured
+  // in app.json) stays up during this gap.
+  if (authLoading) {
+    return null;
+  }
+
+  // Phase 3.2: Redirect unauthenticated users to the auth stack. We use
+  // expo-router's <Redirect> rather than router.replace to avoid the
+  // redirect firing from a useEffect (which would allow one frame of
+  // the protected content to paint).
+  if (!authUser && !inAuthGroup) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
+  // If a signed-in user is somehow still on the auth stack (e.g. they
+  // just finished signing in on /(auth)/verify), kick them out to the
+  // main app.
+  if (authUser && inAuthGroup) {
+    return <Redirect href="/(tabs)" />;
+  }
+
+  // Phase 3.2: Render just the auth stack for unauthenticated users.
+  // This bypasses all the story/cinematic/integrity overlays that
+  // assume a logged-in user and keeps the auth flow lean.
+  if (!authUser) {
+    return (
+      <GestureHandlerRootView style={styles.root}>
+        <RootErrorBoundary>
+          <StatusBar style="light" backgroundColor={colors.bg} />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.bg },
+              animation: "slide_from_right",
+            }}
+          >
+            <Stack.Screen name="(auth)" />
+          </Stack>
+        </RootErrorBoundary>
+      </GestureHandlerRootView>
+    );
+  }
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <RootErrorBoundary>
@@ -390,6 +452,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" options={{ animation: "none" }} />
+        <Stack.Screen name="(auth)" options={{ animation: "none" }} />
         <Stack.Screen
           name="(modals)/add-task"
           options={{
