@@ -54,6 +54,7 @@ import { LevelUpOverlay } from "../src/components/ui/LevelUpOverlay";
 import { OfflineBanner } from "../src/components/ui/OfflineBanner";
 import { useProfileStore } from "../src/stores/useProfileStore";
 import { OnboardingGate } from "../src/components/OnboardingGate";
+import { AppResumeSyncMount } from "../src/components/AppResumeSyncMount";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
 // Loaded once at the root layout; src/theme/typography.ts references the
 // font family by name. Falls back to Menlo/monospace until loaded.
@@ -451,6 +452,7 @@ export default function RootLayout() {
       <SystemWindowProvider>
       <SystemNotificationProvider>
       <OnboardingGate>
+      <AppResumeSyncMount />
       <StatusBar style="light" backgroundColor={colors.bg} />
       <Stack
         screenOptions={{
