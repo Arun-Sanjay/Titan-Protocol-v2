@@ -54,6 +54,7 @@ import { LevelUpOverlay } from "../src/components/ui/LevelUpOverlay";
 import { OfflineBanner } from "../src/components/ui/OfflineBanner";
 import { useProfileStore } from "../src/stores/useProfileStore";
 import { OnboardingGate } from "../src/components/OnboardingGate";
+import { MigrationGate } from "../src/components/MigrationGate";
 import { AppResumeSyncMount } from "../src/components/AppResumeSyncMount";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
 // Loaded once at the root layout; src/theme/typography.ts references the
@@ -451,6 +452,7 @@ export default function RootLayout() {
       <RootErrorBoundary>
       <SystemWindowProvider>
       <SystemNotificationProvider>
+      <MigrationGate>
       <OnboardingGate>
       <AppResumeSyncMount />
       <StatusBar style="light" backgroundColor={colors.bg} />
@@ -581,6 +583,7 @@ export default function RootLayout() {
       )}
       {showWarning && <IntegrityWarningOverlay onDismiss={handleWarningDismiss} />}
       </OnboardingGate>
+      </MigrationGate>
       </SystemNotificationProvider>
       </SystemWindowProvider>
       </RootErrorBoundary>
