@@ -13,6 +13,7 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
+  cancelAnimation,
   interpolate,
   FadeInUp,
   FadeOutDown,
@@ -133,6 +134,10 @@ export const FloatingActionButton = React.memo(function FloatingActionButton(_pr
       -1,
       false,
     );
+    return () => {
+      // Phase 2.1A: cancel infinite pulse on unmount
+      cancelAnimation(glowOpacity);
+    };
   }, [glowOpacity]);
 
   // FAB animated styles

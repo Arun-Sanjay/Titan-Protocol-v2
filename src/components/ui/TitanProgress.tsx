@@ -5,6 +5,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withRepeat,
+  cancelAnimation,
   Easing,
   interpolate,
 } from "react-native-reanimated";
@@ -36,6 +37,12 @@ const Shimmer = React.memo(function Shimmer() {
       -1,
       false,
     );
+    return () => {
+      // Phase 2.1A: cancel infinite shimmer on unmount — Shimmer renders
+      // once per TitanProgress, and there can be many on a single screen.
+      cancelAnimation(translate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const shimmerStyle = useAnimatedStyle(() => ({

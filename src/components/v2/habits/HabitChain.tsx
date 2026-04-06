@@ -6,6 +6,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import { colors, spacing } from "../../../theme";
@@ -66,6 +67,12 @@ function ChainDot({ completed, isToday, color }: { completed: boolean; isToday: 
         false,
       );
     }
+    return () => {
+      // Phase 2.1A: cancel infinite pulse on unmount. HabitChain renders
+      // 14 ChainDots per habit, and the habits list can have 20+ habits,
+      // so leaking these adds up fast.
+      cancelAnimation(pulse);
+    };
   }, [isToday, completed]);
 
   const animStyle = useAnimatedStyle(() => ({

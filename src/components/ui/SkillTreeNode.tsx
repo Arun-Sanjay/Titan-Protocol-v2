@@ -7,6 +7,7 @@ import Animated, {
   withSequence,
   withTiming,
   withSpring,
+  cancelAnimation,
   Easing,
   runOnJS,
 } from "react-native-reanimated";
@@ -81,6 +82,12 @@ export const SkillTreeNode = React.memo(function SkillTreeNode({
       glowOpacity.value = withTiming(0, { duration: 300 });
       glowScale.value = withTiming(1, { duration: 300 });
     }
+    return () => {
+      // Phase 2.1A: cancel infinite pulse animations on unmount to prevent
+      // memory leak accumulating across skill tree navigations.
+      cancelAnimation(glowOpacity);
+      cancelAnimation(glowScale);
+    };
   }, [status]);
 
   // Set initial fill state for claimed nodes

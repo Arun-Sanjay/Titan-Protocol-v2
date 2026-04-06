@@ -6,6 +6,7 @@ import Animated, {
   withTiming,
   withSequence,
   withDelay,
+  cancelAnimation,
   runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -56,6 +57,22 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
   React.useEffect(() => {
     checkScale.value = withTiming(completed ? 1 : 0, { duration: 300 });
   }, [completed]);
+
+  // Phase 2.1A: cancel all shared values on unmount to prevent partial
+  // animation leaks when rows unmount mid-gesture or mid-completion pulse.
+  // Combined with Panel's glow line fix, this keeps the Reanimated worklet
+  // runtime clean even with 30+ tasks added rapidly.
+  useEffect(() => {
+    return () => {
+      cancelAnimation(translateX);
+      cancelAnimation(checkScale);
+      cancelAnimation(cardScale);
+      cancelAnimation(flashOpacity);
+      cancelAnimation(xpPopupY);
+      cancelAnimation(xpPopupOpacity);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleToggle = () => {
     const wasCompleted = completed;

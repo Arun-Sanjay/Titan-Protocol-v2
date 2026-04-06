@@ -6,6 +6,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
@@ -56,6 +57,11 @@ export function SkillNode({
         false,
       );
     }
+    return () => {
+      // Phase 2.1A: cancel infinite pulses on unmount
+      cancelAnimation(glowOpacity);
+      cancelAnimation(pulseTextOpacity);
+    };
   }, [status]);
 
   const glowStyle = useAnimatedStyle(() => ({

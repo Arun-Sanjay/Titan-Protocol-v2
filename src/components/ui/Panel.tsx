@@ -6,6 +6,7 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
+  cancelAnimation,
   FadeInDown,
   Easing,
 } from "react-native-reanimated";
@@ -43,6 +44,14 @@ const GlowLine = React.memo(function GlowLine({ color }: { color?: string }) {
       -1, // infinite
       false,
     );
+    return () => {
+      // Critical: cancel infinite animation on unmount to prevent memory leak.
+      // Without this, every unmounted Panel keeps its shared value alive in
+      // the Reanimated worklet runtime, causing OOM crashes when many are
+      // mounted (e.g., 15+ task rows). See ROADMAP.md Phase 2.1A.
+      cancelAnimation(translateX);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({

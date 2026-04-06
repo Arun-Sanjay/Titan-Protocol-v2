@@ -6,6 +6,7 @@ import Animated, {
   withRepeat,
   withTiming,
   withSequence,
+  cancelAnimation,
   Easing,
   interpolate,
 } from "react-native-reanimated";
@@ -92,6 +93,11 @@ const AmbientGlow = React.memo(function AmbientGlow() {
       -1,
       false,
     );
+    return () => {
+      // Phase 2.1A: cancel infinite pulse on unmount
+      cancelAnimation(pulse);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const glowStyle = useAnimatedStyle(() => ({
@@ -133,6 +139,11 @@ const ScanLine = React.memo(function ScanLine() {
       -1,
       false,
     );
+    return () => {
+      // Phase 2.1A: cancel infinite scan on unmount / height change
+      cancelAnimation(translateY);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [height]);
 
   const scanStyle = useAnimatedStyle(() => ({

@@ -13,6 +13,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
+  cancelAnimation,
   FadeInDown,
   Easing,
 } from "react-native-reanimated";
@@ -184,6 +185,10 @@ const BossChallengeCard = React.memo(function BossChallengeCard({
         false,
       );
     }
+    return () => {
+      // Phase 2.1A: cancel infinite pulse on unmount
+      cancelAnimation(pulseOpacity);
+    };
   }, [boss.active]);
 
   const pulseStyle = useAnimatedStyle(() => ({

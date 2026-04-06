@@ -5,6 +5,7 @@ import Animated, {
   useAnimatedStyle,
   withRepeat,
   withTiming,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 
@@ -37,7 +38,11 @@ export const PulsingGlow = React.memo(function PulsingGlow({
     } else {
       opacity.value = withTiming(1, { duration: 200 });
     }
-  }, [active]);
+    return () => {
+      // Phase 2.1A: cancel infinite animation on unmount/rerun to avoid leak.
+      cancelAnimation(opacity);
+    };
+  }, [active, minOpacity, duration]);
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
