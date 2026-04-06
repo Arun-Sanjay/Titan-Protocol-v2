@@ -83,6 +83,11 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
   },
 
   addTask: (engine, title, kind) => {
+    // Phase 2.1B: Single atomic store update instead of two.
+    // Previously addTask did one set() and callers followed up with
+    // loadEngine() to refresh the score, causing cascading re-renders
+    // (part of the 15+ task crash pathology). Now we recompute scores for
+    // all already-loaded dates in memory inside the same set() call.
     const id = nextId();
     const task: Task = {
       id,
@@ -97,26 +102,54 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
     allTasks.push(task);
     setJSON(tasksKey(engine), allTasks);
 
-    set((s) => ({
-      tasks: {
-        ...s.tasks,
-        [engine]: allTasks.filter((t) => t.is_active === 1),
-      },
-    }));
+    const newTasksForEngine = allTasks.filter((t) => t.is_active === 1);
+
+    set((s) => {
+      // Recompute scores for any loaded dates for this engine. Adding a task
+      // changes the denominator, so stale scores would show incorrect %.
+      const updatedScores = { ...s.scores };
+      const enginePrefix = `${engine}:`;
+      for (const cKey of Object.keys(s.completions)) {
+        if (!cKey.startsWith(enginePrefix)) continue;
+        const ids = new Set(s.completions[cKey] ?? []);
+        updatedScores[cKey] = computeScore(newTasksForEngine, ids);
+      }
+      return {
+        tasks: { ...s.tasks, [engine]: newTasksForEngine },
+        scores: updatedScores,
+      };
+    });
   },
 
   deleteTask: (engine, taskId) => {
+    // Phase 2.1B: Same single-set refactor as addTask.
     const allTasks = getJSON<Task[]>(tasksKey(engine), []).filter(
       (t) => t.id !== taskId
     );
     setJSON(tasksKey(engine), allTasks);
 
-    set((s) => ({
-      tasks: {
-        ...s.tasks,
-        [engine]: allTasks.filter((t) => t.is_active === 1),
-      },
-    }));
+    const newTasksForEngine = allTasks.filter((t) => t.is_active === 1);
+
+    set((s) => {
+      // Recompute scores for any loaded dates for this engine. Also remove
+      // the deleted task id from any cached completions so stale data isn't
+      // held in memory (doesn't need MMKV writes — those keys will be
+      // rewritten next time the user toggles a task).
+      const updatedCompletions = { ...s.completions };
+      const updatedScores = { ...s.scores };
+      const enginePrefix = `${engine}:`;
+      for (const cKey of Object.keys(s.completions)) {
+        if (!cKey.startsWith(enginePrefix)) continue;
+        const filteredIds = (s.completions[cKey] ?? []).filter((i) => i !== taskId);
+        updatedCompletions[cKey] = filteredIds;
+        updatedScores[cKey] = computeScore(newTasksForEngine, new Set(filteredIds));
+      }
+      return {
+        tasks: { ...s.tasks, [engine]: newTasksForEngine },
+        completions: updatedCompletions,
+        scores: updatedScores,
+      };
+    });
   },
 
   toggleTask: (engine, taskId, dateKey) => {

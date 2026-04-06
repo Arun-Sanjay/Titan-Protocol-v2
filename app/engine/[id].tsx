@@ -238,6 +238,9 @@ export default function EngineScreen() {
   }, []);
 
   const handleAddSuggestion = useCallback((s: Suggestion) => {
+    // Phase 2.1B: addTask now recomputes scores for all loaded dates in
+    // a single store update, so we don't need to call loadEngine() after.
+    // Removing the extra call halves re-renders when accepting suggestions.
     useEngineStore.getState().addTask(
       engine, s.title,
       s.type === "mission" ? "main" : "secondary"
@@ -249,7 +252,6 @@ export default function EngineScreen() {
       setJSON(DISMISSED_KEY, [...next]);
       return next;
     });
-    useEngineStore.getState().loadEngine(engine, dateKey);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [engine, dateKey, awardXP]);
 

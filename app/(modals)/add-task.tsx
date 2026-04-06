@@ -34,7 +34,6 @@ export default function AddTaskModal() {
   }>();
   const router = useRouter();
   const addTask = useEngineStore((s) => s.addTask);
-  const loadEngine = useEngineStore((s) => s.loadEngine);
 
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<"main" | "secondary">(
@@ -50,8 +49,9 @@ export default function AddTaskModal() {
   const handleAdd = () => {
     if (!title.trim() || busy || !selectedEngine) return;
     setBusy(true);
+    // Phase 2.1B: addTask is now a single atomic store update that also
+    // recomputes scores for loaded dates — no loadEngine() follow-up needed.
     addTask(selectedEngine, title.trim(), kind);
-    loadEngine(selectedEngine, effectiveDateKey);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
   };
