@@ -46,6 +46,7 @@ import { getDayNumber } from "../src/data/chapters";
 import { getTodayKey } from "../src/lib/date";
 import { AchievementToast } from "../src/components/ui/AchievementToast";
 import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider";
+import { RootErrorBoundary } from "../src/components/ui/RootErrorBoundary";
 import { SurpriseOverlay } from "../src/components/v2/story/SurpriseOverlay";
 import { StreakBreakCinematic } from "../src/components/v2/story/StreakBreakCinematic";
 import { BossDefeatCinematic } from "../src/components/v2/story/BossDefeatCinematic";
@@ -341,6 +342,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
+      <RootErrorBoundary>
       <SystemWindowProvider>
       <SystemNotificationProvider>
       <StatusBar style="light" backgroundColor={colors.bg} />
@@ -441,6 +443,7 @@ export default function RootLayout() {
       )}
       </SystemNotificationProvider>
       </SystemWindowProvider>
+      </RootErrorBoundary>
     </GestureHandlerRootView>
   );
 }
