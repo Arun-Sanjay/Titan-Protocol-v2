@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View, Text, StyleSheet, Pressable, Alert,
   KeyboardAvoidingView, Platform, AppState,
@@ -16,10 +16,18 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { getTodayKey } from "../../src/lib/date";
 import { getJSON, setJSON } from "../../src/db/storage";
-import { useEngineStore } from "../../src/stores/useEngineStore";
-import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
+import { XP_REWARDS } from "../../src/stores/useProfileStore";
 import { evaluateAllTrees } from "../../src/lib/skill-tree-evaluator";
-import type { EngineKey, Task } from "../../src/db/schema";
+import {
+  useEngineTasks,
+  useEngineCompletions,
+  useCreateTask,
+  useDeleteTask,
+  useToggleCompletion,
+} from "../../src/hooks/queries/useTasks";
+import { useAwardXP, useUpdateStreak } from "../../src/hooks/queries/useProfile";
+import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
+import { computeEngineScore, type EngineKey, type Task } from "../../src/services/tasks";
 
 // ─── Engine metadata ──────────────────────────────────────────────────────────
 
@@ -162,58 +170,56 @@ export default function EngineScreen() {
 
   const todayKey = useMemo(() => getTodayKey(), [appActive]);
   const [dateKey, setDateKey] = useState(getTodayKey());
-  const lastLoadRef = useRef("");
 
   useEffect(() => { setDateKey(todayKey); }, [todayKey]);
 
-  const loadEngine = useEngineStore((s) => s.loadEngine);
-  const toggleTask = useEngineStore((s) => s.toggleTask);
-  const deleteTaskAction = useEngineStore((s) => s.deleteTask);
-  const tasks = useEngineStore((s) => s.tasks[engine] ?? []);
-  const allCompletions = useEngineStore((s) => s.completions);
-  const allScores = useEngineStore((s) => s.scores);
+  // Phase 3.5c: switched from useEngineStore to React Query hooks. Tasks
+  // and completions are now Supabase-backed; the cache hydrates from
+  // MMKV via the persister so the offline experience is unchanged.
+  const { data: tasks = [] } = useEngineTasks(engine);
+  const { data: completionRows = [] } = useEngineCompletions(engine, dateKey);
+  const toggleCompletion = useToggleCompletion();
+  const createTaskMutation = useCreateTask();
+  const deleteTaskMutation = useDeleteTask();
+  const awardXPMutation = useAwardXP();
+  const updateStreakMutation = useUpdateStreak();
+  const enqueueRankUpMutation = useEnqueueRankUp();
 
-  const completionIds = allCompletions[`${engine}:${dateKey}`] ?? [];
-  const score = allScores[`${engine}:${dateKey}`] ?? 0;
+  const completedIds = useMemo(
+    () => new Set(completionRows.map((c) => c.task_id)),
+    [completionRows],
+  );
 
-  const awardXP = useProfileStore((s) => s.awardXP);
-  const updateStreak = useProfileStore((s) => s.updateStreak);
-
-  useEffect(() => {
-    const key = `${engine}:${dateKey}`;
-    if (lastLoadRef.current !== key) {
-      lastLoadRef.current = key;
-      loadEngine(engine, dateKey);
-    }
-  }, [engine, dateKey]);
-
-  const completedIds = useMemo(() => new Set(completionIds), [completionIds]);
+  const score = useMemo(
+    () => computeEngineScore(tasks, completedIds),
+    [tasks, completedIds],
+  );
 
   // ── Sorted task groups: incomplete first, completed at bottom ──────────────
   const mainTasks = useMemo(() => {
     const all = tasks.filter((t) => t.kind === "main");
     return [
-      ...all.filter((t) => !completedIds.has(t.id!)),
-      ...all.filter((t) => completedIds.has(t.id!)),
+      ...all.filter((t) => !completedIds.has(t.id)),
+      ...all.filter((t) => completedIds.has(t.id)),
     ];
   }, [tasks, completedIds]);
 
   const sideTasks = useMemo(() => {
     const all = tasks.filter((t) => t.kind === "secondary");
     return [
-      ...all.filter((t) => !completedIds.has(t.id!)),
-      ...all.filter((t) => completedIds.has(t.id!)),
+      ...all.filter((t) => !completedIds.has(t.id)),
+      ...all.filter((t) => completedIds.has(t.id)),
     ];
   }, [tasks, completedIds]);
 
   const totalTasks = tasks.length;
-  const totalCompleted = completionIds.length;
+  const totalCompleted = completionRows.length;
   const mainCompleted = useMemo(
-    () => mainTasks.filter((t) => completedIds.has(t.id!)).length,
+    () => mainTasks.filter((t) => completedIds.has(t.id)).length,
     [mainTasks, completedIds]
   );
   const sideCompleted = useMemo(
-    () => sideTasks.filter((t) => completedIds.has(t.id!)).length,
+    () => sideTasks.filter((t) => completedIds.has(t.id)).length,
     [sideTasks, completedIds]
   );
 
@@ -237,56 +243,88 @@ export default function EngineScreen() {
     });
   }, []);
 
-  const handleAddSuggestion = useCallback((s: Suggestion) => {
-    // Phase 2.1B: addTask now recomputes scores for all loaded dates in
-    // a single store update, so we don't need to call loadEngine() after.
-    // Removing the extra call halves re-renders when accepting suggestions.
-    useEngineStore.getState().addTask(
-      engine, s.title,
-      s.type === "mission" ? "main" : "secondary"
-    );
-    const xp = s.type === "mission" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
-    awardXP(dateKey, "suggestion_accepted", xp);
-    setDismissed((prev) => {
-      const next = new Set([...prev, s.id]);
-      setJSON(DISMISSED_KEY, [...next]);
-      return next;
-    });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [engine, dateKey, awardXP]);
+  const handleAddSuggestion = useCallback(async (s: Suggestion) => {
+    // Phase 3.5c: createTask is now a Supabase mutation. The hook
+    // invalidates the per-engine task list on success so the new task
+    // appears without a manual refetch.
+    try {
+      await createTaskMutation.mutateAsync({
+        engine,
+        title: s.title,
+        kind: s.type === "mission" ? "main" : "secondary",
+      });
+      const xp = s.type === "mission" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
+      const result = await awardXPMutation.mutateAsync(xp);
+      if (result.leveledUp) {
+        await enqueueRankUpMutation.mutateAsync({
+          fromLevel: result.fromLevel,
+          toLevel: result.toLevel,
+        });
+      }
+      setDismissed((prev) => {
+        const next = new Set([...prev, s.id]);
+        setJSON(DISMISSED_KEY, [...next]);
+        return next;
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      // Mutation hook already logged the error via React Query's
+      // built-in retry/onError; no toast yet (Phase 4.4 adds Sentry).
+    }
+  }, [engine, createTaskMutation, awardXPMutation, enqueueRankUpMutation]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-  // Phase 2.1C: callbacks keyed by taskId (not task object) so they have
-  // stable references across re-renders and React.memo on MissionRow works.
-  // Task lookup uses getState() to avoid polluting the dep array.
-  const handleToggle = useCallback((taskId: number) => {
-    const task = useEngineStore.getState().tasks[engine].find((t) => t.id === taskId);
+  // Phase 3.5c: handlers now use React Query mutations. Optimistic
+  // updates from useToggleCompletion + useAwardXP keep the UI feeling
+  // instant; rollback on error is handled inside the mutation hooks.
+  const handleToggle = useCallback(async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
-    const completed = toggleTask(engine, taskId, dateKey);
-    const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
-    if (completed) {
-      awardXP(dateKey, "task_complete", xp);
-      updateStreak(dateKey);
-      evaluateAllTrees();
-    } else {
-      awardXP(dateKey, "task_uncomplete", -xp);
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, [engine, dateKey, toggleTask, awardXP, updateStreak]);
 
-  const handleDelete = useCallback((taskId: number) => {
-    const task = useEngineStore.getState().tasks[engine].find((t) => t.id === taskId);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const result = await toggleCompletion.mutateAsync({
+        task: { id: task.id, engine: task.engine },
+        dateKey,
+      });
+      const xpAmount =
+        task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
+      const xpDelta = result.completed ? xpAmount : -xpAmount;
+      const profile = await awardXPMutation.mutateAsync(xpDelta);
+
+      if (result.completed) {
+        // Streak + skill tree only on completion, not un-completion.
+        await updateStreakMutation.mutateAsync(dateKey);
+        evaluateAllTrees();
+      }
+      if (profile.leveledUp) {
+        await enqueueRankUpMutation.mutateAsync({
+          fromLevel: profile.fromLevel,
+          toLevel: profile.toLevel,
+        });
+      }
+    } catch (e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      // The toggle mutation rolls back its optimistic update on error;
+      // partial state is recovered automatically.
+    }
+  }, [tasks, dateKey, toggleCompletion, awardXPMutation, updateStreakMutation, enqueueRankUpMutation]);
+
+  const handleDelete = useCallback((taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
     Alert.alert("Delete Mission", `Delete "${task.title}"?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete", style: "destructive",
-        // Phase 2.1B: deleteTask now updates scores in a single store
-        // update — no loadEngine() follow-up needed.
-        onPress: () => deleteTaskAction(engine, taskId),
+        onPress: () => {
+          deleteTaskMutation.mutate({ taskId, engine });
+        },
       },
     ]);
-  }, [engine]);
+  }, [tasks, engine, deleteTaskMutation]);
 
   const openAddModal = useCallback((kind: "main" | "secondary") => {
     router.push({
@@ -308,7 +346,7 @@ export default function EngineScreen() {
       items.push({ type: "empty", kind: "main" });
     } else {
       for (const t of mainTasks) {
-        items.push({ type: "task", task: t, completed: completedIds.has(t.id!) });
+        items.push({ type: "task", task: t, completed: completedIds.has(t.id) });
       }
     }
     items.push({ type: "add", kind: "main" });
@@ -319,7 +357,7 @@ export default function EngineScreen() {
       items.push({ type: "empty", kind: "secondary" });
     } else {
       for (const t of sideTasks) {
-        items.push({ type: "task", task: t, completed: completedIds.has(t.id!) });
+        items.push({ type: "task", task: t, completed: completedIds.has(t.id) });
       }
     }
     items.push({ type: "add", kind: "secondary" });
@@ -358,7 +396,7 @@ export default function EngineScreen() {
       case "task":
         return (
           <MissionRow
-            taskId={item.task.id!}
+            taskId={item.task.id}
             title={item.task.title}
             xp={item.task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST}
             completed={item.completed}

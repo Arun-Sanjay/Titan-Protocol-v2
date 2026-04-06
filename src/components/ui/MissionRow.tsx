@@ -22,7 +22,12 @@ const ENGINE_BORDER_COLORS: Record<EngineKey, string> = {
 };
 
 type Props = {
-  taskId: number;
+  /**
+   * Phase 3.5c: taskId is now a string to accommodate Supabase UUIDs.
+   * The legacy MMKV path used numeric ids; consumers that still use
+   * numeric ids can convert via String(id) at the call site.
+   */
+  taskId: string;
   title: string;
   xp: number;
   completed: boolean;
@@ -33,8 +38,8 @@ type Props = {
    * useCallback ref with no per-task closure. Inline arrows like
    * `onToggle={() => handleToggle(task)}` defeat React.memo.
    */
-  onToggle: (taskId: number) => void;
-  onDelete?: (taskId: number) => void;
+  onToggle: (taskId: string) => void;
+  onDelete?: (taskId: string) => void;
   highlighted?: boolean;
 };
 

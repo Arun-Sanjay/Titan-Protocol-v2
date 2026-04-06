@@ -279,6 +279,19 @@ export default function HQScreen() {
     }
   }, [analytics.today, toggleTask, awardXP, updateStreak, notify]);
 
+  // Phase 3.5c bridge: MissionRow now expects string taskId (Supabase
+  // UUIDs in the new path). Dashboard still reads from the legacy
+  // numeric-id store; this adapter parses the string back to a number
+  // and forwards to the existing handler. Removed in 3.5d when the
+  // dashboard migrates fully.
+  const handleToggleStr = useCallback(
+    (taskIdStr: string) => {
+      const taskId = Number(taskIdStr);
+      if (Number.isFinite(taskId)) handleToggle(taskId);
+    },
+    [handleToggle],
+  );
+
   // Protocol pulse animation
   const protocolPulse = useSharedValue(0.4);
   useEffect(() => {
@@ -509,13 +522,18 @@ export default function HQScreen() {
               {visibleTasks.map((task) => (
                 <MissionRow
                   key={`${task.engine}-${task.id}`}
-                  taskId={task.id!}
+                  // Phase 3.5c: MissionRow taskId is now a string (Supabase
+                  // UUIDs). Dashboard still reads from the legacy
+                  // numeric-id store, so we coerce at the boundary. Will
+                  // be cleaned up when the dashboard migrates to the
+                  // useAllTasks hook in 3.5d.
+                  taskId={String(task.id!)}
                   title={task.title}
                   xp={task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST}
                   completed={task.completed}
                   kind={task.kind}
                   engine={task.engine}
-                  onToggle={handleToggle}
+                  onToggle={handleToggleStr}
                   highlighted={task.id === lastCompletedId}
                 />
               ))}
