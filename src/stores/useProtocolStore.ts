@@ -47,6 +47,18 @@ const STREAK_KEY = "protocol_streak";
 const STREAK_DATE_KEY = "protocol_streak_date";
 const STREAK_PREV_KEY = "protocol_streak_previous";
 
+// Phase 2.2A: write-ahead log key. Set before a multi-key protocol write
+// begins, cleared after all writes complete. Any stuck pending marker
+// detected on app launch indicates an incomplete/crashed write and is
+// logged for diagnostics.
+const PROTOCOL_WRITE_PENDING_KEY = "protocol_write_pending";
+
+type ProtocolWritePending = {
+  dateKey: string;
+  phase: "finish" | "evening";
+  startedAt: number;
+};
+
 // ─── Morning / Evening MMKV keys ─────────────────────────────────────────────
 
 function morningKey(dateKey: string) {
@@ -54,6 +66,33 @@ function morningKey(dateKey: string) {
 }
 function eveningKey(dateKey: string) {
   return `evening_${dateKey}`;
+}
+
+// ─── Pure streak computation (shared by finish + evening paths) ─────────────
+
+type StreakUpdate = {
+  newStreak: number;
+  streakPrevious: number;
+};
+
+function computeNewStreak(
+  today: string,
+  streakCurrent: number,
+  streakLastDate: string | null,
+  streakPrevious: number,
+): StreakUpdate {
+  if (!streakLastDate) {
+    return { newStreak: 1, streakPrevious };
+  }
+  if (streakLastDate === today) {
+    return { newStreak: streakCurrent, streakPrevious }; // already counted today
+  }
+  const yesterday = addDays(today, -1);
+  if (streakLastDate === yesterday) {
+    return { newStreak: streakCurrent + 1, streakPrevious };
+  }
+  // Streak broke — preserve what was lost.
+  return { newStreak: 1, streakPrevious: streakCurrent };
 }
 
 export type MorningData = {
@@ -125,6 +164,22 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
   morningReflection: "",
 
   load: () => {
+    // Phase 2.2A: detect a crashed protocol write from a previous session
+    // by checking the write-ahead flag. If present, log it (the caller will
+    // see the stale flag and can decide whether to retry). We don't
+    // automatically repair — the next completeEvening/finishProtocol call
+    // will overwrite the state correctly.
+    const stuck = getJSON<ProtocolWritePending | null>(PROTOCOL_WRITE_PENDING_KEY, null);
+    if (stuck) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[protocol] detected stuck write-ahead flag from previous session: ${JSON.stringify(stuck)}. ` +
+          `This indicates the app crashed mid-write. State may be inconsistent but will self-heal on next protocol completion.`,
+      );
+      // Clear the stuck flag so we don't keep logging on every launch.
+      setJSON(PROTOCOL_WRITE_PENDING_KEY, null);
+    }
+
     const sessions = getJSON<Record<string, ProtocolSession>>(SESSIONS_KEY, {});
     const streakCurrent = getJSON<number>(STREAK_KEY, 0);
     const streakPrevious = getJSON<number>(STREAK_PREV_KEY, 0);
@@ -184,23 +239,20 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
     const today = getTodayKey();
     const { streakCurrent, streakLastDate, sessions } = get();
 
-    // Calculate new streak
-    let newStreak = 1;
-    let streakPrevious = get().streakPrevious;
-    if (streakLastDate) {
-      if (streakLastDate === today) {
-        newStreak = streakCurrent; // Already counted today
-      } else {
-        const yesterday = addDays(today, -1);
-        if (streakLastDate === yesterday) {
-          newStreak = streakCurrent + 1;
-        } else {
-          // Streak broke — save what was lost
-          streakPrevious = streakCurrent;
-          newStreak = 1;
-        }
-      }
-    }
+    // Phase 2.2A: write-ahead flag. If the app crashes between any of the
+    // MMKV writes below, the flag stays set and is detected on next launch.
+    setJSON(PROTOCOL_WRITE_PENDING_KEY, {
+      dateKey: today,
+      phase: "finish",
+      startedAt: Date.now(),
+    });
+
+    const { newStreak, streakPrevious } = computeNewStreak(
+      today,
+      streakCurrent,
+      streakLastDate,
+      get().streakPrevious,
+    );
 
     // Persist streak
     setJSON(STREAK_KEY, newStreak);
@@ -221,6 +273,9 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
 
     // Also persist to per-day key for legacy checks
     setJSON(`protocol_completions:${today}`, { completed: true, score });
+
+    // Phase 2.2A: clear the write-ahead flag — all writes succeeded.
+    setJSON(PROTOCOL_WRITE_PENDING_KEY, null);
 
     set({
       sessions: updatedSessions,
@@ -261,29 +316,28 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
 
   completeEvening: (reflection: string, identityVote: IdentityArchetype | null, titanScore: number) => {
     const today = getTodayKey();
+
+    // Phase 2.2A: write-ahead flag. Set before any of the 6 multi-key
+    // writes below, cleared after all succeed. If the app crashes between
+    // writes, load() on next launch detects the stuck flag and logs it.
+    setJSON(PROTOCOL_WRITE_PENDING_KEY, {
+      dateKey: today,
+      phase: "evening",
+      startedAt: Date.now(),
+    });
+
     const data: EveningData = { reflection, identityVote, titanScore, completedAt: Date.now() };
     setJSON(eveningKey(today), data);
-    set({ eveningCompleted: true, morningReflection: reflection });
 
-    // Backward compat: also record a full ProtocolSession via completeSession logic
+    // Backward compat: also record a full ProtocolSession
     const { sessions, streakCurrent, streakLastDate } = get();
 
-    // Calculate new streak
-    let newStreak = 1;
-    let streakPrevious = get().streakPrevious;
-    if (streakLastDate) {
-      if (streakLastDate === today) {
-        newStreak = streakCurrent;
-      } else {
-        const yesterday = addDays(today, -1);
-        if (streakLastDate === yesterday) {
-          newStreak = streakCurrent + 1;
-        } else {
-          streakPrevious = streakCurrent;
-          newStreak = 1;
-        }
-      }
-    }
+    const { newStreak, streakPrevious } = computeNewStreak(
+      today,
+      streakCurrent,
+      streakLastDate,
+      get().streakPrevious,
+    );
 
     setJSON(STREAK_KEY, newStreak);
     setJSON(STREAK_DATE_KEY, today);
@@ -301,12 +355,17 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
     setJSON(SESSIONS_KEY, updatedSessions);
     setJSON(`protocol_completions:${today}`, { completed: true, score: titanScore });
 
+    // Phase 2.2A: clear write-ahead flag — all writes succeeded.
+    setJSON(PROTOCOL_WRITE_PENDING_KEY, null);
+
     set({
       sessions: updatedSessions,
       streakCurrent: newStreak,
       streakPrevious,
       streakLastDate: today,
       todayCompleted: true,
+      eveningCompleted: true,
+      morningReflection: reflection,
       isActive: false,
       startedAt: null,
       currentPhase: null,
