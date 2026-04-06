@@ -51,6 +51,7 @@ import { AchievementToast } from "../src/components/ui/AchievementToast";
 import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider";
 import { RootErrorBoundary } from "../src/components/ui/RootErrorBoundary";
 import { LevelUpOverlay } from "../src/components/ui/LevelUpOverlay";
+import { OfflineBanner } from "../src/components/ui/OfflineBanner";
 import { useProfileStore } from "../src/stores/useProfileStore";
 import { OnboardingGate } from "../src/components/OnboardingGate";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
@@ -499,6 +500,7 @@ export default function RootLayout() {
         render order enforces priority.
 
         Priority order (lowest → highest):
+          0. OfflineBanner (non-blocking status bar, pointerEvents=none)
           1. AchievementToast (non-blocking, always mounted, toasts auto-dismiss)
           2. MotivationalSplash (app-open splash)
           3. CinematicOnboarding (new users only)
@@ -510,6 +512,7 @@ export default function RootLayout() {
           9. Streak break cinematic
           10. Integrity warning (highest — always visible on top)
       */}
+      <OfflineBanner />
       <AchievementToast />
       {showSplash && <MotivationalSplash onDismiss={() => setShowSplash(false)} context={transmissionCtx} />}
       {!showSplash && !onboardingCompleted && (
