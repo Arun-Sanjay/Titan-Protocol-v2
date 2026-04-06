@@ -290,11 +290,19 @@ export default function AnalyticsScreen() {
 function HabitPerformanceSection({ todayKey }: { todayKey: string }) {
   const habits = useHabitStore((s) => s.habits);
   const loadHabits = useHabitStore((s) => s.load);
+  const loadHabitDateRange = useHabitStore((s) => s.loadDateRange);
   const getHabitStats = useHabitStore((s) => s.getHabitStats);
   const overallScore = useHabitStore((s) => s.getOverallHabitScore(todayKey));
 
-  // Ensure habits are loaded
-  useEffect(() => { loadHabits(todayKey); }, [todayKey]);
+  // Ensure habits + the 30-day stat window are loaded into the store
+  // cache before getHabitStats runs in render (Phase 2.3F).
+  useEffect(() => {
+    loadHabits(todayKey);
+    const start = new Date(`${todayKey}T00:00:00`);
+    start.setDate(start.getDate() - 29);
+    const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+    loadHabitDateRange(startKey, todayKey);
+  }, [todayKey, loadHabits, loadHabitDateRange]);
 
   if (habits.length === 0) return null;
 

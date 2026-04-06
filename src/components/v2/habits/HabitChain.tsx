@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { View, StyleSheet } from "react-native";
 import Animated, {
   useSharedValue,
@@ -10,7 +10,6 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { colors, spacing } from "../../../theme";
-import { getJSON } from "../../../db/storage";
 import { useHabitStore } from "../../../stores/useHabitStore";
 
 const CHAIN_DAYS = 14;
@@ -22,21 +21,41 @@ type Props = {
 };
 
 export function HabitChain({ habitId, engineColor = colors.success }: Props) {
-  // Subscribe to completedIds so chain updates when habits are toggled
+  // Phase 2.3F: read from store cache (warmed below) instead of doing
+  // 14 MMKV reads per habit on every render. With N habits on the track
+  // screen this dropped 14N disk operations to 14 (one shared warmup).
   const completedIds = useHabitStore((s) => s.completedIds);
+  const loadDateRange = useHabitStore((s) => s.loadDateRange);
 
-  // Build 14-day chain data
-  const chain = useMemo(() => {
-    const cells: { dateKey: string; completed: boolean; isToday: boolean }[] = [];
+  // Compute date range once per render (depends only on Date.now()/14d window).
+  const { startKey, endKey, dateKeys } = useMemo(() => {
+    const today = new Date();
+    const dks: string[] = [];
     for (let i = CHAIN_DAYS - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const logs = getJSON<number[]>(`habit_logs:${dk}`, []);
-      cells.push({ dateKey: dk, completed: logs.includes(habitId), isToday: i === 0 });
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      dks.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
     }
-    return cells;
-  }, [habitId, completedIds]);
+    return { startKey: dks[0], endKey: dks[dks.length - 1], dateKeys: dks };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Warm the store cache for the visible window once on mount.
+  useEffect(() => {
+    loadDateRange(startKey, endKey);
+  }, [startKey, endKey, loadDateRange]);
+
+  // Build the 14-day chain from the cache (zero MMKV reads in render).
+  const chain = useMemo(() => {
+    return dateKeys.map((dk, i) => {
+      const ids = completedIds[dk] ?? [];
+      return {
+        dateKey: dk,
+        completed: ids.includes(habitId),
+        isToday: i === dateKeys.length - 1,
+      };
+    });
+  }, [habitId, completedIds, dateKeys]);
 
   return (
     <View style={styles.container}>

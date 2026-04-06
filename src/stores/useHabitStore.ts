@@ -1,11 +1,10 @@
 import { create } from "zustand";
 import { getJSON, setJSON, nextId } from "../db/storage";
+import { K } from "../db/keys";
 import type { Habit } from "../db/schema";
 
-const HABITS_KEY = "habits";
-function logsKey(dateKey: string) {
-  return `habit_logs:${dateKey}`;
-}
+const HABITS_KEY = K.habits;
+const logsKey = (dateKey: string) => K.habitLogs(dateKey);
 
 export type HabitStats = {
   currentChain: number;
@@ -20,6 +19,12 @@ type HabitState = {
   completedIds: Record<string, number[]>; // dateKey → habit IDs
 
   load: (dateKey: string) => void;
+  /**
+   * Phase 2.3F: Pre-load habit logs for a date range so getHabitStats
+   * doesn't have to hit MMKV per-habit per-day. Call this once when a
+   * screen that needs stats mounts (e.g. habits, analytics).
+   */
+  loadDateRange: (startDateKey: string, endDateKey: string) => void;
   addHabit: (title: string, icon: string, engine?: string, trigger?: string, duration?: string, frequency?: string) => void;
   deleteHabit: (id: number) => void;
   toggleHabit: (habitId: number, dateKey: string) => boolean;
@@ -30,6 +35,12 @@ type HabitState = {
   getOverallHabitScore: (dateKey: string) => number;
 };
 
+// Phase 2.3F: helper to format a Date as YYYY-MM-DD without re-allocating
+// every iteration in stat loops.
+function formatDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export const useHabitStore = create<HabitState>()((set, get) => ({
   habits: [],
   completedIds: {},
@@ -38,6 +49,30 @@ export const useHabitStore = create<HabitState>()((set, get) => ({
     const habits = getJSON<Habit[]>(HABITS_KEY, []);
     const ids = getJSON<number[]>(logsKey(dateKey), []);
     set({ habits, completedIds: { ...get().completedIds, [dateKey]: ids } });
+  },
+
+  loadDateRange: (startDateKey, endDateKey) => {
+    // Phase 2.3F: batch-load habit logs for a date range into the store
+    // cache. Used by screens that show habit stats so getHabitStats can
+    // read from memory instead of doing per-day MMKV reads in a hot loop.
+    const start = new Date(`${startDateKey}T00:00:00`);
+    const end = new Date(`${endDateKey}T00:00:00`);
+    if (start > end) return;
+
+    const updates: Record<string, number[]> = {};
+    const cache = get().completedIds;
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      const dk = formatDateKey(cursor);
+      if (cache[dk] === undefined) {
+        updates[dk] = getJSON<number[]>(logsKey(dk), []);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      set((s) => ({ completedIds: { ...s.completedIds, ...updates } }));
+    }
   },
 
   addHabit: (title, icon, engine = "all", trigger, duration, frequency) => {
@@ -94,37 +129,62 @@ export const useHabitStore = create<HabitState>()((set, get) => ({
   },
 
   getHabitStats: (habitId, days = 90) => {
+    // Phase 2.3F: previously this did 2N MMKV reads per call (180 reads
+    // per habit per render). With 20 habits on the analytics screen
+    // that's ~3600 disk operations per render — visible jank on Android.
+    //
+    // New approach: build a single in-memory dateKey → number[] map
+    // covering the range, then iterate once to compute both currentChain
+    // and longestChain. Missing dates are fetched from MMKV on demand
+    // and cached in store state for subsequent calls.
     let currentChain = 0;
     let longestChain = 0;
     let completedDays = 0;
     let chainBroken = false;
 
-    // Walk backward from today — current chain = consecutive days from today
+    // Build the date list once.
+    const dateKeys: string[] = [];
+    const today = new Date();
     for (let i = 0; i < days; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const logs = getJSON<number[]>(logsKey(dk), []);
-
-      if (logs.includes(habitId)) {
-        completedDays++;
-        if (!chainBroken) currentChain++;
-      } else {
-        chainBroken = true;
-      }
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      dateKeys.push(formatDateKey(d));
     }
 
-    // Longest chain: scan all days for the longest consecutive run
-    let runningChain = 0;
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      const logs = getJSON<number[]>(logsKey(dk), []);
+    // Read from store cache; fall back to MMKV for any missing dates and
+    // populate the cache so the next call (other habits) is free.
+    const cache = get().completedIds;
+    const fillIns: Record<string, number[]> = {};
+    const dayLogs: number[][] = new Array(dateKeys.length);
+    for (let i = 0; i < dateKeys.length; i++) {
+      const dk = dateKeys[i];
+      let ids = cache[dk];
+      if (ids === undefined) {
+        ids = getJSON<number[]>(logsKey(dk), []);
+        fillIns[dk] = ids;
+      }
+      dayLogs[i] = ids;
+    }
+    if (Object.keys(fillIns).length > 0) {
+      set((s) => ({ completedIds: { ...s.completedIds, ...fillIns } }));
+    }
 
-      if (logs.includes(habitId)) {
+    // Single pass: iterate forward through `dayLogs` (today is index 0).
+    // For currentChain, walk from index 0 forward until we hit a day
+    // without the habit (chain broken). For longestChain, walk in
+    // reverse (oldest → today) tracking running streaks.
+    for (let i = 0; i < dayLogs.length; i++) {
+      const present = dayLogs[i].includes(habitId);
+      if (present) completedDays++;
+      if (present && !chainBroken) currentChain++;
+      else if (!present) chainBroken = true;
+    }
+
+    let runningChain = 0;
+    for (let i = dayLogs.length - 1; i >= 0; i--) {
+      if (dayLogs[i].includes(habitId)) {
         runningChain++;
-        longestChain = Math.max(longestChain, runningChain);
+        if (runningChain > longestChain) longestChain = runningChain;
       } else {
         runningChain = 0;
       }
