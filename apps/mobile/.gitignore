@@ -1,9 +1,0 @@
-﻿node_modules/
-android/
-ios/
-dist-test/
-.expo/
-*.apk
-*.aab
-*.keystore
-.env
