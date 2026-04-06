@@ -22,7 +22,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { colors, spacing, radius, shadows } from "../../theme";
 
 // ---------------------------------------------------------------------------
@@ -32,7 +32,7 @@ import { colors, spacing, radius, shadows } from "../../theme";
 type MenuItem = {
   label: string;
   icon: string;
-  route: string;
+  route: Href;
   color: string;
 };
 
@@ -190,7 +190,7 @@ export const FloatingActionButton = React.memo(function FloatingActionButton(_pr
     (item: MenuItem) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       closeMenu();
-      router.push(item.route as any);
+      router.push(item.route);
     },
     [closeMenu, router],
   );

@@ -15,7 +15,7 @@ import Animated, {
   interpolate,
   SharedValue,
 } from "react-native-reanimated";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -38,7 +38,7 @@ import { getTodayKey } from "../../lib/date";
 type MenuItem = {
   label: string;
   icon: string;
-  route: string;
+  route: Href;
 };
 
 const MENU_ITEMS: MenuItem[] = [
@@ -71,7 +71,7 @@ type RadialItemProps = {
   index: number;
   total: number;
   isOpen: SharedValue<number>;
-  onPress: (route: string) => void;
+  onPress: (route: Href) => void;
 };
 
 function RadialItem({ item, index, total, isOpen, onPress }: RadialItemProps) {
@@ -155,12 +155,12 @@ export default function RadialMenu() {
     setTimeout(() => setMenuVisible(false), 300);
   };
 
-  const handleNavigate = (route: string) => {
+  const handleNavigate = (route: Href) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     closeMenu();
     // Small delay so the close animation starts before navigation
     setTimeout(() => {
-      router.push(route as any);
+      router.push(route);
     }, 150);
   };
 

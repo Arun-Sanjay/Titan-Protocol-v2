@@ -106,7 +106,7 @@ export default function ProfileScreen() {
             <SectionHeader title="YOUR STORY" />
             <NarrativeTimeline limit={3} />
             <Pressable
-              onPress={() => router.push("/narrative" as any)}
+              onPress={() => router.push("/narrative")}
               style={{ alignItems: "center", paddingVertical: spacing.md }}
             >
               <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textSecondary }}>
@@ -122,7 +122,7 @@ export default function ProfileScreen() {
         )}
 
         <Pressable
-          onPress={() => router.push("/hub/settings" as any)}
+          onPress={() => router.push("/hub/settings")}
           style={styles.settingsBtn}
         >
           <Ionicons name="settings-outline" size={20} color={colors.text} />
@@ -140,7 +140,7 @@ function AchievementLink() {
   const router = useRouter();
   const count = useAchievementStore((s) => s.unlockedIds.length);
   return (
-    <Pressable onPress={() => router.push("/achievements" as any)} style={styles.settingsBtn}>
+    <Pressable onPress={() => router.push("/achievements")} style={styles.settingsBtn}>
       <Ionicons name="ribbon-outline" size={20} color={colors.mind} />
       <Text style={styles.settingsBtnText}>Achievements ({count}/35)</Text>
       <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
@@ -238,7 +238,7 @@ function SkillTreesOverview() {
             <Pressable
               key={eng.id}
               style={skillStyles.card}
-              onPress={() => router.push(`/skill-tree/${eng.id}` as any)}
+              onPress={() => router.push(`/skill-tree/${eng.id}`)}
             >
               <View style={[skillStyles.dot, { backgroundColor: eng.color }]} />
               <Text style={skillStyles.engineName}>{eng.label}</Text>

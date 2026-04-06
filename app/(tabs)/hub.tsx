@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable, useWindowDimensions } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -9,11 +9,14 @@ import { PageHeader } from "../../src/components/ui/PageHeader";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { useModeStore, checkFeatureVisible, type Feature } from "../../src/stores/useModeStore";
 
+// Phase 2.3C: route is typed as Href (expo-router) so router.push accepts
+// it without an `as any` cast. Each item literal still needs a string,
+// but the type is enforced at the array literal.
 type HubItem = {
   icon: string;
   ionicon: keyof typeof Ionicons.glyphMap;
   label: string;
-  route: string;
+  route: Href;
   color: string;
   ready: boolean;
   feature?: Feature; // If set, only show when this feature is visible
@@ -43,7 +46,7 @@ function HubCard({ item, cardWidth, index }: { item: HubItem; cardWidth: number;
     <Pressable
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push(item.route as any);
+        router.push(item.route);
       }}
       style={({ pressed }) => [
         styles.card,
@@ -89,7 +92,7 @@ export default function HubScreen() {
 
         <View style={styles.grid}>
           {visibleItems.map((item, i) => (
-            <HubCard key={item.route} item={item} cardWidth={cardWidth} index={i} />
+            <HubCard key={item.label} item={item} cardWidth={cardWidth} index={i} />
           ))}
         </View>
 
