@@ -87,12 +87,12 @@ These are placeholder defaults for the plan, not final business decisions.
 | 1.2 | Verify configs post-move | ✅ Done | 2026-04-06 · npm install, tsc, expo config all pass |
 | 1.3 | Rewrite CLAUDE.md | ✅ Done | 2026-04-06 · new mobile-first CLAUDE.md at repo root |
 | 1.4 | Baseline safety nets | ✅ Done | 2026-04-06 · +not-found, RootErrorBoundary, .env.example |
-| 2.1A | Animation cleanup pass | ⏳ Pending | **Fixes 15+ task crash** |
-| 2.1B | Collapse addTask double update | ⏳ Pending | |
-| 2.1C | Memoize MissionRow | ⏳ Pending | |
-| 2.1D | Android shadow optimization | ⏳ Pending | |
-| 2.1E | Rank-up refactor (queue + root) | ⏳ Pending | **Fixes rank-up bug** |
-| 2.1F | Overlay priority state machine | ⏳ Pending | |
+| 2.1A | Animation cleanup pass | ✅ Done | 2026-04-06 · 10 files, cancelAnimation on unmount |
+| 2.1B | Collapse addTask double update | ✅ Done | 2026-04-06 · addTask recomputes scores in one set() |
+| 2.1C | Memoize MissionRow | ✅ Done | 2026-04-06 · taskId API, useMemo gesture, useCallback |
+| 2.1D | Android shadow optimization | ✅ Done | 2026-04-06 · Platform.select, capped elevation |
+| 2.1E | Rank-up refactor (queue + root) | ✅ Done | 2026-04-06 · pendingRankUps queue, overlay in root |
+| 2.1F | Overlay priority state machine | ✅ Done | 2026-04-06 · priority by render order, extract deferred to 2.3 |
 | 2.2 | Data integrity pass | ⏳ Pending | |
 | 2.3 | Architecture cleanup | ⏳ Pending | |
 | 2.4 | Performance and polish | ⏳ Pending | |
@@ -868,6 +868,7 @@ Each phase gets its own verification — don't move forward until current passes
 
 - **2026-04-06** — Initial roadmap created by Claude after repo analysis. Diagnosed the 15+ task crash and the rank-up overlay bug. Plan approved by Arun in planning session.
 - **2026-04-06** — **Part 1 complete.** Repo restructured (mobile → root, web → `legacy/`), `android/` now tracked in git (53 files, build artifacts excluded), new mobile-first CLAUDE.md at repo root, baseline safety nets added (`app/+not-found.tsx`, `src/components/ui/RootErrorBoundary.tsx`, `.env.example` with Supabase/RevenueCat/Sentry/PostHog placeholders), stale `test-onboarding.ts` / `test-simulation.ts` deleted, 4 clean commits. Backup at `~/Documents/Projects/Titan/titan-protocol.BACKUP-2026-04-06` and `~/titan-critical-backup-2026-04-06/` can be deleted once smoke test on real device confirms everything works. Git rollback tag: `pre-restructure-2026-04-06`.
+- **2026-04-06** — **Phase 2.1 complete.** Both user-reported bugs fixed: (1) 15+ task crash addressed via animation cleanup in 10 files (Panel, MissionRow, HabitChain, SkillTreeNode+v2, TitanProgress, PulsingGlow, AnimatedBackground, FloatingActionButton, MissionBoard) + single-atomic addTask/deleteTask in useEngineStore + MissionRow memoization (taskId API + stable gesture) + Android elevation cap via Platform.select. (2) Rank-up overlay fixed via persistent `pendingRankUps` queue in useProfileStore, detection moved into `awardXP()`, overlay mounted in `app/_layout.tsx`. Overlay priority order made explicit via documented render sequence. 6 commits (2.1A–2.1F). Needs smoke test on a real Android device to confirm the crash is gone and rank-up triggers from all screens.
 
 ---
 
