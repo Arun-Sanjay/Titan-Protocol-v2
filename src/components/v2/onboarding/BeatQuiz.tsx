@@ -15,6 +15,7 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   Easing,
+  type SharedValue,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
@@ -240,7 +241,7 @@ export function BeatQuiz({ onComplete }: Props) {
 function RingProgress({
   progress,
 }: {
-  progress: Animated.SharedValue<number>;
+  progress: SharedValue<number>;
 }) {
   const RING_SIZE = 160;
   const RING_WIDTH = 3;
@@ -291,7 +292,7 @@ function RingSegment({
   segments,
 }: {
   index: number;
-  progress: Animated.SharedValue<number>;
+  progress: SharedValue<number>;
   threshold: number;
   size: number;
   width: number;

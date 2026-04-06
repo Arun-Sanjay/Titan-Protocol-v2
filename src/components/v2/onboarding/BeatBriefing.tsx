@@ -9,6 +9,7 @@ import Animated, {
   withRepeat,
   Easing,
   FadeInRight,
+  type SharedValue,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
@@ -83,7 +84,7 @@ function ConfigLocked({ visible }: { visible: boolean }) {
     opacity: pulseOpacity.value,
   }));
 
-  const dotStyle = (sv: Animated.SharedValue<number>, color: string) =>
+  const dotStyle = (sv: SharedValue<number>, color: string) =>
     useAnimatedStyle(() => ({
       opacity: sv.value,
       backgroundColor: color,

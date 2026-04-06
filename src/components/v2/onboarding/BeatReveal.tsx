@@ -17,6 +17,7 @@ import Animated, {
   withSequence,
   withRepeat,
   Easing,
+  type SharedValue,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
@@ -571,7 +572,7 @@ function EngineBar({
   label: string;
   color: string;
   weight: number;
-  progress: Animated.SharedValue<number>;
+  progress: SharedValue<number>;
   shimmerDelay: number;
 }) {
   // Shimmer: a white highlight sweeps left to right across the bar
