@@ -50,12 +50,11 @@ import { getTodayKey } from "../src/lib/date";
 import { AchievementToast } from "../src/components/ui/AchievementToast";
 import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider";
 import { RootErrorBoundary } from "../src/components/ui/RootErrorBoundary";
-import { LevelUpOverlay } from "../src/components/ui/LevelUpOverlay";
 import { OfflineBanner } from "../src/components/ui/OfflineBanner";
-import { useProfileStore } from "../src/stores/useProfileStore";
 import { OnboardingGate } from "../src/components/OnboardingGate";
 import { MigrationGate } from "../src/components/MigrationGate";
 import { AppResumeSyncMount } from "../src/components/AppResumeSyncMount";
+import { RankUpOverlayMount } from "../src/components/RankUpOverlayMount";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
 // Loaded once at the root layout; src/theme/typography.ts references the
 // font family by name. Falls back to Menlo/monospace until loaded.
@@ -168,12 +167,11 @@ export default function RootLayout() {
   const userName = useStoryStore((s) => s.userName);
   const streakCurrent = useProtocolStore((s) => s.streakCurrent);
 
-  // Phase 2.1E: Rank-up queue — head of queue is the currently-showing
-  // rank-up. On dismiss we dequeue. Subscribing to just the head means
-  // the layout only re-renders when the queue transitions empty<->non-empty
-  // or when a new rank-up becomes the head.
-  const pendingRankUp = useProfileStore((s) => s.pendingRankUps[0]);
-  const dequeueRankUp = useProfileStore((s) => s.dequeueRankUp);
+  // Phase 3.5d: Rank-up overlay moved to RankUpOverlayMount which lives
+  // inside the QueryClientProvider tree and reads from the cloud-backed
+  // rank_up_events table via usePendingRankUps. The old MMKV queue from
+  // useProfileStore is still loaded by the migration script (see Phase
+  // 3.5a) but is no longer the source of truth.
 
   // Build context for transmission splash
   const transmissionCtx: TransmissionContext = {
@@ -524,16 +522,11 @@ export default function RootLayout() {
           useOnboardingStore.getState().finish();
         }} />
       )}
-      {/* Phase 2.1E: Rank-up. Subscribes to persistent queue in useProfileStore
-          so it fires regardless of which screen the user was on when they
-          crossed a level boundary. Dismiss -> dequeue -> next (if any). */}
-      {pendingRankUp && (
-        <LevelUpOverlay
-          key={pendingRankUp.id}
-          newLevel={pendingRankUp.to}
-          onDismiss={dequeueRankUp}
-        />
-      )}
+      {/* Phase 3.5d: Rank-up overlay reads from the rank_up_events table
+          via React Query (RankUpOverlayMount). Replaces the Phase 2.1E
+          MMKV-backed queue — events are now cross-device. Dismiss
+          mutation optimistically removes the row from the cache. */}
+      <RankUpOverlayMount />
       {/* Boss cinematics */}
       {showBossDefeat && (
         <BossDefeatCinematic

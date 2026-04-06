@@ -1,16 +1,17 @@
 import React, { useState } from "react";
 import {
   View, Text, TextInput, Pressable, StyleSheet,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, fonts } from "../../src/theme";
-import { useEngineStore, ENGINES } from "../../src/stores/useEngineStore";
 import { XP_REWARDS } from "../../src/stores/useProfileStore";
 import { getTodayKey } from "../../src/lib/date";
-import type { EngineKey } from "../../src/db/schema";
+import { ENGINES, type EngineKey } from "../../src/services/tasks";
+import { useCreateTask } from "../../src/hooks/queries/useTasks";
+import { logError } from "../../src/lib/error-log";
 
 const ENGINE_LABELS: Record<EngineKey, string> = {
   body: "BODY",
@@ -33,7 +34,7 @@ export default function AddTaskModal() {
     dateKey: string;
   }>();
   const router = useRouter();
-  const addTask = useEngineStore((s) => s.addTask);
+  const createTask = useCreateTask();
 
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<"main" | "secondary">(
@@ -44,16 +45,33 @@ export default function AddTaskModal() {
   );
   const [busy, setBusy] = useState(false);
 
-  const effectiveDateKey = dateKey || getTodayKey();
+  // dateKey param is preserved for back-compat but the new createTask
+  // mutation doesn't need it (tasks are not date-scoped, completions are).
+  void (dateKey || getTodayKey());
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!title.trim() || busy || !selectedEngine) return;
     setBusy(true);
-    // Phase 2.1B: addTask is now a single atomic store update that also
-    // recomputes scores for loaded dates — no loadEngine() follow-up needed.
-    addTask(selectedEngine, title.trim(), kind);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    try {
+      // Phase 3.5d: Supabase-backed task creation. The hook invalidates
+      // the per-engine task list cache so the engine screen refetches
+      // automatically when this modal closes.
+      await createTask.mutateAsync({
+        engine: selectedEngine,
+        title: title.trim(),
+        kind,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (e) {
+      logError("add-task.handleAdd", e, { engine: selectedEngine, kind });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert(
+        "Couldn't add task",
+        "Something went wrong. Please try again.",
+      );
+      setBusy(false);
+    }
   };
 
   return (
