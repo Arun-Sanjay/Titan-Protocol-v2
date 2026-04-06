@@ -47,6 +47,8 @@ import { getTodayKey } from "../src/lib/date";
 import { AchievementToast } from "../src/components/ui/AchievementToast";
 import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider";
 import { RootErrorBoundary } from "../src/components/ui/RootErrorBoundary";
+import { LevelUpOverlay } from "../src/components/ui/LevelUpOverlay";
+import { useProfileStore } from "../src/stores/useProfileStore";
 import { SurpriseOverlay } from "../src/components/v2/story/SurpriseOverlay";
 import { StreakBreakCinematic } from "../src/components/v2/story/StreakBreakCinematic";
 import { BossDefeatCinematic } from "../src/components/v2/story/BossDefeatCinematic";
@@ -122,6 +124,13 @@ export default function RootLayout() {
   const storyFlags = useStoryStore((s) => s.storyFlags);
   const userName = useStoryStore((s) => s.userName);
   const streakCurrent = useProtocolStore((s) => s.streakCurrent);
+
+  // Phase 2.1E: Rank-up queue — head of queue is the currently-showing
+  // rank-up. On dismiss we dequeue. Subscribing to just the head means
+  // the layout only re-renders when the queue transitions empty<->non-empty
+  // or when a new rank-up becomes the head.
+  const pendingRankUp = useProfileStore((s) => s.pendingRankUps[0]);
+  const dequeueRankUp = useProfileStore((s) => s.dequeueRankUp);
 
   // Build context for transmission splash
   const transmissionCtx: TransmissionContext = {
@@ -439,6 +448,16 @@ export default function RootLayout() {
           currentStreak={showComeback.currentStreak}
           restoredStreak={showComeback.restoredStreak}
           onContinue={handleComebackContinue}
+        />
+      )}
+      {/* Phase 2.1E: Rank-up overlay. Subscribes to the persistent queue in
+          useProfileStore so it fires regardless of which screen the user
+          is on when they level up. Dismiss -> dequeue -> next (if any). */}
+      {pendingRankUp && (
+        <LevelUpOverlay
+          key={pendingRankUp.id}
+          newLevel={pendingRankUp.to}
+          onDismiss={dequeueRankUp}
         />
       )}
       </SystemNotificationProvider>

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect, useRef } from "react";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, RefreshControl, Pressable,
   ScrollView, useWindowDimensions, AppState, Alert,
@@ -15,7 +15,9 @@ import { getJSON, setJSON } from "../../src/db/storage";
 import { useSystemNotification } from "../../src/components/ui/SystemNotification";
 import { QuestCard } from "../../src/components/ui/QuestCard";
 import { SystemVoice } from "../../src/components/ui/SystemVoice";
-import { LevelUpOverlay } from "../../src/components/ui/LevelUpOverlay";
+// Phase 2.1E: LevelUpOverlay moved to root layout (app/_layout.tsx).
+// It now subscribes to useProfileStore.pendingRankUps so rank-ups work
+// regardless of which screen the user is on when XP is awarded.
 import { colors, spacing, fonts, radius } from "../../src/theme";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
@@ -207,18 +209,12 @@ export default function HQScreen() {
   // System notifications
   const notify = useSystemNotification();
 
-  // Level-up detection
-  const [showLevelUp, setShowLevelUp] = useState(false);
-  const [levelUpLevel, setLevelUpLevel] = useState(0);
-  const prevLevelRef = useRef(profileLevel);
-  useEffect(() => {
-    if (profileLevel > prevLevelRef.current && prevLevelRef.current > 0) {
-      setLevelUpLevel(profileLevel);
-      setShowLevelUp(true);
-      notify({ type: "level_up", title: `LEVEL ${profileLevel}`, subtitle: "You leveled up!" });
-    }
-    prevLevelRef.current = profileLevel;
-  }, [profileLevel]);
+  // Phase 2.1E: Level-up detection moved to useProfileStore.awardXP() and
+  // the overlay is now mounted in the root layout subscribing to the
+  // persisted queue (useProfileStore.pendingRankUps). The previous
+  // useRef-based detection only worked when the user was on this screen
+  // at the exact moment XP was awarded — events were silently lost
+  // otherwise.
 
   // Mission toggle — Phase 2.1C: stable callback keyed by taskId.
   // Looks up the task across all engines via getState() to avoid putting
@@ -643,13 +639,7 @@ export default function HQScreen() {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Level-Up Overlay */}
-      {showLevelUp && (
-        <LevelUpOverlay
-          newLevel={levelUpLevel}
-          onDismiss={() => setShowLevelUp(false)}
-        />
-      )}
+      {/* Phase 2.1E: LevelUpOverlay now lives in app/_layout.tsx. */}
     </SafeAreaView>
   );
 }
