@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getJSON, setJSON } from "../db/storage";
+import { K } from "../db/keys";
 import type { IdentityArchetype } from "./useModeStore";
 import { getTodayKey, addDays } from "../lib/date";
 
@@ -42,16 +43,18 @@ export type ProtocolSession = {
   identityVote: IdentityArchetype | null;
 };
 
-const SESSIONS_KEY = "protocol_sessions";
-const STREAK_KEY = "protocol_streak";
-const STREAK_DATE_KEY = "protocol_streak_date";
-const STREAK_PREV_KEY = "protocol_streak_previous";
+// Phase 2.2D: all MMKV keys moved to src/db/keys.ts (K registry).
+// Local aliases below keep this file readable.
+const SESSIONS_KEY = K.protocolSessions;
+const STREAK_KEY = K.protocolStreak;
+const STREAK_DATE_KEY = K.protocolStreakDate;
+const STREAK_PREV_KEY = K.protocolStreakPrevious;
 
 // Phase 2.2A: write-ahead log key. Set before a multi-key protocol write
 // begins, cleared after all writes complete. Any stuck pending marker
 // detected on app launch indicates an incomplete/crashed write and is
 // logged for diagnostics.
-const PROTOCOL_WRITE_PENDING_KEY = "protocol_write_pending";
+const PROTOCOL_WRITE_PENDING_KEY = K.protocolWritePending;
 
 type ProtocolWritePending = {
   dateKey: string;
@@ -61,12 +64,8 @@ type ProtocolWritePending = {
 
 // ─── Morning / Evening MMKV keys ─────────────────────────────────────────────
 
-function morningKey(dateKey: string) {
-  return `morning_${dateKey}`;
-}
-function eveningKey(dateKey: string) {
-  return `evening_${dateKey}`;
-}
+const morningKey = (dateKey: string) => K.morning(dateKey);
+const eveningKey = (dateKey: string) => K.evening(dateKey);
 
 // ─── Pure streak computation (shared by finish + evening paths) ─────────────
 
@@ -272,7 +271,7 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
     setJSON(SESSIONS_KEY, updatedSessions);
 
     // Also persist to per-day key for legacy checks
-    setJSON(`protocol_completions:${today}`, { completed: true, score });
+    setJSON(K.protocolCompletions(today), { completed: true, score });
 
     // Phase 2.2A: clear the write-ahead flag — all writes succeeded.
     setJSON(PROTOCOL_WRITE_PENDING_KEY, null);
@@ -353,7 +352,7 @@ export const useProtocolStore = create<ProtocolState>()((set, get) => ({
     };
     const updatedSessions = { ...sessions, [today]: session };
     setJSON(SESSIONS_KEY, updatedSessions);
-    setJSON(`protocol_completions:${today}`, { completed: true, score: titanScore });
+    setJSON(K.protocolCompletions(today), { completed: true, score: titanScore });
 
     // Phase 2.2A: clear write-ahead flag — all writes succeeded.
     setJSON(PROTOCOL_WRITE_PENDING_KEY, null);

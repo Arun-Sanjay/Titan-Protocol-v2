@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getJSON, setJSON } from "../db/storage";
+import { K } from "../db/keys";
 import type { EngineKey } from "../db/schema";
 import skillTreeData from "../data/skill-trees.json";
 import { SkillTreeDataSchema, parseOrFallback } from "../lib/schemas";
@@ -70,8 +71,9 @@ export const SKILL_TREES = buildSkillTrees();
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
-const UNLOCKS_KEY = "skill_tree_unlocks";
-const PROGRESS_KEY = "skill_tree_progress";
+// Phase 2.2D: keys sourced from central registry.
+const UNLOCKS_KEY = K.skillTreeUnlocks;
+const PROGRESS_KEY = K.skillTreeProgress;
 
 type SkillTreeState = {
   unlockedNodes: Set<string>;

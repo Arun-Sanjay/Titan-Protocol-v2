@@ -1,16 +1,16 @@
 import { create } from "zustand";
 import { getJSON, setJSON, nextId } from "../db/storage";
+import { K } from "../db/keys";
 import { addDays } from "../lib/date";
 import type { EngineKey, Task } from "../db/schema";
 
 export const ENGINES: EngineKey[] = ["body", "mind", "money", "charisma"];
 
-function tasksKey(engine: EngineKey) {
-  return `tasks:${engine}`;
-}
-function completionsKey(engine: EngineKey, dateKey: string) {
-  return `completions:${engine}:${dateKey}`;
-}
+// Phase 2.2D: key builders moved to src/db/keys.ts (K.tasks, K.completions).
+// Local aliases for readability in this file only.
+const tasksKey = (engine: EngineKey) => K.tasks(engine);
+const completionsKey = (engine: EngineKey, dateKey: string) =>
+  K.completions(engine, dateKey);
 
 export type TaskWithStatus = Task & { completed: boolean };
 

@@ -1,10 +1,12 @@
 import { create } from "zustand";
 import { getJSON, setJSON } from "../db/storage";
+import { K } from "../db/keys";
 import { isDoubleXPActive } from "../lib/surprise-engine";
 import type { UserProfile } from "../db/schema";
 
-const PROFILE_KEY = "user_profile";
-const RANK_UP_QUEUE_KEY = "pending_rank_ups";
+// Phase 2.2D: keys sourced from central registry.
+const PROFILE_KEY = K.userProfile;
+const RANK_UP_QUEUE_KEY = K.pendingRankUps;
 const XP_PER_LEVEL = 500;
 
 const DEFAULT_PROFILE: UserProfile = {
