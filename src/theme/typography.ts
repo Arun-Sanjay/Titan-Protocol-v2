@@ -1,11 +1,31 @@
 import { Platform, TextStyle } from "react-native";
 import { colors } from "./colors";
 
-const monoFont = Platform.select({
+// Phase 2.4D: JetBrains Mono is loaded at the root layout via
+// @expo-google-fonts/jetbrains-mono. Font names below match the keys
+// passed to useFonts() in app/_layout.tsx. Until fonts hydrate the
+// root layout returns null, so the system fallback is never visible.
+//
+// `font(weight)` picks the right loaded variant. The fallback to
+// Menlo/monospace only kicks in if the @expo-google-fonts package is
+// uninstalled — used as a defensive measure during dev.
+const FALLBACK_MONO = Platform.select({
   ios: "Menlo",
   android: "monospace",
   default: "monospace",
 });
+
+const JBM_REGULAR = "JetBrainsMono_400Regular";
+const JBM_SEMIBOLD = "JetBrainsMono_600SemiBold";
+const JBM_BOLD = "JetBrainsMono_700Bold";
+const JBM_EXTRABOLD = "JetBrainsMono_800ExtraBold";
+
+const monoFont = JBM_REGULAR; // default for plain mono
+const monoFontSemiBold = JBM_SEMIBOLD;
+const monoFontBold = JBM_BOLD;
+const monoFontExtraBold = JBM_EXTRABOLD;
+// Suppress unused warning for the fallback used by future error paths.
+void FALLBACK_MONO;
 
 export const fonts = {
   hero: {
@@ -68,7 +88,7 @@ export const fonts = {
   mono: {
     fontSize: 14,
     fontWeight: "600",
-    fontFamily: monoFont,
+    fontFamily: monoFontSemiBold,
     color: colors.text,
   } satisfies TextStyle,
 
@@ -83,14 +103,14 @@ export const fonts = {
   monoValue: {
     fontSize: 24,
     fontWeight: "800",
-    fontFamily: monoFont,
+    fontFamily: monoFontExtraBold,
     color: colors.text,
   } satisfies TextStyle,
 
   xpValue: {
     fontSize: 14,
     fontWeight: "700",
-    fontFamily: monoFont,
+    fontFamily: monoFontBold,
     color: colors.textSecondary,
   } satisfies TextStyle,
 };

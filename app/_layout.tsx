@@ -49,6 +49,16 @@ import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider"
 import { RootErrorBoundary } from "../src/components/ui/RootErrorBoundary";
 import { LevelUpOverlay } from "../src/components/ui/LevelUpOverlay";
 import { useProfileStore } from "../src/stores/useProfileStore";
+// Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
+// Loaded once at the root layout; src/theme/typography.ts references the
+// font family by name. Falls back to Menlo/monospace until loaded.
+import {
+  useFonts,
+  JetBrainsMono_400Regular,
+  JetBrainsMono_600SemiBold,
+  JetBrainsMono_700Bold,
+  JetBrainsMono_800ExtraBold,
+} from "@expo-google-fonts/jetbrains-mono";
 import { SurpriseOverlay } from "../src/components/v2/story/SurpriseOverlay";
 import { StreakBreakCinematic } from "../src/components/v2/story/StreakBreakCinematic";
 import { BossDefeatCinematic } from "../src/components/v2/story/BossDefeatCinematic";
@@ -86,6 +96,16 @@ const DAY_CINEMATICS: Record<number, React.ComponentType<{ onComplete: () => voi
 };
 
 export default function RootLayout() {
+  // Phase 2.4D: load JetBrains Mono. Render-blocking via early-return on
+  // !fontsLoaded so we never paint with the system fallback first (avoids
+  // a flash of unstyled text).
+  const [fontsLoaded] = useFonts({
+    JetBrainsMono_400Regular,
+    JetBrainsMono_600SemiBold,
+    JetBrainsMono_700Bold,
+    JetBrainsMono_800ExtraBold,
+  });
+
   const [showSplash, setShowSplash] = useState(true);
   const [showCinematic, setShowCinematic] = useState(false);
   const [showDayCinematic, setShowDayCinematic] = useState<number | null>(null);
@@ -348,6 +368,13 @@ export default function RootLayout() {
 
   // Resolve the day cinematic component
   const DayCinematicComponent = showDayCinematic ? DAY_CINEMATICS[showDayCinematic] : null;
+
+  // Phase 2.4D: hold the entire app render until fonts are ready. The
+  // splash screen (configured in app.json) stays visible meanwhile, so
+  // users see the splash, not a flash of system fonts.
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
     <GestureHandlerRootView style={styles.root}>
