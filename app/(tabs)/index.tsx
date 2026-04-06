@@ -220,16 +220,29 @@ export default function HQScreen() {
     prevLevelRef.current = profileLevel;
   }, [profileLevel]);
 
-  // Mission toggle
-  const handleToggle = useCallback((task: TaskWithStatus) => {
-    const completed = toggleTask(task.engine, task.id!, analytics.today);
+  // Mission toggle — Phase 2.1C: stable callback keyed by taskId.
+  // Looks up the task across all engines via getState() to avoid putting
+  // tasks in the dep array. completedCount and tasks.length are also read
+  // fresh from derived state so the callback ref stays stable across
+  // re-renders — otherwise React.memo on MissionRow can't do its job.
+  const handleToggle = useCallback((taskId: number) => {
+    // Find the task across all engines
+    const storeTasks = useEngineStore.getState().tasks;
+    let task: TaskWithStatus | undefined;
+    for (const eng of ENGINES) {
+      const t = storeTasks[eng].find((x) => x.id === taskId);
+      if (t) { task = { ...t, completed: false } as TaskWithStatus; task.engine = eng; break; }
+    }
+    if (!task) return;
+
+    const completed = toggleTask(task.engine, taskId, analytics.today);
     const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
     if (completed) {
       // [Game-feel #2] Satisfying success haptic instead of plain medium
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       // [Game-feel #2] Flash the completed row green
-      setLastCompletedId(task.id!);
+      setLastCompletedId(taskId);
       setTimeout(() => setLastCompletedId(null), 600);
 
       awardXP(analytics.today, "task_complete", xp);
@@ -250,8 +263,16 @@ export default function HQScreen() {
         subtitle: task.title,
       });
 
-      // [Game-feel #4] All-tasks-complete celebration
-      if (completedCount + 1 === tasks.length) {
+      // [Game-feel #4] All-tasks-complete celebration — read fresh state
+      // from store instead of closure so this callback stays stable.
+      const freshState = useEngineStore.getState();
+      const allTasksNow = selectAllTasksForDate(
+        freshState.tasks,
+        freshState.completions,
+        analytics.today,
+      );
+      const allCompleted = allTasksNow.length > 0 && allTasksNow.every((t) => t.completed);
+      if (allCompleted) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 200);
         notify({ type: "system", title: "ALL TASKS COMPLETE", subtitle: "Protocol objectives cleared." });
@@ -260,7 +281,7 @@ export default function HQScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       awardXP(analytics.today, "task_uncomplete", -xp);
     }
-  }, [analytics.today, toggleTask, awardXP, updateStreak, notify, completedCount, tasks.length]);
+  }, [analytics.today, toggleTask, awardXP, updateStreak, notify]);
 
   // Protocol pulse animation
   const protocolPulse = useSharedValue(0.4);
@@ -492,12 +513,13 @@ export default function HQScreen() {
               {visibleTasks.map((task) => (
                 <MissionRow
                   key={`${task.engine}-${task.id}`}
+                  taskId={task.id!}
                   title={task.title}
                   xp={task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST}
                   completed={task.completed}
                   kind={task.kind}
                   engine={task.engine}
-                  onToggle={() => handleToggle(task)}
+                  onToggle={handleToggle}
                   highlighted={task.id === lastCompletedId}
                 />
               ))}

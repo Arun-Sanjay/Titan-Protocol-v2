@@ -256,8 +256,13 @@ export default function EngineScreen() {
   }, [engine, dateKey, awardXP]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-  const handleToggle = useCallback((task: Task) => {
-    const completed = toggleTask(engine, task.id!, dateKey);
+  // Phase 2.1C: callbacks keyed by taskId (not task object) so they have
+  // stable references across re-renders and React.memo on MissionRow works.
+  // Task lookup uses getState() to avoid polluting the dep array.
+  const handleToggle = useCallback((taskId: number) => {
+    const task = useEngineStore.getState().tasks[engine].find((t) => t.id === taskId);
+    if (!task) return;
+    const completed = toggleTask(engine, taskId, dateKey);
     const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
     if (completed) {
       awardXP(dateKey, "task_complete", xp);
@@ -269,18 +274,19 @@ export default function EngineScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, [engine, dateKey, toggleTask, awardXP, updateStreak]);
 
-  const handleDelete = useCallback((task: Task) => {
+  const handleDelete = useCallback((taskId: number) => {
+    const task = useEngineStore.getState().tasks[engine].find((t) => t.id === taskId);
+    if (!task) return;
     Alert.alert("Delete Mission", `Delete "${task.title}"?`, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete", style: "destructive",
-        onPress: () => {
-          deleteTaskAction(engine, task.id!);
-          loadEngine(engine, dateKey);
-        },
+        // Phase 2.1B: deleteTask now updates scores in a single store
+        // update — no loadEngine() follow-up needed.
+        onPress: () => deleteTaskAction(engine, taskId),
       },
     ]);
-  }, [engine, dateKey]);
+  }, [engine]);
 
   const openAddModal = useCallback((kind: "main" | "secondary") => {
     router.push({
@@ -352,13 +358,14 @@ export default function EngineScreen() {
       case "task":
         return (
           <MissionRow
+            taskId={item.task.id!}
             title={item.task.title}
             xp={item.task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST}
             completed={item.completed}
             kind={item.task.kind}
             engine={engine}
-            onToggle={() => handleToggle(item.task)}
-            onDelete={() => handleDelete(item.task)}
+            onToggle={handleToggle}
+            onDelete={handleDelete}
           />
         );
 

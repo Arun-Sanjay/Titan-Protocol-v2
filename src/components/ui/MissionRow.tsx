@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -22,17 +22,23 @@ const ENGINE_BORDER_COLORS: Record<EngineKey, string> = {
 };
 
 type Props = {
+  taskId: number;
   title: string;
   xp: number;
   completed: boolean;
   kind: "main" | "secondary";
   engine?: EngineKey;
-  onToggle: () => void;
-  onDelete?: () => void;
+  /**
+   * Phase 2.1C: callbacks receive the taskId so the parent can use a stable
+   * useCallback ref with no per-task closure. Inline arrows like
+   * `onToggle={() => handleToggle(task)}` defeat React.memo.
+   */
+  onToggle: (taskId: number) => void;
+  onDelete?: (taskId: number) => void;
   highlighted?: boolean;
 };
 
-export const MissionRow = React.memo(function MissionRow({ title, xp, completed, kind, engine, onToggle, onDelete, highlighted }: Props) {
+export const MissionRow = React.memo(function MissionRow({ taskId, title, xp, completed, kind, engine, onToggle, onDelete, highlighted }: Props) {
   const translateX = useSharedValue(0);
   const checkScale = useSharedValue(completed ? 1 : 0);
   const cardScale = useSharedValue(1);
@@ -74,9 +80,10 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleToggle = () => {
+  // Phase 2.1C: stable callback ref via useCallback.
+  const handleToggle = useCallback(() => {
     const wasCompleted = completed;
-    onToggle();
+    onToggle(taskId);
 
     if (!wasCompleted) {
       // Completing — show XP popup + card pulse
@@ -100,24 +107,37 @@ export const MissionRow = React.memo(function MissionRow({ title, xp, completed,
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completed, onToggle, taskId]);
 
-  const swipeGesture = Gesture.Pan()
-    .onUpdate((e) => {
-      if (e.translationX > 0) {
-        translateX.value = Math.min(e.translationX, 120);
-      } else if (onDelete) {
-        translateX.value = Math.max(e.translationX, -120);
-      }
-    })
-    .onEnd((e) => {
-      if (e.translationX > 80 && !completed) {
-        runOnJS(handleToggle)();
-      } else if (e.translationX < -80 && onDelete) {
-        runOnJS(onDelete)();
-      }
-      translateX.value = withTiming(0, { duration: 200 });
-    });
+  const handleDelete = useCallback(() => {
+    if (onDelete) onDelete(taskId);
+  }, [onDelete, taskId]);
+
+  // Phase 2.1C: memoize the Pan gesture so it isn't recreated on every
+  // render. Gesture.Pan() allocates a native gesture handler — doing it
+  // 15+ times per render contributed to JNI ref-counting pressure on Android.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const swipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onUpdate((e) => {
+          if (e.translationX > 0) {
+            translateX.value = Math.min(e.translationX, 120);
+          } else if (onDelete) {
+            translateX.value = Math.max(e.translationX, -120);
+          }
+        })
+        .onEnd((e) => {
+          if (e.translationX > 80 && !completed) {
+            runOnJS(handleToggle)();
+          } else if (e.translationX < -80 && onDelete) {
+            runOnJS(handleDelete)();
+          }
+          translateX.value = withTiming(0, { duration: 200 });
+        }),
+    [completed, onDelete, handleToggle, handleDelete],
+  );
 
   const rowStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
