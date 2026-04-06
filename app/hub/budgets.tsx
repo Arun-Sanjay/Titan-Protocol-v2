@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
-  FlatList,
   ScrollView,
   StyleSheet,
   Pressable,
@@ -11,6 +10,7 @@ import {
   Platform,
   Alert,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import Animated, {
   FadeInDown,
   Easing,
@@ -569,8 +569,7 @@ export default function BudgetsScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <FlatList
-          style={styles.body}
+        <FlashList
           contentContainerStyle={styles.bodyContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
