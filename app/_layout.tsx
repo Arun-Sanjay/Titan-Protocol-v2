@@ -395,7 +395,24 @@ export default function RootLayout() {
         />
       </Stack>
 
-      {/* Overlays — order matters (last = on top) */}
+      {/*
+        Phase 2.1F — Overlay priority (bottom of list = highest z-index).
+        When adding a new overlay, slot it into the priority order below.
+        Full orchestrator extraction is deferred to Phase 2.3; for now
+        render order enforces priority.
+
+        Priority order (lowest → highest):
+          1. AchievementToast (non-blocking, always mounted, toasts auto-dismiss)
+          2. MotivationalSplash (app-open splash)
+          3. CinematicOnboarding (new users only)
+          4. Rank-up overlay (can fire any time, lower priority than story beats)
+          5. Boss cinematics (victory/defeat, significant moments)
+          6. Daily story cinematics (Day-N, first launch, daily briefing)
+          7. Surprise overlay
+          8. Comeback cinematic (streak recovery)
+          9. Streak break cinematic
+          10. Integrity warning (highest — always visible on top)
+      */}
       <AchievementToast />
       {showSplash && <MotivationalSplash onDismiss={() => setShowSplash(false)} context={transmissionCtx} />}
       {!showSplash && !onboardingCompleted && (
@@ -403,14 +420,14 @@ export default function RootLayout() {
           useOnboardingStore.getState().finish();
         }} />
       )}
-      {showCinematic && <FirstLaunchCinematic onComplete={handleCinematicComplete} />}
-      {DayCinematicComponent && <DayCinematicComponent onComplete={handleDayCinematicComplete} />}
-      {showBriefing && <DailyBriefing onEnter={handleBriefingEnter} />}
-      {activeSurprise && (
-        <SurpriseOverlay
-          surprise={activeSurprise}
-          onAccept={acceptSurprise}
-          onDismiss={dismissSurprise}
+      {/* Phase 2.1E: Rank-up. Subscribes to persistent queue in useProfileStore
+          so it fires regardless of which screen the user was on when they
+          crossed a level boundary. Dismiss -> dequeue -> next (if any). */}
+      {pendingRankUp && (
+        <LevelUpOverlay
+          key={pendingRankUp.id}
+          newLevel={pendingRankUp.to}
+          onDismiss={dequeueRankUp}
         />
       )}
       {/* Boss cinematics */}
@@ -431,8 +448,26 @@ export default function RootLayout() {
           onContinue={handleBossFailContinue}
         />
       )}
-      {/* Integrity overlays — highest priority, render on top */}
-      {showWarning && <IntegrityWarningOverlay onDismiss={handleWarningDismiss} />}
+      {/* Story cinematics */}
+      {showCinematic && <FirstLaunchCinematic onComplete={handleCinematicComplete} />}
+      {DayCinematicComponent && <DayCinematicComponent onComplete={handleDayCinematicComplete} />}
+      {showBriefing && <DailyBriefing onEnter={handleBriefingEnter} />}
+      {activeSurprise && (
+        <SurpriseOverlay
+          surprise={activeSurprise}
+          onAccept={acceptSurprise}
+          onDismiss={dismissSurprise}
+        />
+      )}
+      {/* Integrity overlays — highest priority, render on top of everything */}
+      {showComeback && (
+        <ComebackCinematic
+          preBreakStreak={showComeback.preBreakStreak}
+          currentStreak={showComeback.currentStreak}
+          restoredStreak={showComeback.restoredStreak}
+          onContinue={handleComebackContinue}
+        />
+      )}
       {showStreakBreak && (
         <StreakBreakCinematic
           status={showStreakBreak.status}
@@ -442,24 +477,7 @@ export default function RootLayout() {
           onContinue={handleStreakBreakContinue}
         />
       )}
-      {showComeback && (
-        <ComebackCinematic
-          preBreakStreak={showComeback.preBreakStreak}
-          currentStreak={showComeback.currentStreak}
-          restoredStreak={showComeback.restoredStreak}
-          onContinue={handleComebackContinue}
-        />
-      )}
-      {/* Phase 2.1E: Rank-up overlay. Subscribes to the persistent queue in
-          useProfileStore so it fires regardless of which screen the user
-          is on when they level up. Dismiss -> dequeue -> next (if any). */}
-      {pendingRankUp && (
-        <LevelUpOverlay
-          key={pendingRankUp.id}
-          newLevel={pendingRankUp.to}
-          onDismiss={dequeueRankUp}
-        />
-      )}
+      {showWarning && <IntegrityWarningOverlay onDismiss={handleWarningDismiss} />}
       </SystemNotificationProvider>
       </SystemWindowProvider>
       </RootErrorBoundary>
