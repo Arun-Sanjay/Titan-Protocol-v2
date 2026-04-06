@@ -52,6 +52,7 @@ import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider"
 import { RootErrorBoundary } from "../src/components/ui/RootErrorBoundary";
 import { LevelUpOverlay } from "../src/components/ui/LevelUpOverlay";
 import { useProfileStore } from "../src/stores/useProfileStore";
+import { OnboardingGate } from "../src/components/OnboardingGate";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
 // Loaded once at the root layout; src/theme/typography.ts references the
 // font family by name. Falls back to Menlo/monospace until loaded.
@@ -448,6 +449,7 @@ export default function RootLayout() {
       <RootErrorBoundary>
       <SystemWindowProvider>
       <SystemNotificationProvider>
+      <OnboardingGate>
       <StatusBar style="light" backgroundColor={colors.bg} />
       <Stack
         screenOptions={{
@@ -573,6 +575,7 @@ export default function RootLayout() {
         />
       )}
       {showWarning && <IntegrityWarningOverlay onDismiss={handleWarningDismiss} />}
+      </OnboardingGate>
       </SystemNotificationProvider>
       </SystemWindowProvider>
       </RootErrorBoundary>
