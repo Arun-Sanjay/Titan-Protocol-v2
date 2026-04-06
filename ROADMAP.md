@@ -93,7 +93,10 @@ These are placeholder defaults for the plan, not final business decisions.
 | 2.1D | Android shadow optimization | ✅ Done | 2026-04-06 · Platform.select, capped elevation |
 | 2.1E | Rank-up refactor (queue + root) | ✅ Done | 2026-04-06 · pendingRankUps queue, overlay in root |
 | 2.1F | Overlay priority state machine | ✅ Done | 2026-04-06 · priority by render order, extract deferred to 2.3 |
-| 2.2 | Data integrity pass | ⏳ Pending | |
+| 2.2A | Atomic protocol session writes | ✅ Done | 2026-04-06 · write-ahead flag, shared computeNewStreak helper |
+| 2.2B | Kill silent catches + error log | ✅ Done | 2026-04-06 · src/lib/error-log.ts ring buffer, storage.ts logs via logError |
+| 2.2C | Zod schemas at read boundaries | ✅ Done | 2026-04-06 · src/lib/schemas.ts + parseOrFallback, fixes skill tree `as any` |
+| 2.2D | Central MMKV key registry | ✅ Done | 2026-04-06 · src/db/keys.ts, 4 stores migrated |
 | 2.3 | Architecture cleanup | ⏳ Pending | |
 | 2.4 | Performance and polish | ⏳ Pending | |
 | 3.1 | Supabase project + schema | ⏳ Pending | |
@@ -869,6 +872,7 @@ Each phase gets its own verification — don't move forward until current passes
 - **2026-04-06** — Initial roadmap created by Claude after repo analysis. Diagnosed the 15+ task crash and the rank-up overlay bug. Plan approved by Arun in planning session.
 - **2026-04-06** — **Part 1 complete.** Repo restructured (mobile → root, web → `legacy/`), `android/` now tracked in git (53 files, build artifacts excluded), new mobile-first CLAUDE.md at repo root, baseline safety nets added (`app/+not-found.tsx`, `src/components/ui/RootErrorBoundary.tsx`, `.env.example` with Supabase/RevenueCat/Sentry/PostHog placeholders), stale `test-onboarding.ts` / `test-simulation.ts` deleted, 4 clean commits. Backup at `~/Documents/Projects/Titan/titan-protocol.BACKUP-2026-04-06` and `~/titan-critical-backup-2026-04-06/` can be deleted once smoke test on real device confirms everything works. Git rollback tag: `pre-restructure-2026-04-06`.
 - **2026-04-06** — **Phase 2.1 complete.** Both user-reported bugs fixed: (1) 15+ task crash addressed via animation cleanup in 10 files (Panel, MissionRow, HabitChain, SkillTreeNode+v2, TitanProgress, PulsingGlow, AnimatedBackground, FloatingActionButton, MissionBoard) + single-atomic addTask/deleteTask in useEngineStore + MissionRow memoization (taskId API + stable gesture) + Android elevation cap via Platform.select. (2) Rank-up overlay fixed via persistent `pendingRankUps` queue in useProfileStore, detection moved into `awardXP()`, overlay mounted in `app/_layout.tsx`. Overlay priority order made explicit via documented render sequence. 6 commits (2.1A–2.1F). Needs smoke test on a real Android device to confirm the crash is gone and rank-up triggers from all screens.
+- **2026-04-06** — **Phase 2.2 complete.** Data integrity hardened before the Supabase migration. (A) Protocol session writes now use a write-ahead flag (`protocol_write_pending`) so crashes mid-multi-key-write are detected on next launch; shared `computeNewStreak` helper extracted. (B) Silent `catch {}` blocks in `src/db/storage.ts` replaced with a new `src/lib/error-log.ts` ring buffer (last 50 errors, subscribable, will forward to Sentry in Phase 4.4). (C) Zod runtime validation at storage read boundaries via new `src/lib/schemas.ts` with 15+ schemas + `parseOrFallback` helper; first consumer is `useSkillTreeStore.buildSkillTrees()` which replaces the unsafe `(skillTreeData as any)` cast. (D) Central MMKV key registry at `src/db/keys.ts` with typed builders for templated keys; `useEngineStore`, `useProtocolStore`, `useProfileStore`, `useSkillTreeStore` all migrated. 4 commits (2.2A–2.2D). tsc clean throughout. Other stores keep their local key constants since their data moves to Supabase in Phase 3.3.
 
 ---
 
