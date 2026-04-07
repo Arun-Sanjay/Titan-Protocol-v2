@@ -6,6 +6,7 @@ import Animated, {
   withTiming,
   withSequence,
   withRepeat,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -221,8 +222,13 @@ function EngineIcon({
 
     return () => {
       timers.forEach(clearTimeout);
+      cancelAnimation(opacity);
+      cancelAnimation(glowOpacity);
+      cancelAnimation(scale);
+      cancelAnimation(pulseRingScale);
+      cancelAnimation(pulseRingOpacity);
     };
-  }, []);
+  }, [delayMs, nextDelayMs, opacity, glowOpacity, scale, pulseRingScale, pulseRingOpacity]);
 
   const circleStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

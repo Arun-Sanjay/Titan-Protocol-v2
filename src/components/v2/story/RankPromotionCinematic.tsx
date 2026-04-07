@@ -18,6 +18,7 @@ import Animated, {
   withSequence,
   withTiming,
   withRepeat,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -133,8 +134,13 @@ export function RankPromotionCinematic({
       ),
     );
 
-    return () => { stopCurrentAudio(); };
-  }, [phase]);
+    return () => {
+      stopCurrentAudio();
+      cancelAnimation(glowOpacity);
+      cancelAnimation(nameOpacity);
+      cancelAnimation(nameScale);
+    };
+  }, [phase, glowOpacity, nameOpacity, nameScale]);
 
   // Stop audio on unmount
   useEffect(() => {

@@ -16,6 +16,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -64,7 +65,10 @@ export function SurpriseOverlay({ surprise, onAccept, onDismiss }: Props) {
       -1,
       false,
     );
-  }, []);
+    return () => {
+      cancelAnimation(borderPulse);
+    };
+  }, [borderPulse]);
   const borderStyle = useAnimatedStyle(() => ({
     borderColor: `rgba(${hexToRgb(accentColor)}, ${borderPulse.value})`,
   }));

@@ -7,6 +7,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  cancelAnimation,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
@@ -77,7 +78,10 @@ export function WalkthroughSummary({ onFinish, onBack }: Props) {
       -1,
       false,
     );
-  }, []);
+    return () => {
+      cancelAnimation(pulseOpacity);
+    };
+  }, [pulseOpacity]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     borderColor: `rgba(255, 215, 0, ${pulseOpacity.value})`,

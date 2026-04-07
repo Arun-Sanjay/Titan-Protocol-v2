@@ -6,6 +6,7 @@ import Animated, {
   withTiming,
   withSequence,
   withRepeat,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -74,7 +75,11 @@ function Particle({
       -1,
       true,
     );
-  }, []);
+    return () => {
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
+    };
+  }, [translateX, translateY, driftX, driftY, duration]);
 
   const style = useAnimatedStyle(() => ({
     transform: [
@@ -198,8 +203,25 @@ export function BeatColdOpen({ onComplete }: Props) {
 
     return () => {
       timers.current.forEach(clearTimeout);
+      cancelAnimation(scanY);
+      cancelAnimation(scanOpacity);
+      cancelAnimation(welcomeOpacity);
+      cancelAnimation(logoOpacity);
+      cancelAnimation(logoScale);
+      cancelAnimation(glowOpacity);
+      cancelAnimation(glowRingOpacity);
+      cancelAnimation(glowRingScale);
     };
-  }, []);
+  }, [
+    scanY,
+    scanOpacity,
+    welcomeOpacity,
+    logoOpacity,
+    logoScale,
+    glowOpacity,
+    glowRingOpacity,
+    glowRingScale,
+  ]);
 
   // ── Animated styles ──
   const scanLineStyle = useAnimatedStyle(() => ({

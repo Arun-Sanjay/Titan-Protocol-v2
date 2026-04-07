@@ -16,6 +16,7 @@ import Animated, {
   withDelay,
   withSequence,
   withRepeat,
+  cancelAnimation,
   Easing,
   type SharedValue,
 } from "react-native-reanimated";
@@ -255,8 +256,25 @@ export function BeatReveal({ archetype, onComplete }: Props) {
     return () => {
       timeoutsRef.current.forEach(clearTimeout);
       stopCurrentAudio();
+      cancelAnimation(nameScale);
+      cancelAnimation(nameOpacity);
+      cancelAnimation(radialGlowOpacity);
+      cancelAnimation(radialGlowScale);
+      cancelAnimation(particleOpacity);
+      cancelAnimation(particleScale);
+      cancelAnimation(continuePulse);
+      barWidths.forEach((sv) => cancelAnimation(sv));
     };
-  }, []);
+  }, [
+    nameScale,
+    nameOpacity,
+    radialGlowOpacity,
+    radialGlowScale,
+    particleOpacity,
+    particleScale,
+    continuePulse,
+    barWidths,
+  ]);
 
   // Phase 1: "IDENTITY CONFIRMED" types out
   useEffect(() => {

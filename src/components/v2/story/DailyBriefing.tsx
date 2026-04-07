@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, {
   FadeIn, FadeInDown,
   useSharedValue, useAnimatedStyle,
-  withRepeat, withSequence, withTiming, Easing,
+  withRepeat, withSequence, withTiming, cancelAnimation, Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
@@ -146,7 +146,10 @@ export function DailyBriefing({ onEnter }: Props) {
       ),
       -1, false,
     );
-  }, []);
+    return () => {
+      cancelAnimation(pulse);
+    };
+  }, [pulse]);
   const pulseStyle = useAnimatedStyle(() => ({
     borderColor: `rgba(247, 250, 255, ${pulse.value})`,
   }));

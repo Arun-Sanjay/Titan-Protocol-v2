@@ -15,6 +15,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -46,7 +47,10 @@ export function IntegrityWarningOverlay({ onDismiss }: Props) {
       -1,
       false,
     );
-  }, []);
+    return () => {
+      cancelAnimation(pulse);
+    };
+  }, [pulse]);
   const borderStyle = useAnimatedStyle(() => ({
     borderColor: `rgba(251, 191, 36, ${pulse.value})`,
   }));

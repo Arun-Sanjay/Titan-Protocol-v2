@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue, useAnimatedStyle,
-  withRepeat, withSequence, withTiming, Easing,
+  withRepeat, withSequence, withTiming, cancelAnimation, Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../src/theme";
@@ -62,7 +62,10 @@ function NodeCard({
         false,
       );
     }
-  }, [status]);
+    return () => {
+      cancelAnimation(pulse);
+    };
+  }, [status, pulse]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: status === "ready" ? [{ scale: pulse.value }] : [],

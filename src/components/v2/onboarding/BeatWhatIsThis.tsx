@@ -6,6 +6,7 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import { colors, spacing, fonts, radius } from "../../../theme";
@@ -67,7 +68,11 @@ function Particle({
       -1,
       true,
     );
-  }, []);
+    return () => {
+      cancelAnimation(opacity);
+      cancelAnimation(translateY);
+    };
+  }, [opacity, translateY, delay]);
 
   const style = useAnimatedStyle(() => ({
     opacity: opacity.value,

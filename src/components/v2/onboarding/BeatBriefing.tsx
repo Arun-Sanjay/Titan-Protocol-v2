@@ -7,6 +7,7 @@ import Animated, {
   withSpring,
   withSequence,
   withRepeat,
+  cancelAnimation,
   Easing,
   FadeInRight,
   type SharedValue,
@@ -56,6 +57,7 @@ function ConfigLocked({ visible }: { visible: boolean }) {
   const dot4 = useSharedValue(0);
 
   useEffect(() => {
+    const dotTimers: ReturnType<typeof setTimeout>[] = [];
     if (visible) {
       opacity.value = withTiming(1, { duration: 400 });
       pulseOpacity.value = withRepeat(
@@ -67,14 +69,24 @@ function ConfigLocked({ visible }: { visible: boolean }) {
         true,
       );
       // Engine dots light up in sequence
-      setTimeout(() => { dot1.value = withTiming(1, { duration: 200 }); }, 200);
-      setTimeout(() => { dot2.value = withTiming(1, { duration: 200 }); }, 500);
-      setTimeout(() => { dot3.value = withTiming(1, { duration: 200 }); }, 800);
-      setTimeout(() => { dot4.value = withTiming(1, { duration: 200 }); }, 1100);
+      dotTimers.push(setTimeout(() => { dot1.value = withTiming(1, { duration: 200 }); }, 200));
+      dotTimers.push(setTimeout(() => { dot2.value = withTiming(1, { duration: 200 }); }, 500));
+      dotTimers.push(setTimeout(() => { dot3.value = withTiming(1, { duration: 200 }); }, 800));
+      dotTimers.push(setTimeout(() => { dot4.value = withTiming(1, { duration: 200 }); }, 1100));
     } else {
       opacity.value = withTiming(0, { duration: 300 });
     }
-  }, [visible]);
+
+    return () => {
+      dotTimers.forEach(clearTimeout);
+      cancelAnimation(opacity);
+      cancelAnimation(pulseOpacity);
+      cancelAnimation(dot1);
+      cancelAnimation(dot2);
+      cancelAnimation(dot3);
+      cancelAnimation(dot4);
+    };
+  }, [visible, opacity, pulseOpacity, dot1, dot2, dot3, dot4]);
 
   const containerStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

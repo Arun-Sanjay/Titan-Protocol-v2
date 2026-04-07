@@ -10,6 +10,7 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -158,8 +159,12 @@ function TitanReveal() {
       );
       setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success), 400);
     }, 1000);
-    return () => clearTimeout(timer);
-  }, []);
+    return () => {
+      clearTimeout(timer);
+      cancelAnimation(scale);
+      cancelAnimation(glowOpacity);
+    };
+  }, [scale, glowOpacity]);
 
   const titleStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],

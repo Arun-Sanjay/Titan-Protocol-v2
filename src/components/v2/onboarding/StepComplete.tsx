@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
   withSequence,
   withRepeat,
+  cancelAnimation,
   Easing,
 } from "react-native-reanimated";
 import { useRouter } from "expo-router";
@@ -48,6 +49,10 @@ export function StepComplete() {
       -1, // repeat indefinitely
       false,
     );
+    return () => {
+      cancelAnimation(checkScale);
+      cancelAnimation(glowOpacity);
+    };
   }, [checkScale, glowOpacity]);
 
   const checkAnimatedStyle = useAnimatedStyle(() => ({

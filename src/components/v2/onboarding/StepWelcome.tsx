@@ -7,6 +7,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
+  cancelAnimation,
   Easing,
   FadeIn,
   FadeInDown,
@@ -93,8 +94,23 @@ export function StepWelcome({ onNext }: Props) {
     return () => {
       clearTimeout(typewriterTimeout);
       if (intervalRef.current) clearInterval(intervalRef.current);
+      cancelAnimation(logoOpacity);
+      cancelAnimation(logoScale);
+      cancelAnimation(logoLetterSpacing);
+      cancelAnimation(dividerWidth);
+      cancelAnimation(scanY);
+      cancelAnimation(scanOpacity);
+      cancelAnimation(glowOpacity);
     };
-  }, []);
+  }, [
+    logoOpacity,
+    logoScale,
+    logoLetterSpacing,
+    dividerWidth,
+    scanY,
+    scanOpacity,
+    glowOpacity,
+  ]);
 
   // ── Animated styles ──
   const logoStyle = useAnimatedStyle(() => ({

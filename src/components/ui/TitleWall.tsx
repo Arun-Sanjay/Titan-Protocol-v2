@@ -7,6 +7,7 @@ import Animated, {
   withRepeat,
   withTiming,
   withSequence,
+  cancelAnimation,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../theme";
@@ -49,6 +50,9 @@ function LegendaryBorderCard({
       -1,
       true,
     );
+    return () => {
+      cancelAnimation(opacity);
+    };
   }, [opacity]);
 
   const animatedBorder = useAnimatedStyle(() => ({

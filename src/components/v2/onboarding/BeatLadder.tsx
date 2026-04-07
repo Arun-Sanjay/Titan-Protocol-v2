@@ -13,6 +13,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
+  cancelAnimation,
   Easing,
   FadeInUp,
 } from "react-native-reanimated";
@@ -143,7 +144,27 @@ function RankNode({
         );
       }
     }
-  }, [visible]);
+
+    return () => {
+      cancelAnimation(opacity);
+      cancelAnimation(translateY);
+      cancelAnimation(glowOpacity);
+      cancelAnimation(youAreHereOpacity);
+      cancelAnimation(appearGlowOpacity);
+      cancelAnimation(appearGlowScale);
+    };
+  }, [
+    visible,
+    isTitan,
+    isFirst,
+    rank,
+    opacity,
+    translateY,
+    glowOpacity,
+    youAreHereOpacity,
+    appearGlowOpacity,
+    appearGlowScale,
+  ]);
 
   const nodeAnimStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

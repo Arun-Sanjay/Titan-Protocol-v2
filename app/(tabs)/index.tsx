@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue, useAnimatedStyle, FadeInDown,
-  withRepeat, withSequence, withTiming, Easing,
+  withRepeat, withSequence, withTiming, cancelAnimation, Easing,
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { getJSON, setJSON } from "../../src/db/storage";
@@ -304,7 +304,10 @@ export default function HQScreen() {
         -1, false,
       );
     }
-  }, [protocolCompleted]);
+    return () => {
+      cancelAnimation(protocolPulse);
+    };
+  }, [protocolCompleted, protocolPulse]);
   const protocolBorderStyle = useAnimatedStyle(() => ({
     borderColor: `rgba(247, 250, 255, ${protocolPulse.value})`,
   }));
@@ -321,7 +324,10 @@ export default function HQScreen() {
         -1, false,
       );
     }
-  }, [profileStreak]);
+    return () => {
+      cancelAnimation(streakGlowOpacity);
+    };
+  }, [profileStreak, streakGlowOpacity]);
   const streakGlowStyle = useAnimatedStyle(() => {
     if (profileStreak < 7) return {};
     const intensity = profileStreak >= 14 ? 12 : 8;
