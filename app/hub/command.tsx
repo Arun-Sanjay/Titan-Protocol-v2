@@ -19,14 +19,36 @@ import { PageHeader } from "../../src/components/ui/PageHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { ScoreGauge } from "../../src/components/ui/ScoreGauge";
 import { getTodayKey } from "../../src/lib/date";
+import { ENGINES } from "../../src/stores/useEngineStore";
+import type { Task as CloudTask } from "../../src/services/tasks";
+
+// Structural type that both the legacy CommandTask and the new
+// cloud-backed Task + completed flag satisfy. Only fields TaskRow
+// actually renders are required here.
+type CommandTask = {
+  id: string;
+  title: string;
+  kind: "main" | "secondary";
+  engine: CloudTask["engine"];
+  completed: boolean;
+};
+// Phase 3.5d: everything cloud-backed now. Tasks/completions/scores
+// come from React Query; XP writes use the awardXP mutation; the
+// legacy useEngineStore imports below are kept ONLY for the ENGINES
+// constant and CommandTask type alias.
+import { XP_REWARDS } from "../../src/stores/useProfileStore";
 import {
-  useEngineStore,
-  ENGINES,
-  selectTotalScore,
-  selectAllTasksForDate,
-  type TaskWithStatus,
-} from "../../src/stores/useEngineStore";
-import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
+  useProfile,
+  useAwardXP,
+  useUpdateStreak,
+} from "../../src/hooks/queries/useProfile";
+import {
+  useAllTasks,
+  useAllCompletionsForDate,
+  useToggleCompletion,
+} from "../../src/hooks/queries/useTasks";
+import { computeEngineScore } from "../../src/services/tasks";
+import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
 import type { EngineKey } from "../../src/db/schema";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -90,7 +112,7 @@ const TaskRow = React.memo(function TaskRow({
   task,
   onToggle,
 }: {
-  task: TaskWithStatus;
+  task: CommandTask;
   onToggle: () => void;
 }) {
   const meta = ENGINE_META[task.engine];
@@ -205,33 +227,38 @@ export default function CommandCentreScreen() {
   }, []);
   const dateKey = useMemo(() => getTodayKey(), [appActive]);
 
-  // Engine store
-  const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
-  const toggleTask = useEngineStore((s) => s.toggleTask);
-  const storeTasks = useEngineStore((s) => s.tasks);
-  const storeCompletions = useEngineStore((s) => s.completions);
-  const scores = useEngineStore((s) => s.scores);
+  // Phase 3.5d: full cloud cutover.
+  const { data: cloudTasks = [] } = useAllTasks();
+  const { data: cloudCompletions = [] } = useAllCompletionsForDate(dateKey);
+  const toggleCompletion = useToggleCompletion();
+  const awardXPMutation = useAwardXP();
+  const updateStreakMutation = useUpdateStreak();
+  const enqueueRankUpMutation = useEnqueueRankUp();
+  const { data: profile } = useProfile();
+  const streak = profile?.streak_current ?? 0;
 
-  // Profile store
-  const awardXP = useProfileStore((s) => s.awardXP);
-  const updateStreak = useProfileStore((s) => s.updateStreak);
-  const streak = useProfileStore((s) => s.profile.streak);
-
-  useEffect(() => {
-    loadAllEngines(dateKey);
-  }, [dateKey]);
-
-  // All tasks with status
+  // All tasks with status, derived from cloud.
+  const completedIds = useMemo(
+    () => new Set(cloudCompletions.map((c) => c.task_id)),
+    [cloudCompletions],
+  );
   const allTasks = useMemo(
-    () => selectAllTasksForDate(storeTasks, storeCompletions, dateKey),
-    [storeTasks, storeCompletions, dateKey],
+    () =>
+      cloudTasks.map((t) => ({ ...t, completed: completedIds.has(t.id) })),
+    [cloudTasks, completedIds],
   );
 
-  // Total score
-  const totalScore = useMemo(
-    () => selectTotalScore(scores, dateKey),
-    [scores, dateKey],
-  );
+  // Total score — average of the per-engine scores across engines that
+  // have tasks. Mirrors the dashboard derivation.
+  const totalScore = useMemo(() => {
+    const configured = ENGINES.filter((e) => cloudTasks.some((t) => t.engine === e));
+    if (configured.length === 0) return 0;
+    const sum = configured.reduce((acc, e) => {
+      const engineTasks = cloudTasks.filter((t) => t.engine === e);
+      return acc + computeEngineScore(engineTasks, completedIds);
+    }, 0);
+    return Math.round(sum / configured.length);
+  }, [cloudTasks, completedIds]);
 
   // Filtered tasks
   const filteredTasks = useMemo(() => {
@@ -257,32 +284,51 @@ export default function CommandCentreScreen() {
   const completedCount = useMemo(() => allTasks.filter((t) => t.completed).length, [allTasks]);
   const totalTasks = allTasks.length;
 
-  // Toggle handler — award XP on complete, deduct on un-complete
+  // Toggle handler — cloud-backed. Uses the Supabase UUID directly
+  // (task.id is now a string) so there's no ID coercion.
   const handleToggle = useCallback(
-    (task: TaskWithStatus) => {
-      const completed = toggleTask(task.engine, task.id!, dateKey);
+    async (task: CommandTask) => {
       const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
-      if (completed) {
-        awardXP(dateKey, "task_complete", xp);
-        updateStreak(dateKey);
-      } else {
-        // Deduct XP on un-complete to prevent farming
-        awardXP(dateKey, "task_uncomplete", -xp);
+      try {
+        const result = await toggleCompletion.mutateAsync({
+          task: { id: task.id, engine: task.engine },
+          dateKey,
+        });
+        const delta = result.completed ? xp : -xp;
+        const xpResult = await awardXPMutation.mutateAsync(delta);
+        if (result.completed) {
+          await updateStreakMutation.mutateAsync(dateKey);
+        }
+        if (xpResult.leveledUp) {
+          await enqueueRankUpMutation.mutateAsync({
+            fromLevel: xpResult.fromLevel,
+            toLevel: xpResult.toLevel,
+          });
+        }
+      } catch (_e) {
+        // mutation hooks handle rollback
       }
     },
-    [dateKey, toggleTask, awardXP, updateStreak],
+    [
+      allTasks,
+      dateKey,
+      toggleCompletion,
+      awardXPMutation,
+      updateStreakMutation,
+      enqueueRankUpMutation,
+    ],
   );
 
   // SectionList renderers
   const renderItem = useCallback(
-    ({ item }: { item: TaskWithStatus }) => (
+    ({ item }: { item: CommandTask }) => (
       <TaskRow task={item} onToggle={() => handleToggle(item)} />
     ),
     [handleToggle],
   );
 
   const renderSectionHeader = useCallback(
-    ({ section }: { section: { engine: EngineKey; data: TaskWithStatus[] } }) => {
+    ({ section }: { section: { engine: EngineKey; data: CommandTask[] } }) => {
       const completed = section.data.filter((t) => t.completed).length;
       return (
         <EngineSectionHeader
@@ -296,7 +342,7 @@ export default function CommandCentreScreen() {
   );
 
   const keyExtractor = useCallback(
-    (item: TaskWithStatus) => `${item.engine}:${item.id}`,
+    (item: CommandTask) => `${item.engine}:${item.id}`,
     [],
   );
 

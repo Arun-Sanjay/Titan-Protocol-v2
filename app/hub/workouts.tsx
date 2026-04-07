@@ -43,7 +43,9 @@ import {
   PersonalRecord,
 } from "../../src/stores/useGymStore";
 import { getTodayKey } from "../../src/lib/date";
-import { useProfileStore } from "../../src/stores/useProfileStore";
+// Phase 3.5d: XP writes go through the cloud mutation.
+import { useAwardXP } from "../../src/hooks/queries/useProfile";
+import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -746,7 +748,8 @@ export default function WorkoutsScreen() {
   const personalRecords = useGymStore((s) => s.personalRecords);
   const restTimer = useGymStore((s) => s.restTimer);
 
-  const awardXP = useProfileStore((s) => s.awardXP);
+  const awardXPMutation = useAwardXP();
+  const enqueueRankUpMutation = useEnqueueRankUp();
 
   const load = useGymStore((s) => s.load);
   const addExercise = useGymStore((s) => s.addExercise);
@@ -1053,14 +1056,26 @@ export default function WorkoutsScreen() {
     const totalSets = completedSets.length;
     const prCount = sessionPRSetIds.size;
     const totalXP = 50 + totalSets * 20 + prCount * 100;
-    awardXP(getTodayKey(), "workout_complete", totalXP);
+    awardXPMutation
+      .mutateAsync(totalXP)
+      .then((result) => {
+        if (result.leveledUp) {
+          return enqueueRankUpMutation.mutateAsync({
+            fromLevel: result.fromLevel,
+            toLevel: result.toLevel,
+          });
+        }
+      })
+      .catch(() => {
+        // Non-fatal; workout is still recorded locally.
+      });
 
     endSession(activeSession.id);
     setSummarySessionId(activeSession.id);
     setScreenState("summary");
     cancelRestTimer();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [activeSession, endSession, getSessionSets, cancelRestTimer, sessionPRSetIds, awardXP]);
+  }, [activeSession, endSession, getSessionSets, cancelRestTimer, sessionPRSetIds, awardXPMutation, enqueueRankUpMutation]);
 
   const handleCancelWorkout = useCallback(() => {
     Alert.alert(

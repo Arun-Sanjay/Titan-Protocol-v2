@@ -19,7 +19,7 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { storage } from "../../src/db/storage";
-import { useProfileStore } from "../../src/stores/useProfileStore";
+import { useProfile } from "../../src/hooks/queries/useProfile";
 import { useEngineStore } from "../../src/stores/useEngineStore";
 import { useModeStore, type ExperienceMode } from "../../src/stores/useModeStore";
 import { useIdentityStore, IDENTITIES, selectIdentityMeta, type Archetype } from "../../src/stores/useIdentityStore";
@@ -302,8 +302,19 @@ function V2SettingsSection() {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const profile = useProfileStore((s) => s.profile);
-  const loadProfile = useProfileStore((s) => s.load);
+  // Phase 3.5d: read profile from cloud; keep the legacy best_streak
+  // fallback since the display uses `profile.*` fields that exist on
+  // both the legacy and cloud shapes once we map them.
+  const { data: cloudProfile } = useProfile();
+  const profile = useMemo(
+    () => ({
+      level: cloudProfile?.level ?? 1,
+      xp: cloudProfile?.xp ?? 0,
+      streak: cloudProfile?.streak_current ?? 0,
+      best_streak: cloudProfile?.streak_best ?? 0,
+    }),
+    [cloudProfile],
+  );
   const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
   const [exporting, setExporting] = useState(false);
 
@@ -368,11 +379,14 @@ export default function SettingsScreen() {
                   style: "destructive",
                   onPress: () => {
                     storage.clearAll();
-                    loadProfile();
+                    // Local MMKV is nuked; the cloud profile is
+                    // independent and will be re-read via React Query
+                    // on next focus. This button is a dev/debug utility
+                    // and doesn't affect the Supabase backend.
                     loadAllEngines(getTodayKey());
                     setDataPointCount(0);
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                    Alert.alert("Done", "All data has been cleared.");
+                    Alert.alert("Done", "All local data has been cleared.");
                   },
                 },
               ],
@@ -381,7 +395,7 @@ export default function SettingsScreen() {
         },
       ],
     );
-  }, [loadProfile, loadAllEngines]);
+  }, [loadAllEngines]);
 
   const handleResetProfile = useCallback(() => {
     Alert.alert(
@@ -393,6 +407,11 @@ export default function SettingsScreen() {
           text: "Reset",
           style: "destructive",
           onPress: () => {
+            // Phase 3.5d: this button only clears the LOCAL MMKV
+            // shadow of the profile. The cloud profile is
+            // authoritative and unaffected. A "true" profile reset
+            // would require a cloud mutation that zeroes the
+            // profiles row — deferred.
             storage.set(
               "user_profile",
               JSON.stringify({
@@ -404,13 +423,12 @@ export default function SettingsScreen() {
                 last_active_date: "",
               }),
             );
-            loadProfile();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           },
         },
       ],
     );
-  }, [loadProfile]);
+  }, []);
 
   const [dataPointCount, setDataPointCount] = useState(() => getAllStorageKeys().length);
 

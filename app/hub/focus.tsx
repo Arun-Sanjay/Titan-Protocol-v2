@@ -29,7 +29,10 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey, addDays, getDayOfWeek } from "../../src/lib/date";
 import { useFocusStore, type FocusSettings } from "../../src/stores/useFocusStore";
-import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
+// Phase 3.5d: XP writes go through the cloud mutation.
+import { XP_REWARDS } from "../../src/stores/useProfileStore";
+import { useAwardXP } from "../../src/hooks/queries/useProfile";
+import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -331,7 +334,8 @@ export default function FocusTimerScreen() {
   const completeSession = useFocusStore((s) => s.completeSession);
   const getSessions = useFocusStore((s) => s.getSessions);
   const sessions = getSessions(dateKey);
-  const awardXP = useProfileStore((s) => s.awardXP);
+  const awardXPMutation = useAwardXP();
+  const enqueueRankUpMutation = useEnqueueRankUp();
 
   const [phase, setPhase] = useState<Phase>("focus");
   const [running, setRunning] = useState(false);
@@ -429,7 +433,19 @@ export default function FocusTimerScreen() {
 
       if (currentPhase === "focus") {
         completeSession(currentDateKey);
-        awardXP(currentDateKey, "focus_session", XP_REWARDS.MAIN_TASK);
+        awardXPMutation
+          .mutateAsync(XP_REWARDS.MAIN_TASK)
+          .then((result) => {
+            if (result.leveledUp) {
+              return enqueueRankUpMutation.mutateAsync({
+                fromLevel: result.fromLevel,
+                toLevel: result.toLevel,
+              });
+            }
+          })
+          .catch(() => {
+            // Non-fatal; focus session is still recorded locally.
+          });
         setShowCompleteFlash(true);
         setTimeout(() => setShowCompleteFlash(false), 2000);
 
@@ -444,7 +460,7 @@ export default function FocusTimerScreen() {
         setPhase("focus");
       }
     }
-  }, [secondsLeft, running, completeSession, awardXP, settings.longBreakAfter]);
+  }, [secondsLeft, running, completeSession, awardXPMutation, enqueueRankUpMutation, settings.longBreakAfter]);
 
   const toggleTimer = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

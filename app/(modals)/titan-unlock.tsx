@@ -4,7 +4,7 @@ import { TitanUnlockCelebration } from "../../src/components/v2/celebrations/Tit
 import { useTitanModeStore } from "../../src/stores/useTitanModeStore";
 import { useModeStore } from "../../src/stores/useModeStore";
 import { useIdentityStore } from "../../src/stores/useIdentityStore";
-import { useProfileStore } from "../../src/stores/useProfileStore";
+import { useProfile } from "../../src/hooks/queries/useProfile";
 import { useNarrativeStore } from "../../src/stores/useNarrativeStore";
 import { useProgressionStore } from "../../src/stores/useProgressionStore";
 import { getTodayKey } from "../../src/lib/date";
@@ -16,7 +16,9 @@ export default function TitanUnlockModal() {
     avgScore: s.averageScore,
   }));
   const totalVotes = useIdentityStore((s) => s.totalVotes);
-  const totalXP = useProfileStore((s) => s.profile.xp);
+  // Phase 3.5d: read XP from cloud-backed profile.
+  const { data: profile } = useProfile();
+  const totalXP = profile?.xp ?? 0;
 
   function handleActivate() {
     const today = getTodayKey();

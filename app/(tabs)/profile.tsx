@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,7 +8,7 @@ import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
 import { Card } from "../../src/components/ui/Card";
-import { useProfileStore } from "../../src/stores/useProfileStore";
+import { useProfile } from "../../src/hooks/queries/useProfile";
 import { useSkillTreeStore } from "../../src/stores/useSkillTreeStore";
 import { useAchievementStore } from "../../src/stores/useAchievementStore";
 import { useTitanModeStore, selectUnlockProgress, selectDaysRemaining } from "../../src/stores/useTitanModeStore";
@@ -23,13 +23,14 @@ export default function ProfileScreen() {
   const showNarrative = checkFeatureVisible(profileMode, "narrative");
   const showSkillTrees = checkFeatureVisible(profileMode, "skill_trees");
   const router = useRouter();
-  const xp = useProfileStore((s) => s.profile.xp);
-  const level = useProfileStore((s) => s.profile.level);
-  const streak = useProfileStore((s) => s.profile.streak);
-  const bestStreak = useProfileStore((s) => s.profile.best_streak);
-  const load = useProfileStore((s) => s.load);
-
-  useEffect(() => { load(); }, []);
+  // Phase 3.5d: read profile from React Query (Supabase-backed). The
+  // old useProfileStore.load() bootstrap is no longer needed —
+  // React Query handles the fetch on mount and refetches on focus.
+  const { data: profile } = useProfile();
+  const xp = profile?.xp ?? 0;
+  const level = profile?.level ?? 1;
+  const streak = profile?.streak_current ?? 0;
+  const bestStreak = profile?.streak_best ?? 0;
 
   const rank = getRankForLevel(level);
   const nextRank = RANKS.find((r) => r.minLevel > level);
