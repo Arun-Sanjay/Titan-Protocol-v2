@@ -92,8 +92,11 @@ android {
         applicationId 'com.titan.protocol'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        // Read from gradle.properties so CI can bump with
+        // `-PTITAN_VERSION_CODE=N` (see .github/workflows/android.yml).
+        // The local default is 1 for dev builds.
+        versionCode (findProperty('TITAN_VERSION_CODE') ?: '1').toInteger()
+        versionName findProperty('TITAN_VERSION_NAME') ?: '1.0.0'
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

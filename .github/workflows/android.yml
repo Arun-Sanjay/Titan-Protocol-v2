@@ -124,8 +124,20 @@ jobs:
             echo "Signing config already present, skipping"
           fi
 
+      # Compute a monotonically increasing versionCode. GitHub's run_number
+      # increments on every workflow run and never goes backwards, which
+      # matches Play Store's requirement. Kept <2,100,000,000 (Google's max)
+      # trivially — 2 billion runs is not a problem.
+      - name: Compute versionCode
+        id: vc
+        run: echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
       - name: Build Release APK
-        run: cd android && ./gradlew assembleRelease
+        run: |
+          cd android
+          ./gradlew assembleRelease \
+            -PTITAN_VERSION_CODE=${{ steps.vc.outputs.code }} \
+            -PTITAN_VERSION_NAME=1.0.0
 
       - name: Set version string
         id: version
