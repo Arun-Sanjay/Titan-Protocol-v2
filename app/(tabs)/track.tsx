@@ -16,20 +16,34 @@ import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { HabitGrid } from "../../src/components/ui/HabitGrid";
 import { ProgressRing } from "../../src/components/ui/ProgressRing";
 import { getTodayKey, formatDateShort, getDayOfWeek } from "../../src/lib/date";
-import { useHabitStore } from "../../src/stores/useHabitStore";
+// Phase 3.5d: Habits (reads + writes) go through cloud hooks. The
+// journal tab keeps its local store (no cloud service yet) but its
+// XP award path moves to the cloud awardXP mutation.
+import {
+  useHabits,
+  useHabitLogsForDate,
+  useHabitLogsForRange,
+  useToggleHabit,
+  useCreateHabit,
+  useDeleteHabit,
+} from "../../src/hooks/queries/useHabits";
+import type { Habit as CloudHabit } from "../../src/services/habits";
+import { useAwardXP } from "../../src/hooks/queries/useProfile";
+import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
 import { useJournalStore } from "../../src/stores/useJournalStore";
 import { useGoalStore } from "../../src/stores/useGoalStore";
-import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
+// XP_REWARDS is a pure const export.
+import { XP_REWARDS } from "../../src/stores/useProfileStore";
 import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdentityStore";
 import { getSuggestedHabits, type SuggestedHabit } from "../../src/lib/mission-suggester";
-import { HabitChain } from "../../src/components/v2/habits/HabitChain";
-import type { Habit, Goal } from "../../src/db/schema";
+import type { Goal } from "../../src/db/schema";
+import { addDays } from "../../src/lib/date";
 import { getJSON, setJSON } from "../../src/db/storage";
 
 const MONO_FONT = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
 
-// Stable empty array — prevents Zustand getSnapshot infinite loop when key is missing
-const EMPTY_IDS: number[] = [];
+// Grid window: 84 days (12 weeks) back through today.
+const GRID_DAYS = 84;
 
 type Tab = "habits" | "journal" | "goals";
 
@@ -98,105 +112,152 @@ export default function TrackScreen() {
 // ─── Habits Tab ────────────────────────────────────────────────────────────
 
 function HabitsTab({ dateKey }: { dateKey: string }) {
-  const habits = useHabitStore((s) => s.habits);
-  const completedIds = useHabitStore((s) => s.completedIds[dateKey] ?? EMPTY_IDS);
-  const load = useHabitStore((s) => s.load);
-  const toggle = useHabitStore((s) => s.toggleHabit);
-  const add = useHabitStore((s) => s.addHabit);
-  const remove = useHabitStore((s) => s.deleteHabit);
-  const awardXP = useProfileStore((s) => s.awardXP);
+  // Phase 3.5d: cloud-backed habits. Reads (habits list + today's logs
+  // + 84-day log range) and writes (toggle / create / delete) all go
+  // through React Query. current_chain on the habit row is the
+  // denormalized streak length — no more O(n²) MMKV scans (Phase 2.3F).
+  const { data: habits = [] } = useHabits();
+  const { data: todayLogs = [] } = useHabitLogsForDate(dateKey);
+  const gridStart = useMemo(() => addDays(dateKey, -(GRID_DAYS - 1)), [dateKey]);
+  const { data: rangeLogs = [] } = useHabitLogsForRange(gridStart, dateKey);
+
+  const toggleHabitMutation = useToggleHabit();
+  const createHabitMutation = useCreateHabit();
+  const deleteHabitMutation = useDeleteHabit();
+  const awardXPMutation = useAwardXP();
+  const enqueueRankUpMutation = useEnqueueRankUp();
 
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
 
-  useEffect(() => { load(dateKey); }, [dateKey]);
+  const completedSet = useMemo(
+    () => new Set(todayLogs.map((l) => l.habit_id)),
+    [todayLogs],
+  );
 
-  const completedSet = useMemo(() => new Set(completedIds), [completedIds]);
-
-  // Compute streaks per habit
+  // Streaks come directly from the denormalized habit.current_chain.
   const habitStreaks = useMemo(() => {
-    const streaks: Record<number, number> = {};
+    const streaks: Record<string, number> = {};
     for (const h of habits) {
-      let streak = 0;
-      for (let i = 0; i < 90; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        const logs = getJSON<number[]>(`habit_logs:${dk}`, []);
-        if (logs.includes(h.id!)) {
-          streak++;
-        } else if (i > 0) {
-          break;
-        }
-      }
-      streaks[h.id!] = streak;
+      streaks[h.id] = h.current_chain;
     }
     return streaks;
-  }, [habits, completedIds]);
+  }, [habits]);
 
-  // Build 12-week grid for each habit
+  // Build 12-week grid for each habit from the range-log query.
   const habitGrids = useMemo(() => {
-    const grids: Record<number, { dateKey: string; completed: boolean }[]> = {};
+    // Build the list of dateKeys for the window (oldest → newest).
+    const dateKeys: string[] = [];
+    for (let i = GRID_DAYS - 1; i >= 0; i--) {
+      dateKeys.push(addDays(dateKey, -i));
+    }
+    // Group logs by (habit_id, date_key) for O(1) lookups.
+    const logSet = new Set(rangeLogs.map((l) => `${l.habit_id}|${l.date_key}`));
+    const grids: Record<string, { dateKey: string; completed: boolean }[]> = {};
     for (const h of habits) {
-      const cells: { dateKey: string; completed: boolean }[] = [];
-      for (let i = 83; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        const logs = getJSON<number[]>(`habit_logs:${dk}`, []);
-        cells.push({ dateKey: dk, completed: logs.includes(h.id!) });
-      }
-      grids[h.id!] = cells;
+      grids[h.id] = dateKeys.map((dk) => ({
+        dateKey: dk,
+        completed: logSet.has(`${h.id}|${dk}`),
+      }));
     }
     return grids;
-  }, [habits, completedIds]);
+  }, [habits, rangeLogs, dateKey]);
 
   // Quick stats
   const todayCount = completedSet.size;
   const totalHabits = habits.length;
-  const bestStreak = useMemo(() => Math.max(0, ...Object.values(habitStreaks)), [habitStreaks]);
+  const bestStreak = useMemo(
+    () => habits.reduce((acc, h) => Math.max(acc, h.best_chain), 0),
+    [habits],
+  );
 
-  const handleToggle = (id: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const completed = toggle(id, dateKey);
-    if (completed) {
-      awardXP(dateKey, "habit_complete", XP_REWARDS.HABIT_COMPLETE);
-    } else {
-      awardXP(dateKey, "habit_uncomplete", -XP_REWARDS.HABIT_COMPLETE);
-    }
-  };
+  const handleToggle = useCallback(
+    async (habit: CloudHabit) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      try {
+        const result = await toggleHabitMutation.mutateAsync({
+          habit,
+          dateKey,
+        });
+        const xp = result.completed
+          ? XP_REWARDS.HABIT_COMPLETE
+          : -XP_REWARDS.HABIT_COMPLETE;
+        const xpResult = await awardXPMutation.mutateAsync(xp);
+        if (xpResult.leveledUp) {
+          await enqueueRankUpMutation.mutateAsync({
+            fromLevel: xpResult.fromLevel,
+            toLevel: xpResult.toLevel,
+          });
+        }
+      } catch (_e) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    },
+    [dateKey, toggleHabitMutation, awardXPMutation, enqueueRankUpMutation],
+  );
 
   // Identity for suggested habits
   const archetype = useIdentityStore((s) => s.archetype);
   const identityMeta = selectIdentityMeta(archetype);
   const suggestions = useMemo(
-    () => archetype ? getSuggestedHabits(archetype) : [],
+    () => (archetype ? getSuggestedHabits(archetype) : []),
     [archetype],
   );
-  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(
+    new Set(),
+  );
 
-  const handleAddSuggested = (s: SuggestedHabit) => {
-    add(s.title, s.icon, s.engine, s.trigger, s.duration, s.frequency);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
+  const handleAddSuggested = useCallback(
+    async (s: SuggestedHabit) => {
+      try {
+        await createHabitMutation.mutateAsync({
+          title: s.title,
+          icon: s.icon,
+          engine: s.engine,
+          triggerText: s.trigger,
+          durationText: s.duration,
+          frequency: s.frequency,
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } catch (_e) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    },
+    [createHabitMutation],
+  );
 
   const handleDismissSuggested = (title: string) => {
     setDismissedSuggestions((prev) => new Set([...prev, title]));
   };
 
-  const handleAdd = () => {
+  const handleAdd = useCallback(async () => {
     if (!newTitle.trim()) return;
-    add(newTitle.trim(), "✓");
-    setNewTitle("");
-    setShowAdd(false);
-  };
+    try {
+      await createHabitMutation.mutateAsync({
+        title: newTitle.trim(),
+        icon: "✓",
+        engine: "body",
+      });
+      setNewTitle("");
+      setShowAdd(false);
+    } catch (_e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [newTitle, createHabitMutation]);
 
-  const handleDelete = (id: number) => {
-    Alert.alert("Delete Habit", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => remove(id) },
-    ]);
-  };
+  const handleDelete = useCallback(
+    (id: string) => {
+      Alert.alert("Delete Habit", "Are you sure?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteHabitMutation.mutate(id),
+        },
+      ]);
+    },
+    [deleteHabitMutation],
+  );
 
   return (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
@@ -218,13 +279,13 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
 
       {/* Habit cards */}
       {habits.map((h) => {
-        const done = completedSet.has(h.id!);
-        const streak = habitStreaks[h.id!] ?? 0;
+        const done = completedSet.has(h.id);
+        const streak = habitStreaks[h.id] ?? 0;
         return (
           <Panel key={h.id} style={styles.habitCard}>
             <Pressable
-              onPress={() => handleToggle(h.id!)}
-              onLongPress={() => handleDelete(h.id!)}
+              onPress={() => handleToggle(h)}
+              onLongPress={() => handleDelete(h.id)}
               style={styles.habitHeader}
             >
               <View style={[styles.habitCheck, done && styles.habitCheckDone]}>
@@ -234,8 +295,8 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
                 <Text style={[styles.habitTitle, done && styles.habitTitleDone]}>
                   {h.icon} {h.title}
                 </Text>
-                {h.trigger ? (
-                  <Text style={styles.habitTrigger}>{h.trigger} → {h.title}</Text>
+                {h.trigger_text ? (
+                  <Text style={styles.habitTrigger}>{h.trigger_text} → {h.title}</Text>
                 ) : (
                   <View style={styles.habitMeta}>
                     <Text style={styles.habitEngine}>{h.engine.toUpperCase()}</Text>
@@ -244,22 +305,15 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
                 )}
               </View>
             </Pressable>
-            {/* 14-day chain */}
-            <View style={styles.habitChainWrap}>
-              <HabitChain
-                habitId={h.id!}
-                engineColor={
-                  h.engine === "body" ? colors.body :
-                  h.engine === "mind" ? colors.mind :
-                  h.engine === "money" ? colors.money :
-                  h.engine === "charisma" ? colors.charisma :
-                  colors.success
-                }
-              />
-            </View>
+            {/* 14-day HabitChain is temporarily hidden after the cloud
+                migration — HabitChain reads MMKV via useHabitStore and
+                expects numeric habit IDs. Its 14-day view is a subset
+                of the 12-week grid below (which reads cloud), so
+                hiding it doesn't lose information. Re-enable once
+                HabitChain is refactored to take logs as a prop. */}
             {/* 12-week grid */}
             <View style={styles.habitGridWrap}>
-              <HabitGrid logs={habitGrids[h.id!] ?? []} weeks={12} />
+              <HabitGrid logs={habitGrids[h.id] ?? []} weeks={12} />
             </View>
           </Panel>
         );
@@ -369,7 +423,10 @@ function JournalTab({ dateKey }: { dateKey: string }) {
   const loadRecentEntries = useJournalStore((s) => s.loadRecentEntries);
   const saveEntry = useJournalStore((s) => s.saveEntry);
   const deleteEntry = useJournalStore((s) => s.deleteEntry);
-  const awardXP = useProfileStore((s) => s.awardXP);
+  // Phase 3.5d: XP on journal save goes to cloud. Journal content
+  // itself stays in MMKV — there's no journal service layer yet.
+  const awardXPMutation = useAwardXP();
+  const enqueueRankUpMutation = useEnqueueRankUp();
 
   const [view, setView] = useState<JournalView>("list");
   const [editingKey, setEditingKey] = useState(dateKey); // which date we're editing
@@ -394,18 +451,28 @@ function JournalTab({ dateKey }: { dateKey: string }) {
   const todayEntry = entries[dateKey] ?? null;
   const hasEntryToday = todayEntry && todayEntry.content && todayEntry.content.trim().length > 0;
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!content.trim()) return;
     saveEntry(editingKey, content);
     // Only award XP for new entries (not edits of existing ones)
     const wasNew = !entries[editingKey] || !entries[editingKey]?.content?.trim();
     if (wasNew) {
-      awardXP(editingKey, "journal_entry", XP_REWARDS.JOURNAL_ENTRY);
+      try {
+        const xpResult = await awardXPMutation.mutateAsync(XP_REWARDS.JOURNAL_ENTRY);
+        if (xpResult.leveledUp) {
+          await enqueueRankUpMutation.mutateAsync({
+            fromLevel: xpResult.fromLevel,
+            toLevel: xpResult.toLevel,
+          });
+        }
+      } catch (_e) {
+        // Non-fatal; the journal entry itself is saved.
+      }
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  }, [content, editingKey, entries, saveEntry, awardXP]);
+  }, [content, editingKey, entries, saveEntry, awardXPMutation, enqueueRankUpMutation]);
 
   const handleDelete = useCallback((dk: string) => {
     Alert.alert("Delete Entry", "Remove this journal entry?", [
