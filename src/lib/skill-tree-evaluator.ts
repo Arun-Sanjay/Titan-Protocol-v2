@@ -11,6 +11,15 @@ import { useSkillTreeStore } from "../stores/useSkillTreeStore";
 import { getJSON, storage } from "../db/storage";
 import { getTodayKey, addDays } from "./date";
 import skillTreeData from "../data/skill-trees.json";
+// Phase 3.5f: cloud cache read for checkHabitStreak. The legacy
+// useProtocolStore.streakCurrent becomes stale after Phase 3.5b
+// because the protocol screen writes streak to profiles.streak_current
+// (cloud). We read the cloud value via the shared queryClient
+// singleton and fall back to the legacy store if the cache isn't
+// primed yet.
+import { queryClient } from "./query-client";
+import { profileQueryKey } from "../hooks/queries/useProfile";
+import type { Profile } from "../services/profile";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -324,7 +333,12 @@ function checkLogCount(tag: string, target: number): boolean {
 }
 
 function checkHabitStreak(target: number): boolean {
-  const streak = useProtocolStore.getState().streakCurrent;
+  // Post-Phase 3.5b, streak lives on the cloud profile. Read from
+  // the React Query cache first; fall back to the legacy store for
+  // the pre-migration case where the cache hasn't hydrated yet.
+  const cloudProfile = queryClient.getQueryData<Profile | null>(profileQueryKey);
+  const streak =
+    cloudProfile?.streak_current ?? useProtocolStore.getState().streakCurrent;
   return streak >= target;
 }
 
