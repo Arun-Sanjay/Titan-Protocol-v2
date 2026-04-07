@@ -28,12 +28,19 @@ import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { RadarChart } from "../../src/components/ui/RadarChart";
 import { SparklineChart } from "../../src/components/ui/SparklineChart";
 import { useAnalyticsData } from "../../src/hooks/useAnalyticsData";
-import { useEngineStore, selectAllTasksForDate, ENGINES, type TaskWithStatus } from "../../src/stores/useEngineStore";
-import { useProfileStore, XP_REWARDS } from "../../src/stores/useProfileStore";
+import { ENGINES } from "../../src/stores/useEngineStore";
+// Phase 3.5d: XP_REWARDS stays imported from useProfileStore — it's a
+// pure constant export and importing it doesn't touch MMKV. The actual
+// mutation path now goes through the cloud hooks below.
+import { XP_REWARDS } from "../../src/stores/useProfileStore";
+import { useAllTasks, useAllCompletionsForDate, useToggleCompletion } from "../../src/hooks/queries/useTasks";
+import { computeEngineScore } from "../../src/services/tasks";
+import { useProfile, useAwardXP, useUpdateStreak } from "../../src/hooks/queries/useProfile";
+import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
+import { useProtocolSession } from "../../src/hooks/queries/useProtocol";
 import { getMomentum, getMomentumColor } from "../../src/lib/momentum";
 import { loadIntegrity, getIntegrityColor } from "../../src/lib/protocol-integrity";
 import { useModeStore, IDENTITY_LABELS } from "../../src/stores/useModeStore";
-import { useProtocolStore } from "../../src/stores/useProtocolStore";
 import { useSkillTreeStore, SKILL_TREES } from "../../src/stores/useSkillTreeStore";
 import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdentityStore";
 import { useHabitStore } from "../../src/stores/useHabitStore";
@@ -87,43 +94,42 @@ export default function HQScreen() {
     evaluateAllTrees();
   }, []);
 
-  // Load habits
+  // Load habits (legacy — Track tab migration will move this to cloud)
   useEffect(() => {
     useHabitStore.getState().load(today);
   }, [today]);
 
-  // Load field ops
+  // Load field ops (legacy — not cloud-backed yet)
   useEffect(() => {
     useFieldOpStore.getState().load();
   }, []);
 
-  // Load profile on mount so streak is up to date
-  useEffect(() => {
-    useProfileStore.getState().load();
-  }, []);
+  // Phase 3.5d: Profile / tasks / completions / protocol / rank-ups
+  // are now read from React Query (Supabase-backed). The old Zustand
+  // stores are intentionally NOT touched here — every write that used
+  // to go through them is routed through the mutation hooks below.
+  const { data: profile } = useProfile();
+  const { data: allTasks = [] } = useAllTasks();
+  const { data: allCompletions = [] } = useAllCompletionsForDate(today);
+  const { data: protocolSession = null } = useProtocolSession(today);
 
-  // Stores
-  const storeTasks = useEngineStore((s) => s.tasks);
-  const storeCompletions = useEngineStore((s) => s.completions);
-  const toggleTask = useEngineStore((s) => s.toggleTask);
-  const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
+  const toggleCompletion = useToggleCompletion();
+  const awardXPMutation = useAwardXP();
+  const updateStreakMutation = useUpdateStreak();
+  const enqueueRankUpMutation = useEnqueueRankUp();
 
-  const profileXp = useProfileStore((s) => s.profile.xp);
-  const profileLevel = useProfileStore((s) => s.profile.level);
-  const profileStreak = useProfileStore((s) => s.profile.streak);
-  const loadProfile = useProfileStore((s) => s.load);
-  const awardXP = useProfileStore((s) => s.awardXP);
-  const updateStreak = useProfileStore((s) => s.updateStreak);
+  const profileXp = profile?.xp ?? 0;
+  const profileLevel = profile?.level ?? 1;
+  const profileStreak = profile?.streak_current ?? 0;
 
-  // Game systems
-  const protocolStreak = useProtocolStore((s) => s.streakCurrent);
+  // Streak lives on profile now; protocol streak == profile streak.
+  const protocolStreak = profileStreak;
 
   const identity = useModeStore((s) => s.identity);
   const archetype = useIdentityStore((s) => s.archetype);
-  const morningDone = useProtocolStore((s) => s.isMorningDone(today));
-  const eveningDone = useProtocolStore((s) => s.isEveningDone(today));
+  const morningDone = Boolean(protocolSession?.morning_completed_at);
+  const eveningDone = Boolean(protocolSession?.evening_completed_at);
   const protocolCompleted = morningDone && eveningDone;
-  const protocolSession = useProtocolStore((s) => s.getSession(today));
   const skillProgress = useSkillTreeStore((s) => s.progress);
 
   // Habit store
@@ -138,17 +144,46 @@ export default function HQScreen() {
   const userName = useStoryStore((s) => s.userName);
   const phase = useProgressionStore((s) => s.currentPhase);
 
-  // Task completion flash state
-  const [lastCompletedId, setLastCompletedId] = useState<number | null>(null);
+  // Task completion flash state. String IDs because Supabase uses UUIDs.
+  const [lastCompletedId, setLastCompletedId] = useState<string | null>(null);
 
-  // Derived data
-  const tasks = useMemo(
-    () => selectAllTasksForDate(storeTasks, storeCompletions, analytics.today),
-    [storeTasks, storeCompletions, analytics.today]
+  // Derive the same TaskWithStatus-shaped list the dashboard rendered
+  // before, now sourced from the cloud cache.
+  const completedIds = useMemo(
+    () => new Set(allCompletions.map((c) => c.task_id)),
+    [allCompletions],
   );
-  const completedCount = useMemo(() => tasks.filter((t) => t.completed).length, [tasks]);
+  const tasks = useMemo(
+    () => allTasks.map((t) => ({ ...t, completed: completedIds.has(t.id) })),
+    [allTasks, completedIds],
+  );
   const identityMeta = useMemo(() => selectIdentityMeta(archetype), [archetype]);
-  const rank = getDailyRank(analytics.titanScore);
+
+  // Compute today's weighted Titan score from the cloud data rather than
+  // reading the stale MMKV scores map. Average of the 4 per-engine
+  // scores, rounded. When an engine has no tasks we skip it in the
+  // average so the user isn't punished for not configuring it.
+  const engineScoresFromCloud = useMemo(() => {
+    const result: Record<(typeof ENGINES)[number], number> = {
+      body: 0, mind: 0, money: 0, charisma: 0,
+    };
+    for (const e of ENGINES) {
+      const engineTasks = allTasks.filter((t) => t.engine === e);
+      result[e] = computeEngineScore(engineTasks, completedIds);
+    }
+    return result;
+  }, [allTasks, completedIds]);
+
+  const titanScoreFromCloud = useMemo(() => {
+    const configured = ENGINES.filter((e) =>
+      allTasks.some((t) => t.engine === e),
+    );
+    if (configured.length === 0) return 0;
+    const sum = configured.reduce((acc, e) => acc + engineScoresFromCloud[e], 0);
+    return Math.round(sum / configured.length);
+  }, [allTasks, engineScoresFromCloud]);
+
+  const rank = getDailyRank(titanScoreFromCloud);
 
   // Chapter system
   const firstActiveDate = getJSON<string | null>("first_active_date", null);
@@ -195,16 +230,16 @@ export default function HQScreen() {
     return entries.length > 0 ? entries[entries.length - 1] : null;
   }, [appActive]);
 
-  // Refresh
+  // Refresh. React Query handles its own refetching; we just kick the
+  // legacy stores that haven't migrated yet and let the query client
+  // invalidate the cloud-backed queries.
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadAllEngines(analytics.today);
-    loadProfile();
     useHabitStore.getState().load(today);
     useFieldOpStore.getState().load();
     setRefreshing(false);
-  }, [analytics.today]);
+  }, [today]);
 
   // System notifications
   const notify = useSystemNotification();
@@ -216,80 +251,95 @@ export default function HQScreen() {
   // at the exact moment XP was awarded — events were silently lost
   // otherwise.
 
-  // Mission toggle — Phase 2.1C: stable callback keyed by taskId.
-  // Looks up the task across all engines via getState() to avoid putting
-  // tasks in the dep array. completedCount and tasks.length are also read
-  // fresh from derived state so the callback ref stays stable across
-  // re-renders — otherwise React.memo on MissionRow can't do its job.
-  const handleToggle = useCallback((taskId: number) => {
-    // Find the task across all engines
-    const storeTasks = useEngineStore.getState().tasks;
-    let task: TaskWithStatus | undefined;
-    for (const eng of ENGINES) {
-      const t = storeTasks[eng].find((x) => x.id === taskId);
-      if (t) { task = { ...t, completed: false } as TaskWithStatus; task.engine = eng; break; }
-    }
-    if (!task) return;
+  // Phase 3.5d: Mission toggle now routes through the cloud mutation
+  // hooks. MissionRow receives the Supabase UUID directly — no
+  // number-coercion bridge anymore. We keep the callback shape
+  // (taskId: string) stable so React.memo on MissionRow still does its
+  // job, and we look up the task from the cloud cache via the closure
+  // over `allTasks` (which is already stable-by-reference from React
+  // Query until the underlying data changes).
+  const handleToggle = useCallback(
+    async (taskId: string) => {
+      const task = allTasks.find((t) => t.id === taskId);
+      if (!task) return;
 
-    const completed = toggleTask(task.engine, taskId, analytics.today);
-    const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
-    if (completed) {
-      // [Game-feel #2] Satisfying success haptic instead of plain medium
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
 
-      // [Game-feel #2] Flash the completed row green
-      setLastCompletedId(taskId);
-      setTimeout(() => setLastCompletedId(null), 600);
-
-      awardXP(analytics.today, "task_complete", xp);
-      updateStreak(analytics.today);
-      evaluateAllTrees();
-      // First-ever task voice line
-      const firstTaskPlayed = getJSON<boolean>("first_task_voice_played", false);
-      if (!firstTaskPlayed) {
-        import("../../src/lib/protocol-audio").then(({ playVoiceLineAsync }) => {
-          playVoiceLineAsync("FIRST-TASK");
+      try {
+        const { completed } = await toggleCompletion.mutateAsync({
+          task: { id: task.id, engine: task.engine },
+          dateKey: today,
         });
-        setJSON("first_task_voice_played", true);
-      }
-      // System notification
-      notify({
-        type: "xp",
-        title: `+${xp} XP`,
-        subtitle: task.title,
-      });
 
-      // [Game-feel #4] All-tasks-complete celebration — read fresh state
-      // from store instead of closure so this callback stays stable.
-      const freshState = useEngineStore.getState();
-      const allTasksNow = selectAllTasksForDate(
-        freshState.tasks,
-        freshState.completions,
-        analytics.today,
-      );
-      const allCompleted = allTasksNow.length > 0 && allTasksNow.every((t) => t.completed);
-      if (allCompleted) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 200);
-        notify({ type: "system", title: "ALL TASKS COMPLETE", subtitle: "Protocol objectives cleared." });
-      }
-    } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      awardXP(analytics.today, "task_uncomplete", -xp);
-    }
-  }, [analytics.today, toggleTask, awardXP, updateStreak, notify]);
+        if (completed) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setLastCompletedId(taskId);
+          setTimeout(() => setLastCompletedId(null), 600);
 
-  // Phase 3.5c bridge: MissionRow now expects string taskId (Supabase
-  // UUIDs in the new path). Dashboard still reads from the legacy
-  // numeric-id store; this adapter parses the string back to a number
-  // and forwards to the existing handler. Removed in 3.5d when the
-  // dashboard migrates fully.
-  const handleToggleStr = useCallback(
-    (taskIdStr: string) => {
-      const taskId = Number(taskIdStr);
-      if (Number.isFinite(taskId)) handleToggle(taskId);
+          const xpResult = await awardXPMutation.mutateAsync(xp);
+          await updateStreakMutation.mutateAsync(today);
+          evaluateAllTrees();
+
+          if (xpResult.leveledUp) {
+            await enqueueRankUpMutation.mutateAsync({
+              fromLevel: xpResult.fromLevel,
+              toLevel: xpResult.toLevel,
+            });
+          }
+
+          // First-ever task voice line
+          const firstTaskPlayed = getJSON<boolean>("first_task_voice_played", false);
+          if (!firstTaskPlayed) {
+            import("../../src/lib/protocol-audio").then(({ playVoiceLineAsync }) => {
+              playVoiceLineAsync("FIRST-TASK");
+            });
+            setJSON("first_task_voice_played", true);
+          }
+
+          notify({
+            type: "xp",
+            title: `+${xp} XP`,
+            subtitle: task.title,
+          });
+
+          // All-tasks-complete celebration. We check the closure's
+          // `tasks` list — it's one tick stale (the React Query cache
+          // hasn't re-rendered us yet) so we simulate the toggle
+          // manually: every other task must already be completed.
+          const othersComplete = tasks
+            .filter((t) => t.id !== taskId)
+            .every((t) => t.completed);
+          if (othersComplete && tasks.length > 0) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setTimeout(
+              () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy),
+              200,
+            );
+            notify({
+              type: "system",
+              title: "ALL TASKS COMPLETE",
+              subtitle: "Protocol objectives cleared.",
+            });
+          }
+        } else {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          await awardXPMutation.mutateAsync(-xp);
+        }
+      } catch (_e) {
+        // Mutation hooks already handle optimistic rollback + error log.
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
     },
-    [handleToggle],
+    [
+      allTasks,
+      tasks,
+      today,
+      toggleCompletion,
+      awardXPMutation,
+      updateStreakMutation,
+      enqueueRankUpMutation,
+      notify,
+    ],
   );
 
   // Protocol pulse animation
@@ -450,7 +500,7 @@ export default function HQScreen() {
             </View>
             <View style={s.combatPowerWrap}>
               <Text style={s.combatPowerLabel}>COMBAT POWER</Text>
-              <Text style={s.combatPowerValue}>{analytics.titanScore}</Text>
+              <Text style={s.combatPowerValue}>{titanScoreFromCloud}</Text>
             </View>
           </View>
         </Animated.View>
@@ -472,7 +522,7 @@ export default function HQScreen() {
               {/* Left: Radar Chart */}
               <View style={s.radarCol}>
                 <RadarChart
-                  scores={analytics.engineScores}
+                  scores={engineScoresFromCloud}
                   size={radarSize}
                 />
               </View>
@@ -487,13 +537,13 @@ export default function HQScreen() {
                     </Text>
                     <View style={s.engineBarTrack}>
                       <TitanProgress
-                        value={analytics.engineScores[e]}
+                        value={engineScoresFromCloud[e]}
                         color={ENGINE_COLORS[e]}
                         height={6}
                         shimmer={false}
                       />
                     </View>
-                    <Text style={s.engineBarPct}>{analytics.engineScores[e]}%</Text>
+                    <Text style={s.engineBarPct}>{engineScoresFromCloud[e]}%</Text>
                   </View>
                 ))}
               </View>
@@ -528,18 +578,13 @@ export default function HQScreen() {
               {visibleTasks.map((task) => (
                 <MissionRow
                   key={`${task.engine}-${task.id}`}
-                  // Phase 3.5c: MissionRow taskId is now a string (Supabase
-                  // UUIDs). Dashboard still reads from the legacy
-                  // numeric-id store, so we coerce at the boundary. Will
-                  // be cleaned up when the dashboard migrates to the
-                  // useAllTasks hook in 3.5d.
-                  taskId={String(task.id!)}
+                  taskId={task.id}
                   title={task.title}
                   xp={task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST}
                   completed={task.completed}
                   kind={task.kind}
                   engine={task.engine}
-                  onToggle={handleToggleStr}
+                  onToggle={handleToggle}
                   highlighted={task.id === lastCompletedId}
                 />
               ))}
