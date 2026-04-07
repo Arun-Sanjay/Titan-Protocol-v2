@@ -20,9 +20,25 @@ import { getCurrentChapter, getDayNumber } from "../src/data/chapters";
 import { getLatestNarrative } from "../src/lib/narrative-engine";
 import { evaluateAllTrees } from "../src/lib/skill-tree-evaluator";
 
-import { useProtocolStore } from "../src/stores/useProtocolStore";
-import { useEngineStore, selectTotalScore, selectAllTasksForDate, ENGINES } from "../src/stores/useEngineStore";
-import { useProfileStore, XP_REWARDS } from "../src/stores/useProfileStore";
+// Phase 3.5d: The main ProtocolScreen component at the bottom of this
+// file now writes via cloud mutations (useSaveMorningSession /
+// useSaveEveningSession / useAwardXP / useUpdateStreak / useEnqueueRankUp).
+// Read-only subcomponents (MorningMissionPreviewPhase, EveningScoreRevealPhase)
+// still read from useEngineStore — they don't write, so they can't cause
+// data loss; they'll move to cloud when the engines tab does.
+import {
+  useEngineStore,
+  selectTotalScore,
+  selectAllTasksForDate,
+  ENGINES,
+} from "../src/stores/useEngineStore";
+// XP_REWARDS is a pure const export; no MMKV reads involved.
+import { XP_REWARDS } from "../src/stores/useProfileStore";
+import { useAllTasks, useAllCompletionsForDate } from "../src/hooks/queries/useTasks";
+import { computeEngineScore } from "../src/services/tasks";
+import { useAwardXP, useUpdateStreak } from "../src/hooks/queries/useProfile";
+import { useEnqueueRankUp } from "../src/hooks/queries/useRankUps";
+import { useProtocolSession, useSaveMorningSession, useSaveEveningSession } from "../src/hooks/queries/useProtocol";
 import { useModeStore, type IdentityArchetype, IDENTITY_LABELS } from "../src/stores/useModeStore";
 import { useIdentityStore, selectIdentityMeta, IDENTITIES } from "../src/stores/useIdentityStore";
 import { useHabitStore } from "../src/stores/useHabitStore";
@@ -475,24 +491,40 @@ export default function ProtocolScreen() {
   const router = useRouter();
   const today = getTodayKey();
 
-  // Store selectors
-  const morningDone = useProtocolStore((s) => s.isMorningDone(today));
-  const eveningDone = useProtocolStore((s) => s.isEveningDone(today));
-  const completeMorning = useProtocolStore((s) => s.completeMorning);
-  const completeEvening = useProtocolStore((s) => s.completeEvening);
-  const morningIntention = useProtocolStore((s) => s.morningIntention);
+  // Phase 3.5d: cloud-backed session state. The single protocol_sessions
+  // row per (user, date_key) holds both morning and evening data, so a
+  // morning save and an evening save both upsert the same row. No more
+  // Phase 2.2A multi-key write race.
+  const { data: session = null } = useProtocolSession(today);
+  const morningDone = Boolean(session?.morning_completed_at);
+  const eveningDone = Boolean(session?.evening_completed_at);
+  const morningIntention = session?.morning_intention ?? "";
+
+  const saveMorningMutation = useSaveMorningSession();
+  const saveEveningMutation = useSaveEveningSession();
+  const awardXPMutation = useAwardXP();
+  const updateStreakMutation = useUpdateStreak();
+  const enqueueRankUpMutation = useEnqueueRankUp();
 
   const identity = useModeStore((s) => s.identity);
   const castVote = useIdentityStore((s) => s.castVote);
-  const awardXP = useProfileStore((s) => s.awardXP);
-  const updateStreak = useProfileStore((s) => s.updateStreak);
-  const scores = useEngineStore((s) => s.scores);
-  const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
 
-  // Load engine data on mount
-  useEffect(() => {
-    loadAllEngines(today);
-  }, [today]);
+  // Compute today's Titan score from the cloud task list for the evening
+  // reveal. Mirrors the dashboard derivation so the two screens agree.
+  const { data: allTasks = [] } = useAllTasks();
+  const { data: allCompletions = [] } = useAllCompletionsForDate(today);
+  const titanScore = useMemo(() => {
+    const completedIds = new Set(allCompletions.map((c) => c.task_id));
+    const configured = ENGINES.filter((e) =>
+      allTasks.some((t) => t.engine === e),
+    );
+    if (configured.length === 0) return 0;
+    const sum = configured.reduce((acc, e) => {
+      const engineTasks = allTasks.filter((t) => t.engine === e);
+      return acc + computeEngineScore(engineTasks, completedIds);
+    }, 0);
+    return Math.round(sum / configured.length);
+  }, [allTasks, allCompletions]);
 
   // Auto-detect mode
   const mode: "morning" | "evening" = !morningDone ? "morning" : "evening";
@@ -504,7 +536,6 @@ export default function ProtocolScreen() {
   const [intention, setIntention] = useState("");
 
   // Evening state
-  const titanScore = useMemo(() => selectTotalScore(scores, today), [scores, today]);
   const [wentWell, setWentWell] = useState("");
   const [differently, setDifferently] = useState("");
 
@@ -525,13 +556,34 @@ export default function ProtocolScreen() {
 
   // ─── Morning finish ──────────────────────────────────────────────────────
 
-  const handleMorningFinish = useCallback(() => {
-    completeMorning(intention.trim());
-    awardXP(today, "morning_protocol", 15);
-    updateStreak(today);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
-  }, [intention, completeMorning, awardXP, updateStreak, today, router]);
+  const handleMorningFinish = useCallback(async () => {
+    try {
+      await saveMorningMutation.mutateAsync({
+        dateKey: today,
+        intention: intention.trim(),
+      });
+      const xpResult = await awardXPMutation.mutateAsync(15);
+      await updateStreakMutation.mutateAsync(today);
+      if (xpResult.leveledUp) {
+        await enqueueRankUpMutation.mutateAsync({
+          fromLevel: xpResult.fromLevel,
+          toLevel: xpResult.toLevel,
+        });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (_e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [
+    intention,
+    saveMorningMutation,
+    awardXPMutation,
+    updateStreakMutation,
+    enqueueRankUpMutation,
+    today,
+    router,
+  ]);
 
   // ─── Evening finish ──────────────────────────────────────────────────────
 
@@ -550,14 +602,40 @@ export default function ProtocolScreen() {
     goNext();
   }, [goNext]);
 
-  const handleEveningFinish = useCallback(() => {
+  const handleEveningFinish = useCallback(async () => {
     const reflection = [wentWell.trim(), differently.trim()].filter(Boolean).join("\n\n");
-    completeEvening(reflection, identityVoted ? identity : null, titanScore);
-    awardXP(today, "evening_protocol", 15);
-    evaluateAllTrees();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
-  }, [wentWell, differently, completeEvening, identityVoted, identity, titanScore, awardXP, today, router]);
+    try {
+      await saveEveningMutation.mutateAsync({
+        dateKey: today,
+        reflection,
+        titanScore,
+        identityVote: identityVoted ? identity : null,
+      });
+      const xpResult = await awardXPMutation.mutateAsync(15);
+      if (xpResult.leveledUp) {
+        await enqueueRankUpMutation.mutateAsync({
+          fromLevel: xpResult.fromLevel,
+          toLevel: xpResult.toLevel,
+        });
+      }
+      evaluateAllTrees();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (_e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [
+    wentWell,
+    differently,
+    saveEveningMutation,
+    awardXPMutation,
+    enqueueRankUpMutation,
+    identityVoted,
+    identity,
+    titanScore,
+    today,
+    router,
+  ]);
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
