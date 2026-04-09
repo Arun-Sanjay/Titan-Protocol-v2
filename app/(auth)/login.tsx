@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,21 +10,35 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 
 import { colors, spacing, radius, fonts } from "../../src/theme";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { logError } from "../../src/lib/error-log";
+import { supabase } from "../../src/lib/supabase";
+import { trackSignIn } from "../../src/lib/analytics";
+
+// Phase 7.3: completes the OAuth web-browser session if the deep link
+// returns to the app while it's still in the redirect flow. Required
+// by expo-auth-session for Android.
+WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+const GOOGLE_CONFIGURED = Boolean(GOOGLE_WEB_CLIENT_ID && GOOGLE_ANDROID_CLIENT_ID);
 
 /**
- * Phase 3.2: Main auth entry screen.
+ * Phase 3.2 / 7.3: Main auth entry screen.
  *
  * Three paths:
- * 1. Continue with Google — one-tap for Android (OAuth via expo-auth-session).
- *    Deferred wiring: requires a Google OAuth client ID generated from the
- *    SHA-1 of titan-release.jks. The button is visible but shows a
- *    "coming soon" alert until the client ID is populated in .env.
+ * 1. Continue with Google — one-tap OAuth via expo-auth-session →
+ *    supabase.auth.signInWithIdToken. The button is hidden when no
+ *    OAuth client ID is configured (EXPO_PUBLIC_GOOGLE_*_CLIENT_ID
+ *    env vars), so the app ships cleanly even before the user
+ *    populates the credentials in .env.
  * 2. Sign in with email — routes to /(auth)/email-login.
  * 3. Create account — routes to /(auth)/signup.
  *
@@ -35,22 +49,70 @@ export default function LoginScreen() {
   const router = useRouter();
   const [googleBusy, setGoogleBusy] = useState(false);
 
+  // Phase 7.3: Google OAuth request hook. Only initialized when both
+  // client IDs are present — otherwise we hide the button entirely.
+  const [, googleResponse, googlePromptAsync] = Google.useAuthRequest(
+    GOOGLE_CONFIGURED
+      ? {
+          androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+          webClientId: GOOGLE_WEB_CLIENT_ID,
+        }
+      : { webClientId: "" }, // disabled state — promptAsync won't be called
+  );
+
+  // Phase 7.3: handle the OAuth response. On success, exchange the
+  // id_token for a Supabase session via signInWithIdToken.
+  useEffect(() => {
+    if (!googleResponse) return;
+    if (googleResponse.type === "success") {
+      const idToken = googleResponse.params?.id_token as string | undefined;
+      if (!idToken) {
+        logError("login.google.no_id_token", new Error("OAuth success but no id_token"));
+        Alert.alert("Sign-in failed", "Google did not return an ID token.");
+        setGoogleBusy(false);
+        return;
+      }
+      (async () => {
+        try {
+          const { error } = await supabase.auth.signInWithIdToken({
+            provider: "google",
+            token: idToken,
+          });
+          if (error) throw error;
+          trackSignIn({ method: "google" });
+          // Root layout's auth listener handles the redirect to (tabs).
+        } catch (e) {
+          logError("login.google.exchange", e);
+          Alert.alert("Sign-in failed", "Could not exchange Google credentials.");
+        } finally {
+          setGoogleBusy(false);
+        }
+      })();
+    } else if (googleResponse.type === "error") {
+      logError("login.google.flow", new Error(String(googleResponse.error)));
+      Alert.alert("Sign-in cancelled", "Google sign-in was cancelled or failed.");
+      setGoogleBusy(false);
+    } else if (googleResponse.type === "cancel" || googleResponse.type === "dismiss") {
+      setGoogleBusy(false);
+    }
+  }, [googleResponse]);
+
   const handleGoogleSignIn = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!GOOGLE_CONFIGURED) {
+      Alert.alert(
+        "Google Sign-In not configured",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID and EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID are not set in .env. Use email sign-in below.",
+      );
+      return;
+    }
     setGoogleBusy(true);
     try {
-      // TODO Phase 3.2 follow-up: wire expo-auth-session + Google provider.
-      // Needs EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID + EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID
-      // from a Google Cloud Console OAuth client registered against the
-      // SHA-1 fingerprint of titan-release.jks.
-      Alert.alert(
-        "Coming soon",
-        "Google Sign-In is wired but needs its OAuth client ID. For now, use email sign-in below.",
-      );
+      await googlePromptAsync();
+      // The useEffect above handles the response.
     } catch (e) {
-      logError("login.google", e);
-      Alert.alert("Sign-in failed", "Something went wrong. Please try again.");
-    } finally {
+      logError("login.google.prompt", e);
+      Alert.alert("Sign-in failed", "Could not open Google sign-in.");
       setGoogleBusy(false);
     }
   };
@@ -82,33 +144,35 @@ export default function LoginScreen() {
         </Animated.View>
 
         <View style={styles.buttonGroup}>
-          <Animated.View entering={FadeInDown.delay(150).duration(400)}>
-            <Pressable
-              onPress={handleGoogleSignIn}
-              disabled={googleBusy}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.buttonPressed,
-                googleBusy && styles.buttonDisabled,
-              ]}
-            >
-              {googleBusy ? (
-                <ActivityIndicator color={colors.text} />
-              ) : (
-                <>
-                  <Ionicons
-                    name="logo-google"
-                    size={18}
-                    color={colors.text}
-                    style={styles.buttonIcon}
-                  />
-                  <Text style={styles.primaryButtonText}>
-                    Continue with Google
-                  </Text>
-                </>
-              )}
-            </Pressable>
-          </Animated.View>
+          {GOOGLE_CONFIGURED && (
+            <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+              <Pressable
+                onPress={handleGoogleSignIn}
+                disabled={googleBusy}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.buttonPressed,
+                  googleBusy && styles.buttonDisabled,
+                ]}
+              >
+                {googleBusy ? (
+                  <ActivityIndicator color={colors.text} />
+                ) : (
+                  <>
+                    <Ionicons
+                      name="logo-google"
+                      size={18}
+                      color={colors.text}
+                      style={styles.buttonIcon}
+                    />
+                    <Text style={styles.primaryButtonText}>
+                      Continue with Google
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </Animated.View>
+          )}
 
           <Animated.View entering={FadeInDown.delay(250).duration(400)}>
             <Pressable

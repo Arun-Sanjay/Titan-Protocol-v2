@@ -9,8 +9,11 @@
  * This module provides a centralized error log:
  * - Fixed-size ring buffer (last N errors kept in memory)
  * - Subscribable so a debug screen can show recent errors
- * - In Phase 4.4 this will be upgraded to forward errors to Sentry
- *   (keep the ring buffer for dev builds / hidden debug screen)
+ * - Phase 7.1: every entry is also forwarded to Sentry as a captured
+ *   exception (or message for non-Error inputs) with the source as a
+ *   tag and the context object as extra metadata. The ring buffer is
+ *   kept for the dev debug screen and as a fallback when Sentry is
+ *   disabled (no DSN).
  *
  * Usage:
  *   import { logError } from "@/lib/error-log";
@@ -18,6 +21,8 @@
  *     logError("storage.setJSON", e, { key, valueType: typeof value });
  *   }
  */
+
+import * as Sentry from "@sentry/react-native";
 
 export type ErrorLogEntry = {
   id: number;
@@ -65,6 +70,27 @@ export function logError(
       context ? { context } : "",
       error instanceof Error && error.stack ? `\n${error.stack}` : "",
     );
+
+    // Phase 7.1: forward to Sentry. captureException for real Errors
+    // gives us a proper stack trace; captureMessage covers the case
+    // where someone passed a string or object literal as the error.
+    try {
+      if (error instanceof Error) {
+        Sentry.captureException(error, {
+          tags: { source },
+          extra: context,
+        });
+      } else {
+        Sentry.captureMessage(`[${source}] ${entry.message}`, {
+          level: "error",
+          tags: { source },
+          extra: { ...context, raw: String(error) },
+        });
+      }
+    } catch {
+      // Sentry can fail (e.g. before init in tests). Don't let it break
+      // the local logging.
+    }
 
     // Notify subscribers (the debug screen subscribes to update its list)
     for (const sub of subscribers) {

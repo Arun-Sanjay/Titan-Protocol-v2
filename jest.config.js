@@ -19,7 +19,7 @@ module.exports = {
   // have nothing to do with mobile. Skip them.
   testPathIgnorePatterns: ["/node_modules/", "/legacy/", "/.expo/", "/android/"],
   transformIgnorePatterns: [
-    "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@shopify/.*|react-native-mmkv|react-native-reanimated|@tanstack/.*))",
+    "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|@sentry/.*|posthog-react-native|posthog-core|native-base|react-native-svg|@shopify/.*|react-native-mmkv|react-native-reanimated|@tanstack/.*))",
   ],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json"],
   setupFiles: [],

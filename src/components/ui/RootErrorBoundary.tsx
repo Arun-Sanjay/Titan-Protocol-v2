@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
+import * as Sentry from "@sentry/react-native";
 import { colors } from "../../theme/colors";
 import { fonts } from "../../theme/typography";
 import { spacing } from "../../theme/spacing";
@@ -19,7 +20,9 @@ type State = {
  * any uncaught render error shows a recoverable HUD screen instead of a white
  * screen.
  *
- * In Phase 4.4 this will also forward errors to Sentry.
+ * Phase 7.1: every caught error is forwarded to Sentry along with the
+ * React component stack so we get a useful breadcrumb trail in the
+ * dashboard. The console.error stays for dev visibility.
  */
 export class RootErrorBoundary extends React.Component<Props, State> {
   state: State = {
@@ -36,7 +39,14 @@ export class RootErrorBoundary extends React.Component<Props, State> {
     // eslint-disable-next-line no-console
     console.error("[RootErrorBoundary]", error, errorInfo.componentStack);
     this.setState({ errorInfo });
-    // TODO (Phase 4.4): Sentry.captureException(error, { extra: { componentStack: errorInfo.componentStack } });
+    // Phase 7.1: forward to Sentry. The component stack lands as a
+    // breadcrumb so we can see which subtree blew up.
+    Sentry.captureException(error, {
+      extra: {
+        componentStack: errorInfo.componentStack ?? "(no component stack)",
+      },
+      tags: { boundary: "root" },
+    });
   }
 
   handleReset = () => {

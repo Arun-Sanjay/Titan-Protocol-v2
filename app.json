@@ -33,7 +33,9 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-sharing"
+      "expo-sharing",
+      "@sentry/react-native",
+      "expo-web-browser"
     ]
   }
 }

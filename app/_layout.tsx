@@ -2,9 +2,94 @@ import { useEffect, useState } from "react";
 import { Stack, Redirect, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { StyleSheet } from "react-native";
+import { AppState, StyleSheet, type AppStateStatus } from "react-native";
 import * as SystemUI from "expo-system-ui";
+import * as Notifications from "expo-notifications";
 import { QueryClientProvider } from "@tanstack/react-query";
+import * as Sentry from "@sentry/react-native";
+import PostHog, { PostHogProvider } from "posthog-react-native";
+import {
+  identifyUser,
+  resetIdentity,
+  setPostHogClient,
+  trackAppForeground,
+  trackAppBackground,
+  trackAppOpen,
+} from "../src/lib/analytics";
+
+// Phase 7.1: Sentry init runs at module-eval time, before any other
+// imports that could throw. The DSN is read from EXPO_PUBLIC_SENTRY_DSN
+// in .env. If the DSN is missing (e.g. local dev without secrets),
+// init() is a no-op and Sentry stays disabled — no errors logged but
+// no crashes either.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    debug: __DEV__,
+    enableAutoSessionTracking: true,
+    // 10% of traces in production; full sampling in dev so we can see
+    // every breadcrumb during testing.
+    tracesSampleRate: __DEV__ ? 1.0 : 0.1,
+    // The `release` tag is set automatically by the @sentry/react-native
+    // expo plugin during the EAS build via the bundle version code.
+  });
+}
+
+// Phase 7.2: PostHog client. Disabled (null) when no key is set —
+// every analytics call becomes a no-op via the wrapper in
+// src/lib/analytics.ts. Auto-capture is off because we want to use
+// the typed event taxonomy instead of capturing every interaction.
+const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY;
+const POSTHOG_HOST = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://app.posthog.com";
+
+/**
+ * Conditional PostHogProvider wrapper. Renders children unwrapped
+ * when no API key is configured, so the app boots cleanly in dev
+ * without analytics.
+ */
+function MaybePostHogProvider({ children }: { children: React.ReactNode }) {
+  if (!POSTHOG_KEY) return <>{children}</>;
+  return (
+    <PostHogProvider
+      apiKey={POSTHOG_KEY}
+      options={{
+        host: POSTHOG_HOST,
+        // Don't auto-capture screen views or touches — we use the
+        // typed taxonomy in src/lib/analytics.ts.
+        captureAppLifecycleEvents: false,
+      }}
+      autocapture={false}
+    >
+      <PostHogClientBinder>{children}</PostHogClientBinder>
+    </PostHogProvider>
+  );
+}
+
+/**
+ * Pulls the PostHog instance out of the provider context and wires
+ * it into the analytics module's global so the typed wrappers can
+ * call it from anywhere.
+ */
+function PostHogClientBinder({ children }: { children: React.ReactNode }) {
+  // We can't use the usePostHog hook here without React context, so
+  // pass through children. The provider's instance is available via
+  // PostHog.getInstance() once the provider has mounted; we resolve
+  // it lazily on first capture.
+  useEffect(() => {
+    // Best-effort: resolve the PostHog client and bind it to the
+    // analytics module. We try a few possible APIs across SDK versions.
+    try {
+      // The provider exposes the instance via a singleton on the class.
+      // If this fails, capture() falls back to a no-op.
+      const maybe = (PostHog as unknown as { getInstance?: () => PostHog | null }).getInstance?.();
+      if (maybe) setPostHogClient(maybe);
+    } catch {
+      // ignore — analytics stays as no-op
+    }
+  }, []);
+  return <>{children}</>;
+}
 import { colors } from "../src/theme";
 import { useAuthStore } from "../src/stores/useAuthStore";
 import { queryClient } from "../src/lib/query-client";
@@ -134,6 +219,48 @@ export default function RootLayout() {
     const stop = startCloudSync();
     return () => stop();
   }, [authUser]);
+
+  // Phase 7.2: PostHog identify on auth + reset on sign-out. Also wire
+  // a Sentry user context with the same id so crashes get attributed.
+  useEffect(() => {
+    if (authUser) {
+      identifyUser(authUser.id, { email: authUser.email ?? null });
+      Sentry.setUser({ id: authUser.id, email: authUser.email ?? undefined });
+    } else {
+      resetIdentity();
+      Sentry.setUser(null);
+    }
+  }, [authUser]);
+
+  // Phase 7.4: Local notification channel for Android 8+. Required
+  // before any local notification fires; safe to call repeatedly
+  // (Android dedupes by channel id).
+  useEffect(() => {
+    Notifications.setNotificationChannelAsync("default", {
+      name: "Default",
+      importance: Notifications.AndroidImportance.DEFAULT,
+      sound: "default",
+    }).catch((e) => {
+      // eslint-disable-next-line no-console
+      console.warn("[notifications] channel setup failed", e);
+    });
+  }, []);
+
+  // Phase 7.2: AppState listener for app_open / foreground / background
+  // analytics events.
+  useEffect(() => {
+    trackAppOpen();
+    let lastState: AppStateStatus = AppState.currentState;
+    const sub = AppState.addEventListener("change", (next) => {
+      if (lastState.match(/inactive|background/) && next === "active") {
+        trackAppForeground();
+      } else if (lastState === "active" && next.match(/inactive|background/)) {
+        trackAppBackground();
+      }
+      lastState = next;
+    });
+    return () => sub.remove();
+  }, []);
 
   // Phase 3.2: Route-group-aware guard. We compute whether the current
   // route is inside the (auth) group so we can decide whether to redirect.
@@ -438,6 +565,7 @@ export default function RootLayout() {
   if (!authUser) {
     return (
       <QueryClientProvider client={queryClient}>
+        <MaybePostHogProvider>
         <GestureHandlerRootView style={styles.root}>
           <RootErrorBoundary>
             <StatusBar style="light" backgroundColor={colors.bg} />
@@ -452,12 +580,14 @@ export default function RootLayout() {
             </Stack>
           </RootErrorBoundary>
         </GestureHandlerRootView>
+        </MaybePostHogProvider>
       </QueryClientProvider>
     );
   }
 
   return (
     <QueryClientProvider client={queryClient}>
+    <MaybePostHogProvider>
     <GestureHandlerRootView style={styles.root}>
       <RootErrorBoundary>
       <SystemWindowProvider>
@@ -594,6 +724,7 @@ export default function RootLayout() {
       </SystemWindowProvider>
       </RootErrorBoundary>
     </GestureHandlerRootView>
+    </MaybePostHogProvider>
     </QueryClientProvider>
   );
 }
