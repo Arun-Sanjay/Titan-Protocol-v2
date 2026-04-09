@@ -55,6 +55,7 @@ import { OnboardingGate } from "../src/components/OnboardingGate";
 import { MigrationGate } from "../src/components/MigrationGate";
 import { AppResumeSyncMount } from "../src/components/AppResumeSyncMount";
 import { RankUpOverlayMount } from "../src/components/RankUpOverlayMount";
+import { startCloudSync } from "../src/lib/cloud-sync";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
 // Loaded once at the root layout; src/theme/typography.ts references the
 // font family by name. Falls back to Menlo/monospace until loaded.
@@ -122,6 +123,17 @@ export default function RootLayout() {
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
+
+  // Phase 6: Start the cloud sync engine once we have an authenticated
+  // user. The engine subscribes to the legacy MMKV stores and mirrors
+  // writes to Supabase via the new Phase 4 service layer. The cleanup
+  // unsubscribes on sign-out so we don't double-subscribe on the next
+  // sign-in.
+  useEffect(() => {
+    if (!authUser) return;
+    const stop = startCloudSync();
+    return () => stop();
+  }, [authUser]);
 
   // Phase 3.2: Route-group-aware guard. We compute whether the current
   // route is inside the (auth) group so we can decide whether to redirect.

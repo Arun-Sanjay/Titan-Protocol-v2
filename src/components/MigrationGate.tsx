@@ -17,6 +17,7 @@ import {
   maybeRunMigration,
   type MigrationStatus,
 } from "../lib/migrate-to-supabase";
+import { bootstrapFromCloud } from "../lib/cloud-bootstrap";
 import { logError } from "../lib/error-log";
 import { profileQueryKey } from "../hooks/queries/useProfile";
 
@@ -74,6 +75,17 @@ export function MigrationGate({ children }: Props) {
           // Real migration ran — refresh anything the user is about to see.
           queryClient.invalidateQueries({ queryKey: profileQueryKey });
           queryClient.invalidateQueries();
+        }
+
+        // Phase 6: cloud → MMKV bootstrap. Handles the fresh-device
+        // case where the user signs in on a new install: no MMKV data
+        // exists locally, so the legacy stores would render empty even
+        // though the cloud has rows. The bootstrap pulls cloud data
+        // back into MMKV for the supported domains. Per-user, per-
+        // domain MMKV flags make it idempotent — already-populated
+        // stores are skipped.
+        if (!cancelled) {
+          await bootstrapFromCloud(userId);
         }
       } catch (e) {
         logError("MigrationGate.run", e);
