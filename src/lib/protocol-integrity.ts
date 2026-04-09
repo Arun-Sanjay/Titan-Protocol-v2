@@ -133,13 +133,20 @@ export function recordCompletion(): IntegrityState {
       }
     }
   } else if (daysBefore === 1) {
-    // Missed exactly 1 day — WARNING (grace: no reset in INITIALIZING)
+    // Missed exactly 1 day — WARNING. Phase 1.3: do NOT advance the
+    // streak on a missed day. The previous code did `state.streak + 1`
+    // in BOTH branches, which contradicted the module header ("Miss 1
+    // day → INTEGRITY WARNING (streak paused, not reset — recover
+    // tomorrow)") and rewarded users for missing days. Now both
+    // branches preserve the streak; the post-grace branch additionally
+    // enters RECOVERING so the next consecutive day triggers the
+    // recovery mechanic.
     if (state.streak <= 6) {
-      // Grace period: treat as continuation
-      newStreak = state.streak + 1;
+      // Grace period: pause, do not advance.
+      newStreak = state.streak;
     } else {
-      // Streak paused but not broken — just continue from where we were
-      newStreak = state.streak + 1;
+      // Streak paused but not broken — preserve the value.
+      newStreak = state.streak;
       status = "RECOVERING";
       recoveryDays = 1;
       preBreakStreak = state.streak;
