@@ -1,5 +1,5 @@
 {
-  "name": "mobile",
+  "name": "titan-protocol",
   "version": "1.0.0",
   "main": "expo-router/entry",
   "scripts": {
@@ -8,7 +8,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "typecheck": "tsc --noEmit",
+    "prebuild": "tsc --noEmit && jest"
   },
   "dependencies": {
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",

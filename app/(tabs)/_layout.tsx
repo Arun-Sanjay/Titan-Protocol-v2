@@ -69,9 +69,10 @@ function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         return (
           <Pressable
             key={route.key}
-            accessibilityRole="button"
-            accessibilityState={focused ? { selected: true } : {}}
-            accessibilityLabel={options.tabBarAccessibilityLabel ?? tab.label}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: focused }}
+            accessibilityLabel={options.tabBarAccessibilityLabel ?? `${tab.label} tab`}
+            accessibilityHint={focused ? undefined : `Switch to ${tab.label}`}
             onPress={onPress}
             style={styles.tabPressable}
             hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -81,13 +82,15 @@ function TitanTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               <Ionicons
                 name={focused ? tab.iconFocused : tab.icon}
                 size={21}
-                color={focused ? "rgba(245,248,255,0.92)" : "rgba(210,220,242,0.42)"}
+                // Phase 8.4: bumped inactive opacity from 0.42 → 0.65
+                // for WCAG AA contrast on the dark tab bar background.
+                color={focused ? "rgba(245,248,255,0.96)" : "rgba(210,220,242,0.65)"}
               />
               <Text
                 numberOfLines={1}
                 style={[
                   styles.label,
-                  { color: focused ? "rgba(245,248,255,0.92)" : "rgba(210,220,242,0.42)" },
+                  { color: focused ? "rgba(245,248,255,0.96)" : "rgba(210,220,242,0.65)" },
                 ]}
               >
                 {tab.label}

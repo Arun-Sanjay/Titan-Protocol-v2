@@ -200,10 +200,39 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
     }
 
     if (Object.keys(newScores).length > 0) {
-      set((s) => ({
-        completions: { ...s.completions, ...newCompletions },
-        scores: { ...s.scores, ...newScores },
-      }));
+      // Phase 8.2: sliding window. Keep at most MAX_WINDOW_DAYS of
+      // (engine, day) entries in the in-memory cache to prevent
+      // unbounded growth on year-old power users. Cached entries
+      // are evicted oldest-first by date suffix; the on-disk MMKV
+      // values stay intact and can be re-loaded on demand.
+      const MAX_WINDOW_DAYS = 90;
+      const merged = {
+        completions: { ...get().completions, ...newCompletions },
+        scores: { ...get().scores, ...newScores },
+      };
+      const allKeys = Object.keys(merged.scores);
+      if (allKeys.length > MAX_WINDOW_DAYS * ENGINES.length) {
+        // Sort by date suffix descending; keep the newest window worth.
+        const sorted = allKeys.sort((a, b) => {
+          const da = a.split(":")[1] ?? "";
+          const db = b.split(":")[1] ?? "";
+          return db.localeCompare(da);
+        });
+        const keep = new Set(sorted.slice(0, MAX_WINDOW_DAYS * ENGINES.length));
+        const trimmedCompletions: Record<string, number[]> = {};
+        const trimmedScores: Record<string, number> = {};
+        for (const k of keep) {
+          if (merged.completions[k] !== undefined) {
+            trimmedCompletions[k] = merged.completions[k];
+          }
+          if (merged.scores[k] !== undefined) {
+            trimmedScores[k] = merged.scores[k];
+          }
+        }
+        set({ completions: trimmedCompletions, scores: trimmedScores });
+      } else {
+        set(merged);
+      }
     }
   },
 }));
