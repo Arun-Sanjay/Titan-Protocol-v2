@@ -18,7 +18,9 @@ import { colors, spacing, radius, fonts } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
-import { storage } from "../../src/db/storage";
+import { storage, setJSON } from "../../src/db/storage";
+import { K } from "../../src/db/keys";
+import type { UserProfile } from "../../src/db/schema";
 import { useProfile } from "../../src/hooks/queries/useProfile";
 import { useEngineStore } from "../../src/stores/useEngineStore";
 import { useModeStore, type ExperienceMode } from "../../src/stores/useModeStore";
@@ -407,22 +409,21 @@ export default function SettingsScreen() {
           text: "Reset",
           style: "destructive",
           onPress: () => {
-            // Phase 3.5d: this button only clears the LOCAL MMKV
-            // shadow of the profile. The cloud profile is
-            // authoritative and unaffected. A "true" profile reset
-            // would require a cloud mutation that zeroes the
-            // profiles row — deferred.
-            storage.set(
-              "user_profile",
-              JSON.stringify({
-                id: "default",
-                xp: 0,
-                level: 1,
-                streak: 0,
-                best_streak: 0,
-                last_active_date: "",
-              }),
-            );
+            // Phase 1.2: route through setJSON + the K registry instead of
+            // a raw storage.set, so the error-log wrapper catches any
+            // serialize failure. This button only clears the LOCAL MMKV
+            // shadow of the profile — the cloud profile is authoritative
+            // and unaffected (a true profile reset would need a cloud
+            // mutation that zeroes the profiles row).
+            const blank: UserProfile = {
+              id: "default",
+              xp: 0,
+              level: 1,
+              streak: 0,
+              best_streak: 0,
+              last_active_date: "",
+            };
+            setJSON(K.userProfile, blank);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           },
         },
@@ -504,25 +505,34 @@ export default function SettingsScreen() {
           />
         </Panel>
 
-        {/* ── Danger Zone ── */}
-        <SectionHeader title="Danger Zone" />
-        <Panel delay={200}>
-          <SettingRow
-            icon="refresh-outline"
-            label="Reset Profile"
-            description="Reset XP, level, and streak to zero"
-            onPress={handleResetProfile}
-            danger
-          />
-          <View style={styles.settingDivider} />
-          <SettingRow
-            icon="trash-outline"
-            label="Clear All Data"
-            description="Permanently delete everything"
-            onPress={handleClearAllData}
-            danger
-          />
-        </Panel>
+        {/* ── Danger Zone (DEV ONLY) ── */}
+        {/* Phase 1.2: gated behind __DEV__ so production users can't
+            wipe their MMKV out from under their cloud profile. The
+            "Reset Profile" button only clears the local mirror, and
+            "Clear All Data" leaves Supabase intact — both produce a
+            confusing half-state if hit by a real user. */}
+        {__DEV__ && (
+          <>
+            <SectionHeader title="Danger Zone (Dev)" />
+            <Panel delay={200}>
+              <SettingRow
+                icon="refresh-outline"
+                label="Reset Profile (Local)"
+                description="Reset local XP/level/streak mirror; cloud unaffected"
+                onPress={handleResetProfile}
+                danger
+              />
+              <View style={styles.settingDivider} />
+              <SettingRow
+                icon="trash-outline"
+                label="Clear All Local Data"
+                description="Wipe MMKV; cloud profile remains intact"
+                onPress={handleClearAllData}
+                danger
+              />
+            </Panel>
+          </>
+        )}
 
         {/* ── About ── */}
         <SectionHeader title="About" />
