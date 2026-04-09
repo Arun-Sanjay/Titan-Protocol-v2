@@ -22,6 +22,9 @@ import { markFirstLaunchSeen } from "../../../components/v2/story/FirstLaunchCin
 import { markBriefingSeen } from "../../../components/v2/story/DailyBriefing";
 import { getJSON, setJSON } from "../../../db/storage";
 import { getTodayKey } from "../../../lib/date";
+import { useCompleteOnboarding } from "../../../hooks/queries/useProfile";
+import { logError } from "../../../lib/error-log";
+import type { Enums } from "../../../types/supabase";
 import type { EngineKey } from "../../../db/schema";
 
 // -- Beat components ----------------------------------------------------------
@@ -109,26 +112,63 @@ export function CinematicOnboarding({ onComplete }: Props) {
   const setEnginePriority = useOnboardingStore((s) => s.setEnginePriority);
   const setSchedule = useOnboardingStore((s) => s.setSchedule);
 
+  // Phase 3.1: cloud onboarding completion mutation. Without this, the
+  // OnboardingGate kept redirecting users back to /onboarding on every
+  // cold launch because the cloud `profile.onboarding_completed` flag
+  // was never flipped — only the local MMKV mirror was.
+  const completeOnboardingMutation = useCompleteOnboarding();
+
   // Beat 12: complete onboarding (runs as effect, not during render)
   useEffect(() => {
     if (currentBeat !== 12) return;
 
+    // Local mirrors first — these are fast and idempotent.
     finishOnboarding();
     useWalkthroughStore.getState().finish();
-
-    // Skip FirstLaunchCinematic — onboarding already covered it
     markFirstLaunchSeen();
-
-    // Skip Day 1 DailyBriefing — user already saw the operation in BeatBriefing
     markBriefingSeen();
 
-    // Set first_active_date if not already set (needed for day counting)
     if (!getJSON("first_active_date", null)) {
       setJSON("first_active_date", getTodayKey());
     }
 
     stopCurrentAudio();
-    onComplete();
+
+    // Phase 3.1: mark onboarding complete in the cloud profile too.
+    // We pass through the choices we collected during the beats so the
+    // server-side profile row matches the local picks. Fire-and-forget
+    // with onError logging — if the server call fails, the local flag
+    // is already set so the user isn't trapped, and OnboardingGate's
+    // `if (isLoading || !profile) return <>{children}</>` fallback
+    // means they get into the app immediately.
+    const archetype = archetypeRef.current as Enums<"archetype">;
+    const mode = modeRef.current as Enums<"app_mode">;
+    const focusEngines = (focusEnginesRef.current ?? enginePriorityRef.current) as Enums<"engine_key">[];
+    completeOnboardingMutation.mutate(
+      {
+        archetype,
+        display_name: nameRef.current || null,
+        mode,
+        focus_engines: focusEngines,
+        first_use_date: getTodayKey(),
+      },
+      {
+        onError: (e) => {
+          logError("CinematicOnboarding.completeOnboarding", e, {
+            archetype,
+            mode,
+            focusEngines,
+          });
+        },
+        onSettled: () => {
+          // Always advance regardless of network success — the local
+          // flag is the user-facing source of truth for "did the
+          // user finish onboarding" and the next launch will retry
+          // the cloud sync via useAppResumeSync if needed.
+          onComplete();
+        },
+      },
+    );
   }, [currentBeat]);
 
   // Initialize audio on mount, stop on unmount

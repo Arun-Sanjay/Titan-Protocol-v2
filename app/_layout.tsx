@@ -10,7 +10,7 @@ import { useAuthStore } from "../src/stores/useAuthStore";
 import { queryClient } from "../src/lib/query-client";
 import { SystemNotificationProvider } from "../src/components/ui/SystemNotification";
 import { MotivationalSplash } from "../src/components/ui/MotivationalSplash";
-import { CinematicOnboarding } from "../src/components/v2/onboarding/CinematicOnboarding";
+// Phase 3.3: CinematicOnboarding is mounted by OnboardingGate now.
 import { useOnboardingStore } from "../src/stores/useOnboardingStore";
 import { useWalkthroughStore } from "../src/stores/useWalkthroughStore";
 import {
@@ -517,11 +517,12 @@ export default function RootLayout() {
       <OfflineBanner />
       <AchievementToast />
       {showSplash && <MotivationalSplash onDismiss={() => setShowSplash(false)} context={transmissionCtx} />}
-      {!showSplash && !onboardingCompleted && (
-        <CinematicOnboarding onComplete={() => {
-          useOnboardingStore.getState().finish();
-        }} />
-      )}
+      {/* Phase 3.3: CinematicOnboarding mount moved into OnboardingGate.
+          Previously this duplicated the gate's job: the gate would
+          redirect to /onboarding (rendering OnboardingShell — dead code)
+          while this overlay rendered CinematicOnboarding on top, so a
+          new user could see two onboarding flows stacked. Collapsing
+          both paths into the gate fixes that bug. */}
       {/* Phase 3.5d: Rank-up overlay reads from the rank_up_events table
           via React Query (RankUpOverlayMount). Replaces the Phase 2.1E
           MMKV-backed queue — events are now cross-device. Dismiss

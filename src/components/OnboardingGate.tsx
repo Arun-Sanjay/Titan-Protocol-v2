@@ -1,27 +1,38 @@
 import React from "react";
-import { Redirect, useSegments } from "expo-router";
 import { useProfile } from "../hooks/queries/useProfile";
+import { CinematicOnboarding } from "./v2/onboarding/CinematicOnboarding";
+import { useOnboardingStore } from "../stores/useOnboardingStore";
 
 /**
- * Phase 3.3b: Onboarding gate.
+ * Phase 3.1: Onboarding gate (redesigned in Phase 3.1 of the v1
+ * launch plan).
  *
  * Lives inside the signed-in render path (below QueryClientProvider)
- * so it can read the profile via React Query. Redirects to /onboarding
- * if the profile has not yet completed onboarding.
+ * so it can read the profile via React Query. When the cloud profile
+ * has `onboarding_completed = false`, this component renders the
+ * `CinematicOnboarding` flow INLINE instead of redirecting to
+ * `/onboarding` — the legacy redirect target was the dead `OnboardingShell`
+ * (Step* flow) that was deleted in Phase 3.4.
+ *
+ * The previous design had a structural bug: a new user could see BOTH
+ * the inline `CinematicOnboarding` overlay (gated on MMKV state) AND
+ * the legacy `OnboardingShell` route at the same time, because the two
+ * gates were independent. Collapsing both into a single gate fixes
+ * that.
  *
  * Design notes:
- *   - Returns null while the profile query is loading. The parent
- *     layout already shows the splash screen during initial load, so
- *     users see that instead of a flash of nothing.
- *   - If the user is already inside /onboarding, we don't redirect
- *     them again (avoids a redirect loop on the onboarding screen
- *     itself).
- *   - If the profile query fails or returns null, we still render
- *     children. The old local-state onboarding flow takes over as a
- *     fallback — this keeps the migration risk-free.
- *   - Once the profile is loaded AND onboarding_completed is false,
- *     we redirect. The onboarding screen itself should call
- *     useCompleteOnboarding() at the end so the flag flips.
+ *   - While the profile query is loading or missing, render children.
+ *     The parent layout already shows the splash screen during initial
+ *     load, so users see that instead of a flash of nothing.
+ *   - If profile.onboarding_completed is false, render
+ *     `CinematicOnboarding` and let it call `useCompleteOnboarding`
+ *     on its own — that flips the cloud flag, the React Query cache
+ *     updates, and this gate falls through to children on the next
+ *     render.
+ *   - The local MMKV `useOnboardingStore.completed` flag is still
+ *     respected as a fast-path: if it's true (set by a previous
+ *     run on the same device) we let the user through immediately
+ *     even if the cloud query hasn't refetched yet.
  */
 type Props = {
   children: React.ReactNode;
@@ -29,26 +40,28 @@ type Props = {
 
 export function OnboardingGate({ children }: Props) {
   const { data: profile, isLoading } = useProfile();
-  const segments = useSegments();
+  const localCompleted = useOnboardingStore((s) => s.completed);
 
-  // Allow the onboarding/tutorial/walkthrough screens themselves to
-  // render without a guard — otherwise we'd redirect them to themselves.
-  const segment = segments[0];
-  const inOnboardingFlow =
-    segment === "onboarding" ||
-    segment === "tutorial" ||
-    segment === "walkthrough";
-
-  // Don't redirect while the profile is loading or missing — avoids a
-  // race on first app launch where the profile row might be 50ms behind
-  // the auth event.
+  // Don't gate while the profile is loading — the parent layout's
+  // splash is up, and gating now would flash the cinematic.
   if (isLoading || !profile) {
     return <>{children}</>;
   }
 
-  if (!profile.onboarding_completed && !inOnboardingFlow) {
-    return <Redirect href="/onboarding" />;
+  // Cloud is authoritative, but the local MMKV mirror is a fast-path
+  // so users who completed onboarding on this device get through
+  // even if the cloud query is in flight.
+  if (profile.onboarding_completed || localCompleted) {
+    return <>{children}</>;
   }
 
-  return <>{children}</>;
+  return (
+    <CinematicOnboarding
+      onComplete={() => {
+        // No-op: CinematicOnboarding writes the local + cloud flags
+        // itself; this gate will re-render and pass through children
+        // when React Query refetches profile.
+      }}
+    />
+  );
 }
