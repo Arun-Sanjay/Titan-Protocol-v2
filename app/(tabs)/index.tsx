@@ -15,9 +15,10 @@ import { getJSON, setJSON } from "../../src/db/storage";
 import { useSystemNotification } from "../../src/components/ui/SystemNotification";
 import { QuestCard } from "../../src/components/ui/QuestCard";
 import { SystemVoice } from "../../src/components/ui/SystemVoice";
-// Phase 2.1E: LevelUpOverlay moved to root layout (app/_layout.tsx).
-// It now subscribes to useProfileStore.pendingRankUps so rank-ups work
-// regardless of which screen the user is on when XP is awarded.
+// Phase 2.4: LevelUpOverlay is mounted in app/_layout.tsx via
+// RankUpOverlayMount, which subscribes to the cloud rank_up_events
+// table (services/rank-ups.ts). The legacy MMKV queue
+// (useProfileStore.pendingRankUps) was deleted as dead code.
 import { colors, spacing, fonts, radius } from "../../src/theme";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
@@ -244,12 +245,13 @@ export default function HQScreen() {
   // System notifications
   const notify = useSystemNotification();
 
-  // Phase 2.1E: Level-up detection moved to useProfileStore.awardXP() and
-  // the overlay is now mounted in the root layout subscribing to the
-  // persisted queue (useProfileStore.pendingRankUps). The previous
-  // useRef-based detection only worked when the user was on this screen
-  // at the exact moment XP was awarded — events were silently lost
-  // otherwise.
+  // Phase 2.4: Level-up detection now happens inside the cloud
+  // useAwardXP mutation (hooks/queries/useProfile.ts), which calls
+  // useEnqueueRankUp on the cloud rank_up_events table. The overlay is
+  // mounted in the root layout via RankUpOverlayMount, which reads
+  // from the cloud queue. This is cross-device and survives screen
+  // unmounts, app backgrounding, and rapid XP awards — all the edge
+  // cases the original useRef-based detection missed.
 
   // Phase 3.5d: Mission toggle now routes through the cloud mutation
   // hooks. MissionRow receives the Supabase UUID directly — no

@@ -48,7 +48,9 @@ export const K = {
   // ─── Profile & progression (static) ──────────────────────────────────────
 
   userProfile: "user_profile",
-  pendingRankUps: "pending_rank_ups",
+  // Phase 2.4: pendingRankUps key removed. The MMKV-backed queue was the
+  // legacy half of the dual rank-up queue and had no readers — the
+  // cloud rank_up_events table is now authoritative.
   playerRank: "player_rank",
   progressionPhase: "progression_phase",
   firstActiveDate: "first_active_date",

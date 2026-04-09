@@ -14,11 +14,10 @@ import {
  * from the cache so the next event slides in instantly).
  *
  * Replaces the Phase 2.1E mount in app/_layout.tsx that read from
- * useProfileStore.pendingRankUps[0]. The store-backed queue stays in
- * place for now but is no longer the source of truth — the migration
- * script copies any pending events into rank_up_events on first run,
- * and new events go straight to Supabase via useEnqueueRankUp from
- * the consumer cutover commits.
+ * useProfileStore.pendingRankUps[0]. As of Phase 2.4 the store-backed
+ * queue has been deleted entirely — the migration script copied any
+ * pending MMKV events into rank_up_events on first run, and all new
+ * events go straight to Supabase via useEnqueueRankUp.
  *
  * Lives inside the QueryClientProvider tree (mounted from
  * app/_layout.tsx authenticated render path).

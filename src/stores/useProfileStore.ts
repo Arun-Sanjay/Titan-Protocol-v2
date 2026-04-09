@@ -2,11 +2,12 @@ import { create } from "zustand";
 import { getJSON, setJSON } from "../db/storage";
 import { K } from "../db/keys";
 import { isDoubleXPActive } from "../lib/surprise-engine";
+import { enqueueRankUp } from "../services/rank-ups";
+import { logError } from "../lib/error-log";
 import type { UserProfile } from "../db/schema";
 
 // Phase 2.2D: keys sourced from central registry.
 const PROFILE_KEY = K.userProfile;
-const RANK_UP_QUEUE_KEY = K.pendingRankUps;
 const XP_PER_LEVEL = 500;
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -29,46 +30,32 @@ export const XP_REWARDS = {
 } as const;
 
 /**
- * Phase 2.1E: Rank-up events are persisted to MMKV so that level-ups
- * survive screen unmounts, app backgrounding, and rapid successive XP
- * awards. Previously the LevelUpOverlay was mounted only in the dashboard
- * tab and used a useRef-based detection that missed events when the user
- * was on any other screen (the core bug).
+ * Phase 2.4: the MMKV-backed `pendingRankUps` queue and its
+ * `dequeueRankUp` action have been deleted. They were the legacy half
+ * of the dual rank-up queue documented in the engineering report
+ * (§6.9). The cloud `rank_up_events` table is now the only source of
+ * truth — RankUpOverlayMount.tsx subscribes to `usePendingRankUps()`
+ * from `hooks/queries/useRankUps.ts`.
  *
- * Now: useProfileStore.awardXP() detects the level change at the source
- * and enqueues an event. The LevelUpOverlay (mounted in the root layout
- * in Phase 2.1E) subscribes to the queue head and shows whatever is
- * pending, calling dequeueRankUp() on dismiss.
+ * Existing legacy callers of `useProfileStore.awardXP` (QuestCard,
+ * WarRoom) get migrated to the cloud `useAwardXP` mutation in Phase 6.
+ * Until then, this store's `awardXP` keeps the local MMKV profile in
+ * sync AND fires a fire-and-forget call to `services/rank-ups
+ * .enqueueRankUp` on level-up so the cloud overlay still triggers.
  */
-export type RankUpEvent = {
-  id: string;
-  from: number;
-  to: number;
-  at: number;
-};
 
 type ProfileState = {
   profile: UserProfile;
-  pendingRankUps: RankUpEvent[];
   load: () => void;
   awardXP: (dateKey: string, source: string, amount: number) => void;
   updateStreak: (dateKey: string) => void;
-  dequeueRankUp: () => void;
 };
 
-function genRankUpId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
 export const useProfileStore = create<ProfileState>()((set, get) => ({
-  profile: DEFAULT_PROFILE,
-  pendingRankUps: getJSON<RankUpEvent[]>(RANK_UP_QUEUE_KEY, []),
+  profile: getJSON<UserProfile>(PROFILE_KEY, DEFAULT_PROFILE),
 
   load: () => {
-    set({
-      profile: getJSON<UserProfile>(PROFILE_KEY, DEFAULT_PROFILE),
-      pendingRankUps: getJSON<RankUpEvent[]>(RANK_UP_QUEUE_KEY, []),
-    });
+    set({ profile: getJSON<UserProfile>(PROFILE_KEY, DEFAULT_PROFILE) });
   },
 
   awardXP: (_dateKey, _source, amount) => {
@@ -82,30 +69,26 @@ export const useProfileStore = create<ProfileState>()((set, get) => ({
     profile.xp = Math.max(0, profile.xp + finalAmount); // Clamp to 0 minimum
     profile.level = Math.max(1, Math.floor(profile.xp / XP_PER_LEVEL) + 1);
     setJSON(PROFILE_KEY, profile);
+    set({ profile });
 
-    // Phase 2.1E: detect level change at the source.
-    // Guard: only enqueue on positive level changes from >=1 (not initial
-    // load from 0). Handles multi-level jumps (e.g., big XP awards crossing
-    // several level boundaries) as a single rank-up event from->to.
+    // Phase 2.4: enqueue rank-up to the cloud table on level change.
+    // Fire-and-forget — if the user is offline the call will fail and
+    // the overlay won't fire for this particular event, but Phase 6
+    // will migrate the two legacy callers (QuestCard, WarRoom) to
+    // useAwardXP from hooks/queries/useProfile.ts which uses the
+    // optimistic-mutation path with offline queueing. Until then this
+    // is the cleanest way to keep the legacy callers wired without
+    // resurrecting the dead MMKV queue.
     if (profile.level > prevLevel && prevLevel >= 1) {
-      const event: RankUpEvent = {
-        id: genRankUpId(),
-        from: prevLevel,
-        to: profile.level,
-        at: Date.now(),
-      };
-      const nextQueue = [...get().pendingRankUps, event];
-      setJSON(RANK_UP_QUEUE_KEY, nextQueue);
-      set({ profile, pendingRankUps: nextQueue });
-    } else {
-      set({ profile });
+      enqueueRankUp({ fromLevel: prevLevel, toLevel: profile.level }).catch(
+        (e) => {
+          logError("useProfileStore.awardXP.enqueueRankUp", e, {
+            fromLevel: prevLevel,
+            toLevel: profile.level,
+          });
+        },
+      );
     }
-  },
-
-  dequeueRankUp: () => {
-    const [, ...rest] = get().pendingRankUps;
-    setJSON(RANK_UP_QUEUE_KEY, rest);
-    set({ pendingRankUps: rest });
   },
 
   updateStreak: (dateKey) => {
