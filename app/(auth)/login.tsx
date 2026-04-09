@@ -49,16 +49,18 @@ export default function LoginScreen() {
   const router = useRouter();
   const [googleBusy, setGoogleBusy] = useState(false);
 
-  // Phase 7.3: Google OAuth request hook. Only initialized when both
-  // client IDs are present — otherwise we hide the button entirely.
-  const [, googleResponse, googlePromptAsync] = Google.useAuthRequest(
-    GOOGLE_CONFIGURED
-      ? {
-          androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-          webClientId: GOOGLE_WEB_CLIENT_ID,
-        }
-      : { webClientId: "" }, // disabled state — promptAsync won't be called
-  );
+  // Phase 7.3: Google OAuth request hook. Hooks must be called
+  // unconditionally per the rules of hooks, AND Google.useAuthRequest
+  // throws synchronously during render if `androidClientId` is missing
+  // on Android (the runtime validates platform fields at hook-call
+  // time, not at promptAsync time). So we pass placeholder strings
+  // when not configured — the button itself is hidden via
+  // GOOGLE_CONFIGURED below, so promptAsync is never actually called
+  // with these dummy values.
+  const [, googleResponse, googlePromptAsync] = Google.useAuthRequest({
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID ?? "placeholder.apps.googleusercontent.com",
+    webClientId: GOOGLE_WEB_CLIENT_ID ?? "placeholder.apps.googleusercontent.com",
+  });
 
   // Phase 7.3: handle the OAuth response. On success, exchange the
   // id_token for a Supabase session via signInWithIdToken.
