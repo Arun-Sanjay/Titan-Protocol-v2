@@ -7,10 +7,8 @@
  * (which will recompute scores against rows pulled from the server)
  * can't drift the math.
  */
-import {
-  calculateWeightedTitanScore,
-  calculateRank,
-} from "../lib/scoring-v2";
+import { calculateWeightedTitanScore } from "../lib/scoring-v2";
+import { getDailyRank } from "../db/gamification";
 
 describe("calculateWeightedTitanScore", () => {
   describe("with no identity (equal weights)", () => {
@@ -140,7 +138,12 @@ describe("calculateWeightedTitanScore", () => {
   });
 });
 
-describe("calculateRank", () => {
+describe("getDailyRank", () => {
+  // Phase 2.2: migrated from the deleted scoring-v2.calculateRank to
+  // gamification.getDailyRank, which returns the same D-SS thresholds
+  // wrapped in a {letter, min, color} object. The two functions had
+  // identical semantics but the gamification version is the one with
+  // 6 production callers.
   it.each([
     [0, "D"],
     [29, "D"],
@@ -155,6 +158,6 @@ describe("calculateRank", () => {
     [95, "SS"],
     [100, "SS"],
   ])("score %i returns rank %s", (score, expected) => {
-    expect(calculateRank(score)).toBe(expected);
+    expect(getDailyRank(score).letter).toBe(expected);
   });
 });

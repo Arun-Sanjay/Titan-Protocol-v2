@@ -23,20 +23,14 @@ const ENGINE_WEIGHTS: Record<Archetype, Record<string, number>> = {
 
 const EQUAL_WEIGHTS: Record<string, number> = { body: 0.25, mind: 0.25, money: 0.25, charisma: 0.25 };
 
-// ─── Rank thresholds (same as v1) ──────────────────────────────────────────
-
-export type RankGrade = "D" | "C" | "B" | "A" | "S" | "SS";
-
-const RANK_THRESHOLDS: { min: number; grade: RankGrade }[] = [
-  { min: 95, grade: "SS" },
-  { min: 85, grade: "S" },
-  { min: 70, grade: "A" },
-  { min: 50, grade: "B" },
-  { min: 30, grade: "C" },
-  { min: 0, grade: "D" },
-];
-
 // ─── Public API ─────────────────────────────────────────────────────────────
+//
+// Phase 2.2: removed the dead `calculateRank(score)` function and its
+// `RANK_THRESHOLDS` constant. Both duplicated `getDailyRank` from
+// `db/gamification.ts`, which is the version that 6 production files
+// already import. There's no replacement needed — call sites should
+// use `getDailyRank(score).letter` for the D-SS grade and
+// `getDailyRank(score).color` for the display color.
 
 /**
  * Calculate the weighted Titan Score.
@@ -78,27 +72,3 @@ export function calculateWeightedTitanScore(
   return Math.round(weighted);
 }
 
-/**
- * Get rank grade from a score (0-100).
- */
-export function calculateRank(score: number): RankGrade {
-  for (const { min, grade } of RANK_THRESHOLDS) {
-    if (score >= min) return grade;
-  }
-  return "D";
-}
-
-/**
- * Get rank color for display.
- */
-export function getRankColor(grade: RankGrade): string {
-  const colorMap: Record<RankGrade, string> = {
-    D: "#6B7280",
-    C: "#A78BFA",
-    B: "#60A5FA",
-    A: "#34D399",
-    S: "#FBBF24",
-    SS: "#F97316",
-  };
-  return colorMap[grade];
-}
