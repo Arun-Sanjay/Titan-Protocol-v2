@@ -57,6 +57,25 @@ function migrationInProgressKey(userId: string): string {
   return `migration_to_supabase_in_progress:${userId}`;
 }
 
+/**
+ * Phase 1.7: per-domain completion flag. Lets us skip already-migrated
+ * domains on re-run after a partial-failure crash, instead of either
+ * (a) re-uploading everything (which previously caused duplicates for
+ * tasks/habits because they used insert, not upsert) or (b) blocking
+ * the user from a successful retry of the failed domain.
+ */
+function domainCompletedKey(userId: string, domain: MigrationStep): string {
+  return `migration_${domain}_completed:${userId}`;
+}
+
+function isDomainComplete(userId: string, domain: MigrationStep): boolean {
+  return storage.getBoolean(domainCompletedKey(userId, domain)) === true;
+}
+
+function markDomainComplete(userId: string, domain: MigrationStep): void {
+  storage.set(domainCompletedKey(userId, domain), true);
+}
+
 // ─── Status types ───────────────────────────────────────────────────────────
 
 export type MigrationStep =
@@ -142,85 +161,127 @@ export async function maybeRunMigration(
     result.counts[step] = count;
   };
 
+  // Phase 1.7: each domain checks its own completion flag and skips if
+  // already done. This makes re-runs after a partial-failure crash safe
+  // without re-uploading rows that already landed.
+
   // ─── 1. Profile (XP, level, streak, archetype, mode) ───────────────────
-  stepStart("profile");
-  try {
-    const count = await migrateProfile(userId);
-    stepDone("profile", count);
-  } catch (e) {
-    logError("migration.profile", e);
-    result.errors.push({ step: "profile", error: e });
-    result.success = false;
+  if (!isDomainComplete(userId, "profile")) {
+    stepStart("profile");
+    try {
+      const count = await migrateProfile(userId);
+      markDomainComplete(userId, "profile");
+      stepDone("profile", count);
+    } catch (e) {
+      logError("migration.profile", e);
+      result.errors.push({ step: "profile", error: e });
+      result.success = false;
+    }
+  } else {
+    completed += 1;
   }
 
   // ─── 2. Tasks ──────────────────────────────────────────────────────────
-  stepStart("tasks");
   let taskIdMap: Map<number, string> = new Map();
-  try {
-    const out = await migrateTasks(userId);
-    taskIdMap = out.idMap;
-    stepDone("tasks", out.count);
-  } catch (e) {
-    logError("migration.tasks", e);
-    result.errors.push({ step: "tasks", error: e });
-    result.success = false;
+  if (!isDomainComplete(userId, "tasks")) {
+    stepStart("tasks");
+    try {
+      const out = await migrateTasks(userId);
+      taskIdMap = out.idMap;
+      markDomainComplete(userId, "tasks");
+      stepDone("tasks", out.count);
+    } catch (e) {
+      logError("migration.tasks", e);
+      result.errors.push({ step: "tasks", error: e });
+      result.success = false;
+    }
+  } else {
+    // Re-derive id map from the cloud rows so completions can still join.
+    taskIdMap = await rebuildTaskIdMap(userId);
+    completed += 1;
   }
 
   // ─── 3. Completions (depend on the task id map) ────────────────────────
-  stepStart("completions");
-  try {
-    const count = await migrateCompletions(userId, taskIdMap);
-    stepDone("completions", count);
-  } catch (e) {
-    logError("migration.completions", e);
-    result.errors.push({ step: "completions", error: e });
-    result.success = false;
+  if (!isDomainComplete(userId, "completions")) {
+    stepStart("completions");
+    try {
+      const count = await migrateCompletions(userId, taskIdMap);
+      markDomainComplete(userId, "completions");
+      stepDone("completions", count);
+    } catch (e) {
+      logError("migration.completions", e);
+      result.errors.push({ step: "completions", error: e });
+      result.success = false;
+    }
+  } else {
+    completed += 1;
   }
 
   // ─── 4. Habits ────────────────────────────────────────────────────────
-  stepStart("habits");
   let habitIdMap: Map<number, string> = new Map();
-  try {
-    const out = await migrateHabits(userId);
-    habitIdMap = out.idMap;
-    stepDone("habits", out.count);
-  } catch (e) {
-    logError("migration.habits", e);
-    result.errors.push({ step: "habits", error: e });
-    result.success = false;
+  if (!isDomainComplete(userId, "habits")) {
+    stepStart("habits");
+    try {
+      const out = await migrateHabits(userId);
+      habitIdMap = out.idMap;
+      markDomainComplete(userId, "habits");
+      stepDone("habits", out.count);
+    } catch (e) {
+      logError("migration.habits", e);
+      result.errors.push({ step: "habits", error: e });
+      result.success = false;
+    }
+  } else {
+    habitIdMap = await rebuildHabitIdMap(userId);
+    completed += 1;
   }
 
   // ─── 5. Habit logs ────────────────────────────────────────────────────
-  stepStart("habit_logs");
-  try {
-    const count = await migrateHabitLogs(userId, habitIdMap);
-    stepDone("habit_logs", count);
-  } catch (e) {
-    logError("migration.habit_logs", e);
-    result.errors.push({ step: "habit_logs", error: e });
-    result.success = false;
+  if (!isDomainComplete(userId, "habit_logs")) {
+    stepStart("habit_logs");
+    try {
+      const count = await migrateHabitLogs(userId, habitIdMap);
+      markDomainComplete(userId, "habit_logs");
+      stepDone("habit_logs", count);
+    } catch (e) {
+      logError("migration.habit_logs", e);
+      result.errors.push({ step: "habit_logs", error: e });
+      result.success = false;
+    }
+  } else {
+    completed += 1;
   }
 
   // ─── 6. Protocol sessions ─────────────────────────────────────────────
-  stepStart("protocol");
-  try {
-    const count = await migrateProtocolSessions(userId);
-    stepDone("protocol", count);
-  } catch (e) {
-    logError("migration.protocol", e);
-    result.errors.push({ step: "protocol", error: e });
-    result.success = false;
+  if (!isDomainComplete(userId, "protocol")) {
+    stepStart("protocol");
+    try {
+      const count = await migrateProtocolSessions(userId);
+      markDomainComplete(userId, "protocol");
+      stepDone("protocol", count);
+    } catch (e) {
+      logError("migration.protocol", e);
+      result.errors.push({ step: "protocol", error: e });
+      result.success = false;
+    }
+  } else {
+    completed += 1;
   }
 
   // ─── 7. Pending rank-ups ──────────────────────────────────────────────
-  stepStart("rank_ups");
-  try {
-    const count = await migrateRankUps(userId);
-    stepDone("rank_ups", count);
-  } catch (e) {
-    logError("migration.rank_ups", e);
-    result.errors.push({ step: "rank_ups", error: e });
-    // Rank-ups failing isn't critical — they're celebration events.
+  if (!isDomainComplete(userId, "rank_ups")) {
+    stepStart("rank_ups");
+    try {
+      const count = await migrateRankUps(userId);
+      markDomainComplete(userId, "rank_ups");
+      stepDone("rank_ups", count);
+    } catch (e) {
+      logError("migration.rank_ups", e);
+      result.errors.push({ step: "rank_ups", error: e });
+      // Rank-ups failing isn't critical — they're celebration events.
+    }
+  } else {
+    completed += 1;
   }
 
   // ─── Done ─────────────────────────────────────────────────────────────
@@ -284,36 +345,67 @@ async function migrateTasks(
     const tasks = getJSON<MMKVTask[]>(`tasks:${engine}`, []);
     if (tasks.length === 0) continue;
 
-    const rows: TablesInsert<"tasks">[] = tasks.map((t) => ({
-      user_id: userId,
-      engine: t.engine,
-      title: t.title,
-      kind: t.kind,
-      days_per_week: t.days_per_week ?? 7,
-      is_active: t.is_active === 1,
-    }));
+    // Phase 1.7: upsert with (user_id, legacy_local_id) conflict target.
+    // Previously this used insert(), so a re-run after a partial-failure
+    // crash would duplicate every task. The legacy_local_id column was
+    // added in migration 10_legacy_local_id_columns and the partial
+    // unique index makes this conflict target valid.
+    const rows: TablesInsert<"tasks">[] = tasks
+      .filter((t) => t.id !== undefined && t.id !== null)
+      .map((t) => ({
+        user_id: userId,
+        engine: t.engine,
+        title: t.title,
+        kind: t.kind,
+        days_per_week: t.days_per_week ?? 7,
+        is_active: t.is_active === 1,
+        legacy_local_id: t.id!,
+      }));
+
+    if (rows.length === 0) continue;
 
     const { data, error } = await supabase
       .from("tasks")
-      .insert(rows)
-      .select("id");
+      .upsert(rows, { onConflict: "user_id,legacy_local_id" })
+      .select("id, legacy_local_id");
 
     if (error) throw error;
 
-    // Build the id map: numeric MMKV id → uuid Supabase id.
-    // Order is preserved by the insert+select roundtrip on Postgres.
     if (data) {
-      data.forEach((row, idx) => {
-        const localId = tasks[idx].id;
-        if (localId !== undefined && localId !== null) {
-          idMap.set(localId, row.id);
+      for (const row of data) {
+        if (row.legacy_local_id !== null && row.legacy_local_id !== undefined) {
+          idMap.set(row.legacy_local_id, row.id);
         }
-      });
+      }
     }
     count += rows.length;
   }
 
   return { count, idMap };
+}
+
+/**
+ * Phase 1.7: rebuild the task id map from cloud rows when the tasks
+ * domain has already been marked complete on a previous run. This lets
+ * the completions step still join MMKV-local-id → cloud-uuid even
+ * after a successful tasks migration.
+ */
+async function rebuildTaskIdMap(userId: string): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("id, legacy_local_id")
+    .eq("user_id", userId)
+    .not("legacy_local_id", "is", null);
+  if (error) throw error;
+  if (data) {
+    for (const row of data) {
+      if (row.legacy_local_id !== null && row.legacy_local_id !== undefined) {
+        map.set(row.legacy_local_id, row.id);
+      }
+    }
+  }
+  return map;
 }
 
 async function migrateCompletions(
@@ -380,38 +472,67 @@ async function migrateHabits(
     return { count: 0, idMap: new Map() };
   }
 
-  const rows: TablesInsert<"habits">[] = habits.map((h) => ({
-    user_id: userId,
-    title: h.title,
-    engine: h.engine,
-    icon: h.icon ?? "",
-    trigger_text: h.trigger ?? null,
-    duration_text: h.duration ?? null,
-    frequency: h.frequency ?? null,
-    // Phase 3.1 denormalized chain stats — start at 0 since the legacy
-    // store recomputed them on read. The next habit toggle re-derives.
-    current_chain: 0,
-    best_chain: 0,
-  }));
+  // Phase 1.7: upsert with (user_id, legacy_local_id) conflict target.
+  // Same fix as migrateTasks — see that function for the rationale.
+  const rows: TablesInsert<"habits">[] = habits
+    .filter((h) => h.id !== undefined && h.id !== null)
+    .map((h) => ({
+      user_id: userId,
+      title: h.title,
+      engine: h.engine,
+      icon: h.icon ?? "",
+      trigger_text: h.trigger ?? null,
+      duration_text: h.duration ?? null,
+      frequency: h.frequency ?? null,
+      // Phase 3.1 denormalized chain stats — start at 0 since the legacy
+      // store recomputed them on read. The next habit toggle re-derives.
+      current_chain: 0,
+      best_chain: 0,
+      legacy_local_id: h.id!,
+    }));
+
+  if (rows.length === 0) {
+    return { count: 0, idMap: new Map() };
+  }
 
   const { data, error } = await supabase
     .from("habits")
-    .insert(rows)
-    .select("id");
+    .upsert(rows, { onConflict: "user_id,legacy_local_id" })
+    .select("id, legacy_local_id");
 
   if (error) throw error;
 
   const idMap = new Map<number, string>();
   if (data) {
-    data.forEach((row, idx) => {
-      const localId = habits[idx].id;
-      if (localId !== undefined && localId !== null) {
-        idMap.set(localId, row.id);
+    for (const row of data) {
+      if (row.legacy_local_id !== null && row.legacy_local_id !== undefined) {
+        idMap.set(row.legacy_local_id, row.id);
       }
-    });
+    }
   }
 
   return { count: rows.length, idMap };
+}
+
+/**
+ * Phase 1.7: same rebuild pattern as `rebuildTaskIdMap` for habits.
+ */
+async function rebuildHabitIdMap(userId: string): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  const { data, error } = await supabase
+    .from("habits")
+    .select("id, legacy_local_id")
+    .eq("user_id", userId)
+    .not("legacy_local_id", "is", null);
+  if (error) throw error;
+  if (data) {
+    for (const row of data) {
+      if (row.legacy_local_id !== null && row.legacy_local_id !== undefined) {
+        map.set(row.legacy_local_id, row.id);
+      }
+    }
+  }
+  return map;
 }
 
 async function migrateHabitLogs(
