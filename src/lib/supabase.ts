@@ -18,25 +18,27 @@ import "react-native-url-polyfill/auto";
 import { createClient } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Database } from "../types/supabase";
-import { logError } from "./error-log";
 
+// Phase 1.1: throw at module-eval if env vars are missing instead of
+// silently constructing a client with empty strings. The previous
+// behavior logged an error and let the app boot into a state where
+// every Supabase call returned 401, which is impossible to debug from
+// the user side. Crashing loud at startup forces the dev to fix the
+// `.env` before shipping.
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  logError(
-    "supabase.init",
-    new Error("Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY"),
-    {
-      hasUrl: Boolean(SUPABASE_URL),
-      hasKey: Boolean(SUPABASE_ANON_KEY),
-    },
+  throw new Error(
+    "Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY in .env. " +
+      "The Supabase client cannot be constructed without these. " +
+      "See titan-protocol/.env.example for the required keys.",
   );
 }
 
 export const supabase = createClient<Database>(
-  SUPABASE_URL ?? "",
-  SUPABASE_ANON_KEY ?? "",
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
   {
     auth: {
       storage: AsyncStorage,
