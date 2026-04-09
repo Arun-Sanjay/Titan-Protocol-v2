@@ -7,46 +7,27 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { colors } from "../../src/theme";
 
 // ---------------------------------------------------------------------------
-// Tab definitions — game mode uses different icons/labels
+// Tab definitions
 // ---------------------------------------------------------------------------
+//
+// Phase 1.4: removed `gameIcon`, `gameIconFocused`, `gameLabel` — they were
+// declared on the type and populated for every tab, but the renderer never
+// read them (it always used `tab.icon`/`tab.iconFocused`/`tab.label`). The
+// "game mode" tab variant is not part of v1.
 
 type TabDef = {
   key: string;
   icon: keyof typeof Ionicons.glyphMap;
   iconFocused: keyof typeof Ionicons.glyphMap;
   label: string;
-  // Game mode overrides
-  gameIcon?: keyof typeof Ionicons.glyphMap;
-  gameIconFocused?: keyof typeof Ionicons.glyphMap;
-  gameLabel?: string;
 };
 
 const TABS: TabDef[] = [
-  {
-    key: "index",
-    icon: "home-outline", iconFocused: "home", label: "HQ",
-    gameIcon: "game-controller-outline", gameIconFocused: "game-controller", gameLabel: "Command",
-  },
-  {
-    key: "engines",
-    icon: "flash-outline", iconFocused: "flash", label: "Engines",
-    gameIcon: "flame-outline", gameIconFocused: "flame", gameLabel: "Engines",
-  },
-  {
-    key: "track",
-    icon: "checkbox-outline", iconFocused: "checkbox", label: "Track",
-    gameIcon: "checkbox-outline", gameIconFocused: "checkbox", gameLabel: "Track",
-  },
-  {
-    key: "hub",
-    icon: "grid-outline", iconFocused: "grid", label: "Hub",
-    gameIcon: "apps-outline", gameIconFocused: "apps", gameLabel: "Hub",
-  },
-  {
-    key: "profile",
-    icon: "person-outline", iconFocused: "person", label: "Profile",
-    gameIcon: "shield-outline", gameIconFocused: "shield", gameLabel: "Profile",
-  },
+  { key: "index",   icon: "home-outline",     iconFocused: "home",     label: "HQ" },
+  { key: "engines", icon: "flash-outline",    iconFocused: "flash",    label: "Engines" },
+  { key: "track",   icon: "checkbox-outline", iconFocused: "checkbox", label: "Track" },
+  { key: "hub",     icon: "grid-outline",     iconFocused: "grid",     label: "Hub" },
+  { key: "profile", icon: "person-outline",   iconFocused: "person",   label: "Profile" },
 ];
 
 const TAB_BAR_HEIGHT = 56;
