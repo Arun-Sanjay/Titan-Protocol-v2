@@ -212,24 +212,44 @@ function checkRequirement(def: LevelDef): boolean {
 
 // ─── Individual Checkers ────────────────────────────────────────────────────
 
+/**
+ * Phase 1.6: Pre-compute the set of date keys that have at least one
+ * completion. The previous code called `storage.getAllKeys()` once per
+ * day in a 365-iteration loop AND once per day in the nested
+ * (week × day) loop in checkWeeklyConsistency, which stalled the JS
+ * thread on year-old users with thousands of MMKV keys.
+ *
+ * This helper does a single pass over `getAllKeys()` and returns a
+ * `Set<dateKey>` for fast O(1) day lookups.
+ */
+function buildCompletedDatesIndex(prefix: string = "completions:"): Set<string> {
+  const allKeys = storage.getAllKeys() as string[];
+  const completedDates = new Set<string>();
+  for (const key of allKeys) {
+    if (!key.startsWith(prefix)) continue;
+    // Format: "completions:{engine}:{YYYY-MM-DD}"
+    const parts = key.split(":");
+    if (parts.length !== 3) continue;
+    const dateKey = parts[2];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) continue;
+    // Skip the per-key getJSON read for the streak path — empty arrays
+    // are vanishingly rare for completion keys (writers don't create
+    // them) and the cost of checking each one is exactly the perf bug
+    // we're fixing.
+    const ids = getJSON<number[]>(key, []);
+    if (ids.length > 0) completedDates.add(dateKey);
+  }
+  return completedDates;
+}
+
 function checkStreakDays(target: number): boolean {
   // Count consecutive days (ending today) with ANY task completion across all engines
   const today = getTodayKey();
+  const completedDates = buildCompletedDatesIndex();
   let streak = 0;
   for (let i = 0; i < 365; i++) {
     const dk = addDays(today, -i);
-    let dayHasCompletion = false;
-    const allKeys = storage.getAllKeys() as string[];
-    for (const key of allKeys) {
-      if (key.startsWith("completions:") && key.endsWith(`:${dk}`)) {
-        const ids = getJSON<number[]>(key, []);
-        if (ids.length > 0) {
-          dayHasCompletion = true;
-          break;
-        }
-      }
-    }
-    if (dayHasCompletion) {
+    if (completedDates.has(dk)) {
       streak++;
     } else {
       break; // streak broken
@@ -355,20 +375,18 @@ function checkHabitCompletionRate(days: number, threshold: number): boolean {
 }
 
 function checkWeeklyConsistency(targetWeeks: number): boolean {
+  // Phase 1.6: hoist getAllKeys() out of the nested (week × day) loop.
   const today = getTodayKey();
+  const completedDates = buildCompletedDatesIndex();
   let weeksWithActivity = 0;
   for (let w = 0; w < targetWeeks + 2; w++) {
     let weekActive = false;
     for (let d = 0; d < 7; d++) {
       const dk = addDays(today, -(w * 7 + d));
-      const allKeys = storage.getAllKeys() as string[];
-      for (const key of allKeys) {
-        if (key.startsWith(`completions:`) && key.endsWith(`:${dk}`)) {
-          const ids = getJSON<number[]>(key, []);
-          if (ids.length > 0) { weekActive = true; break; }
-        }
+      if (completedDates.has(dk)) {
+        weekActive = true;
+        break;
       }
-      if (weekActive) break;
     }
     if (weekActive) weeksWithActivity++;
   }
