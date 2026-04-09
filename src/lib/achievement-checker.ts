@@ -49,25 +49,36 @@ export type AppState = {
 /**
  * Check all achievements against current state.
  * Returns array of newly unlocked achievement IDs.
+ *
+ * Phase 1.5 fix: previously this called `unlockAchievement()` inside the
+ * iteration loop, which mutated the store mid-pass. The local
+ * `unlockedIds` snapshot was taken at the top of the function and never
+ * refreshed, so any meta-achievement that depended on another
+ * achievement being unlocked would silently fail to fire in the same
+ * pass. Also: a `defs` array was being built but never read (the loop
+ * iterated `ALL_DEFS` directly).
+ *
+ * Now we keep a live `Set` of unlocked IDs (snapshot + in-flight
+ * unlocks) and apply the actual store mutations after the loop has
+ * finished.
  */
 export function checkAllAchievements(appState: AppState): string[] {
-  const unlockedIds = useAchievementStore.getState().unlockedIds;
-  const newlyUnlocked: string[] = [];
+  const initial = new Set(useAchievementStore.getState().unlockedIds);
+  const liveUnlocked = new Set(initial);
+  const pending: { id: string; def: AchievementDef }[] = [];
 
-  const defs: AchievementDef[] = ALL_DEFS.map((d) => ({
-    id: d.id,
-    name: d.name,
-    description: d.description,
-    rarity: d.rarity as AchievementDef["rarity"],
-    xpReward: d.xpReward,
-    iconName: d.iconName,
-  }));
+  // Multiple passes so meta-achievements (those that depend on another
+  // achievement being unlocked) fire in the same `checkAllAchievements`
+  // call. Each pass that adds new unlocks triggers another pass; we
+  // bound the loop count to prevent infinite cycles.
+  let changed = true;
+  let safety = 8;
+  while (changed && safety-- > 0) {
+    changed = false;
+    for (const def of ALL_DEFS) {
+      if (liveUnlocked.has(def.id)) continue;
+      if (!evaluateCondition(def, appState, liveUnlocked)) continue;
 
-  for (const def of ALL_DEFS) {
-    if (unlockedIds.includes(def.id)) continue;
-
-    const met = evaluateCondition(def, appState);
-    if (met) {
       const achDef: AchievementDef = {
         id: def.id,
         name: def.name,
@@ -76,19 +87,40 @@ export function checkAllAchievements(appState: AppState): string[] {
         xpReward: def.xpReward,
         iconName: def.iconName,
       };
-      useAchievementStore.getState().unlockAchievement(def.id, achDef);
-      newlyUnlocked.push(def.id);
+      liveUnlocked.add(def.id);
+      pending.push({ id: def.id, def: achDef });
+      changed = true;
     }
   }
 
-  return newlyUnlocked;
+  // Apply all unlocks AFTER iteration so the store update doesn't
+  // race with the loop.
+  const store = useAchievementStore.getState();
+  for (const { id, def } of pending) {
+    store.unlockAchievement(id, def);
+  }
+
+  return pending.map((p) => p.id);
 }
 
 // ─── Condition evaluator ────────────────────────────────────────────────────
+//
+// Phase 1.5: takes a `liveUnlocked` Set so meta-achievements (e.g.
+// "first 5 achievements unlocked") can see in-flight unlocks from the
+// same `checkAllAchievements` call.
 
-function evaluateCondition(def: AchDef, state: AppState): boolean {
+function evaluateCondition(
+  def: AchDef,
+  state: AppState,
+  liveUnlocked: Set<string>,
+): boolean {
   const val = typeof def.conditionValue === "number" ? def.conditionValue : 0;
   const strVal = typeof def.conditionValue === "string" ? def.conditionValue : "";
+
+  // Allow conditions to query the live unlock set for meta-achievements.
+  // Currently no condition type uses this, but the parameter is in place
+  // for future "first N unlocks" / "unlock chain" achievements.
+  void liveUnlocked;
 
   switch (def.conditionType) {
     case "tasks_completed_total":
