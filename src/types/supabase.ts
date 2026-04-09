@@ -1,19 +1,9 @@
 // ─── Auto-generated from Supabase schema ───────────────────────────────────
-// Phase 3.1: Types generated via
-//   mcp__supabase__generate_typescript_types (project: rmvodrpgaffxeultskst)
+// Generated via mcp__claude_ai_Supabase__generate_typescript_types
+// (project: rmvodrpgaffxeultskst)
 //
 // DO NOT EDIT BY HAND. To regenerate after a schema change, run the MCP
-// tool again and replace the contents of this file.
-//
-// Usage:
-//   import type { Database, Tables, TablesInsert, Enums } from "@/types/supabase";
-//   type Task = Tables<"tasks">;
-//   type NewTask = TablesInsert<"tasks">;
-//   type Engine = Enums<"engine_key">; // "body" | "mind" | "money" | "charisma"
-//
-// The supabase-js client is typed against this Database type in
-// src/lib/supabase.ts (Phase 3.2).
-// ───────────────────────────────────────────────────────────────────────────
+// tool again and overwrite this file.
 
 export type Json =
   | string
@@ -226,6 +216,149 @@ export type Database = {
             foreignKeyName: "deep_work_sessions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      field_op_cooldown: {
+        Row: {
+          cooldown_until: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cooldown_until?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cooldown_until?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_op_cooldown_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      field_ops: {
+        Row: {
+          completed_at: string | null
+          current_day: number
+          day_results: Json
+          field_op_id: string
+          id: string
+          started_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          current_day?: number
+          day_results?: Json
+          field_op_id: string
+          id?: string
+          started_at?: string
+          status: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          current_day?: number
+          day_results?: Json
+          field_op_id?: string
+          id?: string
+          started_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_ops_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      focus_sessions: {
+        Row: {
+          category: string | null
+          completed: boolean
+          date_key: string
+          duration_minutes: number
+          ended_at: string | null
+          id: string
+          started_at: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          completed?: boolean
+          date_key: string
+          duration_minutes: number
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          completed?: boolean
+          date_key?: string
+          duration_minutes?: number
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      focus_settings: {
+        Row: {
+          break_minutes: number
+          daily_target_sessions: number
+          pomodoro_minutes: number
+          sound_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          break_minutes?: number
+          daily_target_sessions?: number
+          pomodoro_minutes?: number
+          sound_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          break_minutes?: number
+          daily_target_sessions?: number
+          pomodoro_minutes?: number
+          sound_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "focus_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -507,6 +640,7 @@ export type Database = {
           icon: string
           id: string
           last_broken_date: string | null
+          legacy_local_id: number | null
           title: string
           trigger_text: string | null
           updated_at: string
@@ -522,6 +656,7 @@ export type Database = {
           icon?: string
           id?: string
           last_broken_date?: string | null
+          legacy_local_id?: number | null
           title: string
           trigger_text?: string | null
           updated_at?: string
@@ -537,6 +672,7 @@ export type Database = {
           icon?: string
           id?: string
           last_broken_date?: string | null
+          legacy_local_id?: number | null
           title?: string
           trigger_text?: string | null
           updated_at?: string
@@ -631,6 +767,50 @@ export type Database = {
           },
         ]
       }
+      mind_training_results: {
+        Row: {
+          answered_at: string
+          category: string | null
+          correct: boolean
+          exercise_id: string
+          id: string
+          selected_option: string | null
+          time_spent_ms: number | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          answered_at?: string
+          category?: string | null
+          correct: boolean
+          exercise_id: string
+          id?: string
+          selected_option?: string | null
+          time_spent_ms?: number | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          answered_at?: string
+          category?: string | null
+          correct?: boolean
+          exercise_id?: string
+          id?: string
+          selected_option?: string | null
+          time_spent_ms?: number | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mind_training_results_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_transactions: {
         Row: {
           amount: number
@@ -694,6 +874,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "narrative_entries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      narrative_log: {
+        Row: {
+          created_at: string
+          date_key: string
+          id: string
+          text: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_key: string
+          id?: string
+          text: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date_key?: string
+          id?: string
+          text?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "narrative_log_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -1105,6 +1320,44 @@ export type Database = {
           },
         ]
       }
+      srs_cards: {
+        Row: {
+          ease_factor: number
+          exercise_id: string
+          interval_days: number
+          next_review_at: string
+          review_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ease_factor?: number
+          exercise_id: string
+          interval_days?: number
+          next_review_at?: string
+          review_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ease_factor?: number
+          exercise_id?: string
+          interval_days?: number
+          next_review_at?: string
+          review_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "srs_cards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           cancel_reason: string | null
@@ -1181,6 +1434,7 @@ export type Database = {
           id: string
           is_active: boolean
           kind: Database["public"]["Enums"]["task_kind"]
+          legacy_local_id: number | null
           title: string
           updated_at: string
           user_id: string
@@ -1192,6 +1446,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           kind?: Database["public"]["Enums"]["task_kind"]
+          legacy_local_id?: number | null
           title: string
           updated_at?: string
           user_id: string
@@ -1203,6 +1458,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           kind?: Database["public"]["Enums"]["task_kind"]
+          legacy_local_id?: number | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -1210,6 +1466,73 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tasks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      titan_mode_state: {
+        Row: {
+          average_score: number
+          consecutive_days: number
+          last_recorded_date: string | null
+          start_date: string | null
+          unlocked: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          average_score?: number
+          consecutive_days?: number
+          last_recorded_date?: string | null
+          start_date?: string | null
+          unlocked?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          average_score?: number
+          consecutive_days?: number
+          last_recorded_date?: string | null
+          start_date?: string | null
+          unlocked?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "titan_mode_state_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_titles: {
+        Row: {
+          equipped: boolean
+          title_id: string
+          unlocked_at: string
+          user_id: string
+        }
+        Insert: {
+          equipped?: boolean
+          title_id: string
+          unlocked_at?: string
+          user_id: string
+        }
+        Update: {
+          equipped?: boolean
+          title_id?: string
+          unlocked_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_titles_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
