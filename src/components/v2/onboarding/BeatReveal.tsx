@@ -277,18 +277,53 @@ export function BeatReveal({ archetype, onComplete }: Props) {
   ]);
 
   // Phase 1: "IDENTITY CONFIRMED" types out
+  //
+  // Fix: delay the audio call by 200ms to let the JS thread settle
+  // after the component mount (Reanimated worklet initialization on
+  // Hermes release builds can cause brief thread contention that
+  // swallows setTimeout callbacks). Also add a safety auto-advance
+  // to phase 2 after 4s in case the typewriter freezes for any
+  // reason — the user should never get permanently stuck on this
+  // screen.
   useEffect(() => {
-    playVoiceLineAsync("ONBO-009");
+    // Delay audio slightly so the typewriter timers aren't competing
+    // with native audio module initialization on first render.
+    const audioDelay = setTimeout(() => {
+      try {
+        playVoiceLineAsync("ONBO-009");
+      } catch {
+        // Audio failures must never block the flow.
+      }
+    }, 200);
+    timeoutsRef.current.push(audioDelay);
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    // Type out character by character
-    const typeChars = () => {
-      for (let i = 0; i <= CONFIRM_TEXT.length; i++) {
-        const t = setTimeout(() => setConfirmTypedChars(i), 500 + i * 50);
-        timeoutsRef.current.push(t);
+    // Type out character by character using a single interval instead
+    // of 19 separate timeouts — more resilient to JS thread pauses.
+    let charIndex = 0;
+    const interval = setInterval(() => {
+      charIndex += 1;
+      setConfirmTypedChars(charIndex);
+      if (charIndex >= CONFIRM_TEXT.length) {
+        clearInterval(interval);
       }
+    }, 50);
+    // Start typing after 500ms
+    const startDelay = setTimeout(() => {
+      setConfirmTypedChars(0);
+    }, 500);
+    timeoutsRef.current.push(startDelay);
+
+    // Safety: if we're still in phase 1 after 4s, force phase 2.
+    const safetyTimer = setTimeout(() => {
+      setConfirmTypedChars(CONFIRM_TEXT.length);
+    }, 4000);
+    timeoutsRef.current.push(safetyTimer);
+
+    return () => {
+      clearInterval(interval);
     };
-    typeChars();
   }, []);
 
   // Phase 2: Black screen pause at 2s
@@ -397,10 +432,18 @@ export function BeatReveal({ archetype, onComplete }: Props) {
   };
 
   // ── Phase 1: IDENTITY CONFIRMED typing ────────────────────────────────
+  // Tap anywhere to skip the typewriter and jump straight to phase 2.
+  // Safety net for the release-build freeze documented above.
 
   if (phase === 1) {
     return (
-      <View style={styles.container}>
+      <Pressable
+        style={styles.container}
+        onPress={() => {
+          setConfirmTypedChars(CONFIRM_TEXT.length);
+          setPhase(2);
+        }}
+      >
         <View style={styles.center}>
           <Text style={styles.confirmText}>
             {CONFIRM_TEXT.slice(0, confirmTypedChars)}
@@ -409,7 +452,7 @@ export function BeatReveal({ archetype, onComplete }: Props) {
             )}
           </Text>
         </View>
-      </View>
+      </Pressable>
     );
   }
 
