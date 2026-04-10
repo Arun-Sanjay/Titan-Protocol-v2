@@ -2,8 +2,7 @@
 // Generated via mcp__claude_ai_Supabase__generate_typescript_types
 // (project: rmvodrpgaffxeultskst)
 //
-// DO NOT EDIT BY HAND. To regenerate after a schema change, run the MCP
-// tool again and overwrite this file.
+// DO NOT EDIT BY HAND.
 
 export type Json =
   | string
@@ -359,6 +358,44 @@ export type Database = {
             foreignKeyName: "focus_settings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goals: {
+        Row: {
+          created_at: string
+          id: string
+          status: string
+          target_date: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          status?: string
+          target_date?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          status?: string
+          target_date?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
