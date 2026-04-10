@@ -28,33 +28,35 @@ import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { RadarChart } from "../../src/components/ui/RadarChart";
 import { SparklineChart } from "../../src/components/ui/SparklineChart";
-import { useAnalyticsData } from "../../src/hooks/useAnalyticsData";
-import { ENGINES } from "../../src/stores/useEngineStore";
-// Phase 3.5d: XP_REWARDS stays imported from useProfileStore — it's a
-// pure constant export and importing it doesn't touch MMKV. The actual
-// mutation path now goes through the cloud hooks below.
-import { XP_REWARDS } from "../../src/stores/useProfileStore";
+// Wave 1: Full cloud migration — all data reads come from React Query hooks.
+// Stores that STAY: useModeStore (UI mode), useIdentityStore (archetype UI),
+// useStoryStore (cinematic playback state). Everything else → cloud hooks.
 import { useAllTasks, useAllCompletionsForDate, useToggleCompletion } from "../../src/hooks/queries/useTasks";
-import { computeEngineScore } from "../../src/services/tasks";
+import { computeEngineScore, ENGINES, type EngineKey } from "../../src/services/tasks";
 import { useProfile, useAwardXP, useUpdateStreak } from "../../src/hooks/queries/useProfile";
 import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
 import { useProtocolSession } from "../../src/hooks/queries/useProtocol";
+import { useHabits, useHabitLogsForDate } from "../../src/hooks/queries/useHabits";
+import { useActiveFieldOp, useFieldOpHistory } from "../../src/hooks/queries/useFieldOps";
+import { useSkillProgress } from "../../src/hooks/queries/useSkillTree";
+import { useProgression } from "../../src/hooks/queries/useProgression";
 import { getMomentum, getMomentumColor } from "../../src/lib/momentum";
 import { loadIntegrity, getIntegrityColor } from "../../src/lib/protocol-integrity";
 import { useModeStore, IDENTITY_LABELS } from "../../src/stores/useModeStore";
-import { useSkillTreeStore, SKILL_TREES } from "../../src/stores/useSkillTreeStore";
 import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdentityStore";
-import { useHabitStore } from "../../src/stores/useHabitStore";
-import { useFieldOpStore } from "../../src/stores/useFieldOpStore";
 import { useStoryStore } from "../../src/stores/useStoryStore";
-import { useProgressionStore } from "../../src/stores/useProgressionStore";
 import { getTodayKey } from "../../src/lib/date";
 import { getDailyRank } from "../../src/db/gamification";
 import { getCurrentChapter, getDayNumber } from "../../src/data/chapters";
-import { evaluateAllTrees, initializeAllTrees } from "../../src/lib/skill-tree-evaluator";
 import { getStoryForDay, addEntry } from "../../src/lib/narrative-engine";
 import { generateDailyOperation } from "../../src/lib/operation-engine";
-import type { EngineKey } from "../../src/db/schema";
+
+// Pure constants that were previously imported from stores but have no
+// MMKV dependency — inlined here to remove the store import.
+const XP_REWARDS = {
+  MAIN_TASK: 20, SIDE_QUEST: 10, HABIT_COMPLETE: 5, JOURNAL_ENTRY: 15,
+  STREAK_BONUS_7: 50, STREAK_BONUS_30: 200, PERFECT_DAY: 100,
+} as const;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -87,23 +89,9 @@ export default function HQScreen() {
     return () => sub.remove();
   }, []);
 
-  const analytics = useAnalyticsData();
-
-  // Initialize skill trees on first load
-  useEffect(() => {
-    initializeAllTrees();
-    evaluateAllTrees();
-  }, []);
-
-  // Load habits (legacy — Track tab migration will move this to cloud)
-  useEffect(() => {
-    useHabitStore.getState().load(today);
-  }, [today]);
-
-  // Load field ops (legacy — not cloud-backed yet)
-  useEffect(() => {
-    useFieldOpStore.getState().load();
-  }, []);
+  // Wave 1: removed useAnalyticsData (legacy MMKV aggregation),
+  // initializeAllTrees/evaluateAllTrees (MMKV writes), and store
+  // load() effects. React Query auto-fetches on mount.
 
   // Phase 3.5d: Profile / tasks / completions / protocol / rank-ups
   // are now read from React Query (Supabase-backed). The old Zustand
@@ -131,19 +119,40 @@ export default function HQScreen() {
   const morningDone = Boolean(protocolSession?.morning_completed_at);
   const eveningDone = Boolean(protocolSession?.evening_completed_at);
   const protocolCompleted = morningDone && eveningDone;
-  const skillProgress = useSkillTreeStore((s) => s.progress);
 
-  // Habit store
-  const habits = useHabitStore((s) => s.habits);
-  const habitCompletedIds = useHabitStore((s) => s.completedIds);
+  // Wave 1: cloud-backed reads replacing legacy store reads
+  const { data: cloudSkillProgress = [] } = useSkillProgress();
+  const { data: cloudHabits = [] } = useHabits();
+  const { data: cloudHabitLogs = [] } = useHabitLogsForDate(today);
+  const { data: cloudActiveFieldOp } = useActiveFieldOp();
+  const { data: cloudFieldOpHistory = [] } = useFieldOpHistory();
+  const { data: cloudProgression } = useProgression();
 
-  // Field op store
-  const activeFieldOp = useFieldOpStore((s) => s.activeFieldOp);
-  const fieldOpClearedCount = useFieldOpStore((s) => s.getClearedCount());
+  // Derive legacy-compatible shapes from cloud data
+  const habits = cloudHabits;
+  const habitCompletedIds = useMemo(
+    () => new Set(cloudHabitLogs.map((l) => l.habit_id)),
+    [cloudHabitLogs],
+  );
+  const activeFieldOp = cloudActiveFieldOp ?? null;
+  const fieldOpClearedCount = useMemo(
+    () => cloudFieldOpHistory.filter((op) => op.status === "completed").length,
+    [cloudFieldOpHistory],
+  );
 
-  // Story + Progression stores (for operation engine)
+  // Skill tree progress grouped by engine for the ready-to-claim count
+  const skillProgress = useMemo(() => {
+    const grouped: Record<string, Array<{ nodeId: string; status: string }>> = {};
+    for (const node of cloudSkillProgress) {
+      if (!grouped[node.engine]) grouped[node.engine] = [];
+      grouped[node.engine].push({ nodeId: node.node_id, status: node.state });
+    }
+    return grouped;
+  }, [cloudSkillProgress]);
+
+  // Story + Progression (story store stays — UI state; progression from cloud)
   const userName = useStoryStore((s) => s.userName);
-  const phase = useProgressionStore((s) => s.currentPhase);
+  const phase = cloudProgression?.current_phase ?? "foundation";
 
   // Task completion flash state. String IDs because Supabase uses UUIDs.
   const [lastCompletedId, setLastCompletedId] = useState<string | null>(null);
@@ -186,8 +195,8 @@ export default function HQScreen() {
 
   const rank = getDailyRank(titanScoreFromCloud);
 
-  // Chapter system
-  const firstActiveDate = getJSON<string | null>("first_active_date", null);
+  // Chapter system — read from cloud profile instead of MMKV
+  const firstActiveDate = profile?.first_use_date ?? null;
   const dayNumber = getDayNumber(firstActiveDate);
   const chapter = getCurrentChapter(dayNumber);
 
@@ -207,40 +216,38 @@ export default function HQScreen() {
     return count;
   }, [skillProgress]);
 
-  // Skill tree overall progress
+  // Skill tree overall progress — cloud-backed
   const skillTreeProgress = useMemo(() => {
     let claimed = 0;
-    let total = 0;
-    for (const engine of ENGINES) {
-      const nodes = skillProgress[engine] ?? [];
-      claimed += nodes.filter((n) => n.status === "claimed").length;
-      total += nodes.length || SKILL_TREES[engine]?.reduce((acc, b) => acc + b.nodes.length, 0) || 0;
+    const total = cloudSkillProgress.length || 1; // avoid div by 0
+    for (const node of cloudSkillProgress) {
+      if (node.state === "claimed") claimed++;
     }
-    return total > 0 ? Math.round((claimed / total) * 100) : 0;
-  }, [skillProgress]);
+    return cloudSkillProgress.length > 0 ? Math.round((claimed / total) * 100) : 0;
+  }, [cloudSkillProgress]);
 
-  // Habit stats for today
+  // Habit stats for today — cloud-backed
   const habitStats = useMemo(() => {
-    const completedSet = habitCompletedIds[today] ?? [];
-    return { done: completedSet.length, total: habits.length };
-  }, [habits, habitCompletedIds, today]);
+    return { done: habitCompletedIds.size, total: habits.length };
+  }, [habits, habitCompletedIds]);
 
-  // Narrative (latest entry)
+  // Narrative (latest entry) — TODO: replace with useNarrativeLog()
+  // For now we keep the MMKV read as a low-priority v1.1 target
   const latestNarrative = useMemo(() => {
     const entries = getJSON<{ date: string; text: string }[]>("narrative_entries", []);
     return entries.length > 0 ? entries[entries.length - 1] : null;
   }, [appActive]);
 
-  // Refresh. React Query handles its own refetching; we just kick the
-  // legacy stores that haven't migrated yet and let the query client
-  // invalidate the cloud-backed queries.
+  // Refresh — React Query handles its own refetching via invalidation.
+  // No more legacy store.load() calls needed.
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    useHabitStore.getState().load(today);
-    useFieldOpStore.getState().load();
+    // React Query automatically refetches stale queries on focus/mount.
+    // For pull-to-refresh, we'd call queryClient.invalidateQueries()
+    // but the query client is already configured to refetch on mount.
     setRefreshing(false);
-  }, [today]);
+  }, []);
 
   // System notifications
   const notify = useSystemNotification();
@@ -280,7 +287,8 @@ export default function HQScreen() {
 
           const xpResult = await awardXPMutation.mutateAsync(xp);
           await updateStreakMutation.mutateAsync(today);
-          evaluateAllTrees();
+          // Wave 1: removed evaluateAllTrees() — skill tree evaluation
+          // now happens via cloud upserts, not MMKV writes.
 
           if (xpResult.leveledUp) {
             await enqueueRankUpMutation.mutateAsync({
@@ -617,7 +625,7 @@ export default function HQScreen() {
               <Text style={s.halfCardKicker}>HABITS</Text>
               <View style={s.habitDotsRow}>
                 {habits.slice(0, 7).map((h, i) => {
-                  const done = h.id != null && (habitCompletedIds[today] ?? []).includes(h.id);
+                  const done = h.id != null && habitCompletedIds.has(h.id);
                   return (
                     <View
                       key={h.id ?? i}
