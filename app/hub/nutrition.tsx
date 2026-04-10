@@ -22,15 +22,23 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey } from "../../src/lib/date";
-import { useWeightStore } from "../../src/stores/useWeightStore";
 import {
   useNutritionStore,
   computeTDEE,
   computeDayMacros,
-  type NutritionProfile,
+  type NutritionProfile as LegacyNutritionProfile,
   type Meal,
   type QuickMeal,
 } from "../../src/stores/useNutritionStore";
+import { useWeightLogs } from "../../src/hooks/queries/useWeight";
+import {
+  useNutritionProfile,
+  useUpsertNutritionProfile,
+  useMealLogs,
+  useCreateMealLog,
+  useDeleteMealLog,
+} from "../../src/hooks/queries/useNutrition";
+import type { NutritionProfile as CloudNutritionProfile, MealLog } from "../../src/services/nutrition";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -67,8 +75,8 @@ function ProfileSetup({
   onSave,
   initialProfile,
 }: {
-  onSave: (profile: NutritionProfile) => void;
-  initialProfile?: NutritionProfile | null;
+  onSave: (profile: LegacyNutritionProfile) => void;
+  initialProfile?: LegacyNutritionProfile | null;
 }) {
   const [height, setHeight] = useState(initialProfile ? String(initialProfile.height_cm) : "");
   const [weight, setWeight] = useState(initialProfile ? String(initialProfile.weight_kg) : "");
@@ -77,7 +85,7 @@ function ProfileSetup({
   const [activity, setActivity] = useState(initialProfile?.activity_multiplier ?? 1.55);
   const [goal, setGoal] = useState<"cut" | "bulk" | "maintain">(initialProfile?.goal ?? "maintain");
 
-  const previewProfile = useMemo((): NutritionProfile | null => {
+  const previewProfile = useMemo((): LegacyNutritionProfile | null => {
     const h = parseFloat(height);
     const w = parseFloat(weight);
     const a = parseInt(age, 10);
@@ -387,26 +395,47 @@ export default function NutritionScreen() {
   }, []);
   const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
-  const profile = useNutritionStore((s) => s.profile);
-  const meals = useNutritionStore((s) => s.meals);
+  // Cloud hooks for profile and meals
+  const { data: cloudProfile } = useNutritionProfile();
+  const upsertProfileMut = useUpsertNutritionProfile();
+  const { data: cloudMealLogs = [] } = useMealLogs(todayKey);
+  const createMealMut = useCreateMealLog();
+  const deleteMealMut = useDeleteMealLog();
+
+  // Adapt cloud profile to legacy shape for computeTDEE and other pure helpers
+  const profile: LegacyNutritionProfile | null = useMemo(() => {
+    if (!cloudProfile) return null;
+    return {
+      height_cm: cloudProfile.height_cm ?? 0,
+      weight_kg: 0, // will be overridden by weight logs below
+      age: cloudProfile.age ?? 25,
+      sex: (cloudProfile.sex ?? "male") as "male" | "female",
+      activity_multiplier: cloudProfile.tdee && cloudProfile.bmr && cloudProfile.bmr > 0
+        ? cloudProfile.tdee / cloudProfile.bmr
+        : 1.55,
+      goal: (cloudProfile.goal ?? "maintain") as "cut" | "bulk" | "maintain",
+      calorie_target: cloudProfile.daily_calorie_target ?? 2000,
+      protein_g: cloudProfile.protein_target_g ?? 150,
+    };
+  }, [cloudProfile]);
+
+  // Weight sync: check weight from cloud weight logs
+  const { data: weightLogs = [] } = useWeightLogs();
+  const latestWeight = useMemo(() => {
+    if (weightLogs.length === 0) return null;
+    return weightLogs[weightLogs.length - 1];
+  }, [weightLogs]);
+
+  // Quick meals and water remain on MMKV
   const quickMeals = useNutritionStore((s) => s.quickMeals);
   const waterLog = useNutritionStore((s) => s.waterLog);
   const waterTarget = useNutritionStore((s) => s.waterTarget);
-  const loadProfile = useNutritionStore((s) => s.loadProfile);
-  const updateProfile = useNutritionStore((s) => s.updateProfile);
-  const loadMeals = useNutritionStore((s) => s.loadMeals);
-  const addMeal = useNutritionStore((s) => s.addMeal);
-  const deleteMeal = useNutritionStore((s) => s.deleteMeal);
   const loadQuickMeals = useNutritionStore((s) => s.loadQuickMeals);
   const addQuickMeal = useNutritionStore((s) => s.addQuickMeal);
   const deleteQuickMeal = useNutritionStore((s) => s.deleteQuickMeal);
   const loadWater = useNutritionStore((s) => s.loadWater);
   const addWaterFn = useNutritionStore((s) => s.addWater);
   const removeWaterFn = useNutritionStore((s) => s.removeWater);
-
-  // Weight sync: check if weight tracker has a different weight
-  const weightLoad = useWeightStore((s) => s.load);
-  const weightGetLatest = useWeightStore((s) => s.getLatest);
 
   const [showMealForm, setShowMealForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -418,24 +447,32 @@ export default function NutritionScreen() {
   const [mealCarbs, setMealCarbs] = useState("");
   const [mealFat, setMealFat] = useState("");
 
+  // Load MMKV-backed data (quick meals, water)
   useEffect(() => {
-    loadProfile();
-    loadMeals(todayKey);
     loadQuickMeals();
     loadWater(todayKey);
-    weightLoad();
-  }, [todayKey, loadProfile, loadMeals, loadQuickMeals, loadWater, weightLoad]);
+  }, [todayKey, loadQuickMeals, loadWater]);
 
   // Check if weight tracker has a newer weight than the profile
   useEffect(() => {
-    if (!profile) return;
-    const latest = weightGetLatest();
-    if (latest && Math.abs(latest.weightKg - profile.weight_kg) >= 1) {
+    if (!profile || !latestWeight) return;
+    if (Math.abs(latestWeight.weight_kg - profile.weight_kg) >= 1) {
       setShowWeightSync(true);
     }
-  }, [profile, weightGetLatest]);
+  }, [profile, latestWeight]);
 
-  const todayMeals = meals[todayKey] ?? [];
+  // Adapt cloud meal logs to legacy Meal shape for computeDayMacros
+  const todayMeals: Meal[] = useMemo(
+    () => cloudMealLogs.map((log) => ({
+      id: log.id as unknown as number, // Meal type expects number id
+      name: log.name,
+      calories: log.calories,
+      protein_g: log.protein_g,
+      carbs_g: log.carbs_g,
+      fat_g: log.fat_g,
+    })),
+    [cloudMealLogs],
+  );
   const dayMacros = useMemo(() => computeDayMacros(todayMeals), [todayMeals]);
   const todayWater = waterLog[todayKey] ?? 0;
 
@@ -478,7 +515,14 @@ export default function NutritionScreen() {
       fat_g: Math.max(0, parseInt(mealFat, 10) || 0),
     };
 
-    addMeal(todayKey, mealData);
+    createMealMut.mutate({
+      dateKey: todayKey,
+      name: mealData.name,
+      calories: mealData.calories,
+      proteinG: mealData.protein_g,
+      carbsG: mealData.carbs_g,
+      fatG: mealData.fat_g,
+    });
 
     // Save as quick meal if toggled
     if (saveAsQuick) {
@@ -493,37 +537,38 @@ export default function NutritionScreen() {
     setMealFat("");
     setSaveAsQuick(false);
     setShowMealForm(false);
-  }, [mealName, mealCalories, mealProtein, mealCarbs, mealFat, todayKey, addMeal, saveAsQuick, addQuickMeal]);
+  }, [mealName, mealCalories, mealProtein, mealCarbs, mealFat, todayKey, createMealMut, saveAsQuick, addQuickMeal]);
 
   const handleUseQuickMeal = useCallback(
     (qm: QuickMeal) => {
-      addMeal(todayKey, {
+      createMealMut.mutate({
+        dateKey: todayKey,
         name: qm.name,
         calories: qm.calories,
-        protein_g: qm.protein_g,
-        carbs_g: qm.carbs_g,
-        fat_g: qm.fat_g,
+        proteinG: qm.protein_g,
+        carbsG: qm.carbs_g,
+        fatG: qm.fat_g,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    [todayKey, addMeal],
+    [todayKey, createMealMut],
   );
 
   const handleDeleteMeal = useCallback(
-    (mealId: number) => {
+    (mealId: string) => {
       Alert.alert("Delete Meal", "Remove this meal?", [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            deleteMeal(todayKey, mealId);
+            deleteMealMut.mutate(mealId);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           },
         },
       ]);
     },
-    [todayKey, deleteMeal],
+    [deleteMealMut],
   );
 
   return (
@@ -560,7 +605,16 @@ export default function NutritionScreen() {
             <ProfileSetup
               initialProfile={showEditProfile ? profile : null}
               onSave={(p) => {
-                updateProfile(p);
+                upsertProfileMut.mutate({
+                  height_cm: p.height_cm,
+                  age: p.age,
+                  sex: p.sex,
+                  goal: p.goal,
+                  daily_calorie_target: p.calorie_target,
+                  protein_target_g: p.protein_g,
+                  tdee: computeTDEE(p),
+                  bmr: Math.round(computeTDEE(p) / p.activity_multiplier),
+                });
                 setShowEditProfile(false);
               }}
             />
@@ -570,30 +624,35 @@ export default function NutritionScreen() {
           {profile && !showEditProfile && (
             <>
               {/* Weight sync banner */}
-              {showWeightSync && (() => {
-                const latest = weightGetLatest();
-                if (!latest) return null;
-                return (
-                  <Pressable
-                    style={styles.syncBanner}
-                    onPress={() => {
-                      const updated = { ...profile, weight_kg: latest.weightKg };
-                      const tdee = computeTDEE(updated);
-                      const goalOffset = profile.goal === "cut" ? -500 : profile.goal === "bulk" ? 300 : 0;
-                      updated.calorie_target = Math.max(tdee + goalOffset, profile.sex === "female" ? 1200 : 1500);
-                      updated.protein_g = Math.round(latest.weightKg * 2.0);
-                      updateProfile(updated);
-                      setShowWeightSync(false);
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    }}
-                  >
-                    <Ionicons name="sync-outline" size={16} color={colors.charisma} />
-                    <Text style={styles.syncBannerText}>
-                      Weight tracker shows {latest.weightKg}kg (profile: {profile.weight_kg}kg). Tap to sync.
-                    </Text>
-                  </Pressable>
-                );
-              })()}
+              {showWeightSync && latestWeight && (
+                <Pressable
+                  style={styles.syncBanner}
+                  onPress={() => {
+                    const updated = { ...profile, weight_kg: latestWeight.weight_kg };
+                    const tdee = computeTDEE(updated);
+                    const goalOffset = profile.goal === "cut" ? -500 : profile.goal === "bulk" ? 300 : 0;
+                    const newCalTarget = Math.max(tdee + goalOffset, profile.sex === "female" ? 1200 : 1500);
+                    const newProtein = Math.round(latestWeight.weight_kg * 2.0);
+                    upsertProfileMut.mutate({
+                      height_cm: profile.height_cm,
+                      age: profile.age,
+                      sex: profile.sex,
+                      goal: profile.goal,
+                      daily_calorie_target: newCalTarget,
+                      protein_target_g: newProtein,
+                      tdee,
+                      bmr: Math.round(tdee / profile.activity_multiplier),
+                    });
+                    setShowWeightSync(false);
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  }}
+                >
+                  <Ionicons name="sync-outline" size={16} color={colors.charisma} />
+                  <Text style={styles.syncBannerText}>
+                    Weight tracker shows {latestWeight.weight_kg}kg (profile: {profile.weight_kg}kg). Tap to sync.
+                  </Text>
+                </Pressable>
+              )}
 
               {/* Calorie Ring + Water */}
               <SectionHeader title="Daily Dashboard" />
@@ -878,7 +937,7 @@ export default function NutritionScreen() {
                         <Text style={styles.mealCal}>{meal.calories} cal</Text>
                       </View>
                       <Pressable
-                        onPress={() => handleDeleteMeal(meal.id)}
+                        onPress={() => handleDeleteMeal(String(meal.id))}
                         style={styles.deleteBtn}
                         hitSlop={8}
                       >

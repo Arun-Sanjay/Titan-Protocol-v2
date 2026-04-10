@@ -28,7 +28,13 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey, addDays, getDayOfWeek } from "../../src/lib/date";
-import { useFocusStore, type FocusSettings } from "../../src/stores/useFocusStore";
+import { useFocusStore, type FocusSettings as LegacyFocusSettings } from "../../src/stores/useFocusStore";
+import {
+  useFocusSettings as useCloudFocusSettings,
+  useUpsertFocusSettings,
+  useRecordFocusSession,
+  useFocusSessions,
+} from "../../src/hooks/queries/useFocus";
 // Phase 3.5d: XP writes go through the cloud mutation.
 import { XP_REWARDS } from "../../src/stores/useProfileStore";
 import { useAwardXP } from "../../src/hooks/queries/useProfile";
@@ -184,8 +190,8 @@ function SettingsPanel({
   onUpdate,
   onClose,
 }: {
-  settings: FocusSettings;
-  onUpdate: (s: Partial<FocusSettings>) => void;
+  settings: LegacyFocusSettings;
+  onUpdate: (s: Partial<LegacyFocusSettings>) => void;
   onClose: () => void;
 }) {
   const [focusMin, setFocusMin] = useState(String(settings.focusMinutes));
@@ -337,6 +343,12 @@ export default function FocusTimerScreen() {
   const awardXPMutation = useAwardXP();
   const enqueueRankUpMutation = useEnqueueRankUp();
 
+  // Cloud hooks for settings and session recording
+  const { data: cloudSettings } = useCloudFocusSettings();
+  const upsertSettingsMut = useUpsertFocusSettings();
+  const recordSessionMut = useRecordFocusSession();
+  const { data: cloudFocusSessions = [] } = useFocusSessions(dateKey);
+
   const [phase, setPhase] = useState<Phase>("focus");
   const [running, setRunning] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(settings.focusMinutes * 60);
@@ -433,6 +445,12 @@ export default function FocusTimerScreen() {
 
       if (currentPhase === "focus") {
         completeSession(currentDateKey);
+        // Record session to cloud
+        recordSessionMut.mutate({
+          dateKey: currentDateKey,
+          durationMinutes: settings.focusMinutes,
+          completed: true,
+        });
         awardXPMutation
           .mutateAsync(XP_REWARDS.MAIN_TASK)
           .then((result) => {
@@ -523,7 +541,16 @@ export default function FocusTimerScreen() {
         {showSettings && (
           <SettingsPanel
             settings={settings}
-            onUpdate={updateSettings}
+            onUpdate={(partial) => {
+              updateSettings(partial);
+              // Also persist to cloud (cloud schema only has a subset of fields)
+              const merged = { ...settings, ...partial };
+              upsertSettingsMut.mutate({
+                pomodoro_minutes: merged.focusMinutes,
+                break_minutes: merged.breakMinutes,
+                daily_target_sessions: merged.dailyTarget,
+              });
+            }}
             onClose={() => setShowSettings(false)}
           />
         )}

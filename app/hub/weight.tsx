@@ -24,20 +24,32 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey, formatDateShort } from "../../src/lib/date";
 import {
-  useWeightStore,
   getMovingAverage,
   getWeeklyRate,
   getGoalETA,
   getTrend,
+  isValidWeight,
   type WeightEntry,
   type GoalProgress,
   type WeightTrend,
 } from "../../src/stores/useWeightStore";
 import {
-  useNutritionStore,
   computeBMI,
   getBMICategory,
 } from "../../src/stores/useNutritionStore";
+import { useWeightLogs, useCreateWeightLog, useDeleteWeightLog } from "../../src/hooks/queries/useWeight";
+import { useNutritionProfile } from "../../src/hooks/queries/useNutrition";
+import type { WeightLog } from "../../src/services/weight";
+
+// ─── Cloud-to-legacy adapter (pure helpers expect WeightEntry shape) ────────
+
+function toWeightEntry(log: WeightLog): WeightEntry {
+  return {
+    dateKey: log.date_key,
+    weightKg: log.weight_kg,
+    createdAt: new Date(log.created_at).getTime(),
+  };
+}
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -282,32 +294,55 @@ export default function WeightScreen() {
   }, []);
   const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
-  const entries = useWeightStore((s) => s.entries);
-  const goalWeight = useWeightStore((s) => s.goalWeight);
-  const load = useWeightStore((s) => s.load);
-  const addEntry = useWeightStore((s) => s.addEntry);
-  const deleteEntry = useWeightStore((s) => s.deleteEntry);
-  const setGoalWeight = useWeightStore((s) => s.setGoalWeight);
-  const getLatest = useWeightStore((s) => s.getLatest);
-  const getChangeFromFirst = useWeightStore((s) => s.getChangeFromFirst);
-  const getGoalProgress = useWeightStore((s) => s.getGoalProgress);
+  const { data: weightLogs = [] } = useWeightLogs();
+  const createWeightLogMut = useCreateWeightLog();
+  const deleteWeightLogMut = useDeleteWeightLog();
+
+  // Map dateKey -> cloud id for deletion
+  const dateKeyToId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const log of weightLogs) m.set(log.date_key, log.id);
+    return m;
+  }, [weightLogs]);
 
   // Nutrition profile for BMI
-  const nutritionProfile = useNutritionStore((s) => s.profile);
-  const loadNutritionProfile = useNutritionStore((s) => s.loadProfile);
+  const { data: nutritionProfile } = useNutritionProfile();
+
+  // Convert cloud logs to legacy WeightEntry shape for pure helpers
+  const entries = useMemo(() => weightLogs.map(toWeightEntry), [weightLogs]);
+
+  // Goal weight is stored locally for now (no cloud table for it)
+  // TODO: migrate goal_weight to a cloud column on nutrition_profile or a dedicated table
+  const [goalWeight, setGoalWeight] = useState<number | null>(null);
 
   const [weightInput, setWeightInput] = useState("");
   const [goalInput, setGoalInput] = useState("");
   const [showGoalForm, setShowGoalForm] = useState(false);
 
-  useEffect(() => {
-    load();
-    loadNutritionProfile();
-  }, [todayKey, load, loadNutritionProfile]);
+  // No load() needed — React Query auto-fetches
 
-  const latest = getLatest();
-  const changeInfo = getChangeFromFirst();
-  const goalProgress = getGoalProgress();
+  const latest = useMemo(() => (entries.length > 0 ? entries[entries.length - 1] : null), [entries]);
+  const changeInfo = useMemo(() => {
+    if (entries.length < 2) return null;
+    const first = entries[0];
+    const last = entries[entries.length - 1];
+    return {
+      change: +(last.weightKg - first.weightKg).toFixed(1),
+      startWeight: first.weightKg,
+    };
+  }, [entries]);
+  const goalProgress: GoalProgress | null = useMemo(() => {
+    if (!goalWeight || entries.length === 0) return null;
+    const start = entries[0].weightKg;
+    const current = entries[entries.length - 1].weightKg;
+    const totalDistance = Math.abs(goalWeight - start);
+    if (totalDistance === 0) return { pct: 100, remaining: 0, direction: "maintain" as const };
+    const direction: "gain" | "lose" = goalWeight > start ? "gain" : "lose";
+    const progress = direction === "lose" ? start - current : current - start;
+    const pct = Math.min(Math.round((Math.max(progress, 0) / totalDistance) * 100), 100);
+    const remaining = direction === "lose" ? current - goalWeight : goalWeight - current;
+    return { pct, remaining, direction, overshot: remaining < 0 };
+  }, [entries, goalWeight]);
   const trend = useMemo(() => getTrend(entries), [entries]);
   const weeklyRate = useMemo(() => getWeeklyRate(entries), [entries]);
   const movingAvg = useMemo(() => getMovingAverage(entries), [entries]);
@@ -316,8 +351,9 @@ export default function WeightScreen() {
   // BMI calculation
   const bmi = useMemo(() => {
     if (!latest || !nutritionProfile) return null;
-    if (nutritionProfile.height_cm < 50 || nutritionProfile.height_cm > 300) return null;
-    const value = computeBMI(nutritionProfile.height_cm, latest.weightKg);
+    const heightCm = nutritionProfile.height_cm;
+    if (!heightCm || heightCm < 50 || heightCm > 300) return null;
+    const value = computeBMI(heightCm, latest.weightKg);
     if (value <= 0 || value > 100) return null;
     return { value, ...getBMICategory(value) };
   }, [latest, nutritionProfile]);
@@ -361,14 +397,14 @@ export default function WeightScreen() {
       }
       return;
     }
-    addEntry(todayKey, +val.toFixed(1));
+    createWeightLogMut.mutate({ dateKey: todayKey, weightKg: +val.toFixed(1) });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setWeightInput("");
-  }, [weightInput, todayKey, addEntry]);
+  }, [weightInput, todayKey, createWeightLogMut]);
 
   const handleSaveGoal = useCallback(() => {
     const val = parseFloat(goalInput);
-    if (isNaN(val) || val < 20 || val > 500) {
+    if (isNaN(val) || !isValidWeight(val)) {
       Alert.alert("Invalid Goal", "Goal weight must be between 20 and 500 kg.");
       return;
     }
@@ -376,23 +412,25 @@ export default function WeightScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setGoalInput("");
     setShowGoalForm(false);
-  }, [goalInput, setGoalWeight]);
+  }, [goalInput]);
 
   const handleDeleteEntry = useCallback(
     (dateKey: string) => {
+      const cloudId = dateKeyToId.get(dateKey);
+      if (!cloudId) return;
       Alert.alert("Delete Entry", "Remove this weight entry?", [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            deleteEntry(dateKey);
+            deleteWeightLogMut.mutate(cloudId);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           },
         },
       ]);
     },
-    [deleteEntry],
+    [dateKeyToId, deleteWeightLogMut],
   );
 
   // Quick adjust: pre-fill with last weight

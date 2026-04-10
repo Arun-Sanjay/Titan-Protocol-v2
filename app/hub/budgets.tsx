@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -26,22 +26,55 @@ import { PageHeader } from "../../src/components/ui/PageHeader";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import {
-  useBudgetStore,
   getBudgetStatus,
   getBudgetStatusColor,
   getDailyRemaining,
-  type Budget,
   type BudgetStatus,
 } from "../../src/stores/useBudgetStore";
 import {
-  useMoneyStore,
-  computeMonthTotals,
   EXPENSE_CATEGORIES,
   CATEGORY_ICONS,
   CATEGORY_COLORS,
 } from "../../src/stores/useMoneyStore";
+import { useBudgets, useCreateBudget, useDeleteBudget } from "../../src/hooks/queries/useBudgets";
+import { useTransactions } from "../../src/hooks/queries/useMoney";
+import type { Budget } from "../../src/services/budgets";
+import type { MoneyTransaction } from "../../src/services/money";
 import { getMonthKey, getMonthLabel } from "../../src/lib/date";
 import { formatCurrency } from "../../src/lib/format";
+
+// ─── Cloud-compatible month totals (uses date_key instead of dateISO) ───────
+
+function computeCloudMonthTotals(
+  txs: MoneyTransaction[],
+  monthKey: string,
+): {
+  spent: number;
+  earned: number;
+  net: number;
+  byCategory: Record<string, number>;
+} {
+  let spent = 0;
+  let earned = 0;
+  const byCategory: Record<string, number> = {};
+
+  for (const tx of txs) {
+    if (!tx.date_key.startsWith(monthKey)) continue;
+    if (tx.type === "expense") {
+      spent += tx.amount;
+      byCategory[tx.category] = (byCategory[tx.category] ?? 0) + tx.amount;
+    } else {
+      earned += tx.amount;
+    }
+  }
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  for (const key of Object.keys(byCategory)) {
+    byCategory[key] = r2(byCategory[key]);
+  }
+
+  return { spent: r2(spent), earned: r2(earned), net: r2(earned - spent), byCategory };
+}
 
 // ─── Month Navigation Component ─────────────────────────────────────────────
 
@@ -157,13 +190,13 @@ const BudgetCard = React.memo(function BudgetCard({
   onDelete,
   index,
 }: BudgetCardProps) {
-  const { category, monthlyLimit } = budget;
-  const pct = monthlyLimit > 0 ? spent / monthlyLimit : 0;
+  const { category, monthly_limit } = budget;
+  const pct = monthly_limit > 0 ? spent / monthly_limit : 0;
   const pctClamped = Math.min(pct, 1);
-  const status = getBudgetStatus(monthlyLimit, spent);
+  const status = getBudgetStatus(monthly_limit, spent);
   const statusColor = getBudgetStatusColor(status);
-  const remaining = monthlyLimit - spent;
-  const dailyBudget = getDailyRemaining(monthlyLimit, spent, monthKey);
+  const remaining = monthly_limit - spent;
+  const dailyBudget = getDailyRemaining(monthly_limit, spent, monthKey);
   const icon = CATEGORY_ICONS[category] ?? "ellipsis-horizontal-circle-outline";
   const catColor = CATEGORY_COLORS[category] ?? colors.textMuted;
   const isOver = status === "over";
@@ -182,7 +215,7 @@ const BudgetCard = React.memo(function BudgetCard({
               <Text style={styles.budgetMeta}>
                 {formatCurrency(spent)}{" "}
                 <Text style={{ color: colors.textMuted }}>of</Text>{" "}
-                {formatCurrency(monthlyLimit)}
+                {formatCurrency(monthly_limit)}
               </Text>
             </View>
           </View>
@@ -242,7 +275,7 @@ const AddBudgetForm = React.memo(function AddBudgetForm({
   onClose: () => void;
   existingCategories: Set<string>;
 }) {
-  const addBudget = useBudgetStore((s) => s.addBudget);
+  const createBudgetMut = useCreateBudget();
 
   const existingKey = useMemo(
     () => [...existingCategories].sort().join(","),
@@ -273,9 +306,9 @@ const AddBudgetForm = React.memo(function AddBudgetForm({
     if (parsed > 999999.99) { Alert.alert("Invalid", "Max budget is $999,999.99"); return; }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addBudget(category, Math.round(parsed * 100) / 100);
+    createBudgetMut.mutate({ category, monthlyLimit: Math.round(parsed * 100) / 100 });
     onClose();
-  }, [category, limitStr, addBudget, onClose]);
+  }, [category, limitStr, createBudgetMut, onClose]);
 
   if (availableCategories.length === 0) {
     return (
@@ -369,11 +402,9 @@ const AddBudgetForm = React.memo(function AddBudgetForm({
 
 export default function BudgetsScreen() {
   const router = useRouter();
-  const budgets = useBudgetStore((s) => s.budgets);
-  const loadBudgets = useBudgetStore((s) => s.load);
-  const deleteBudget = useBudgetStore((s) => s.deleteBudget);
-  const transactions = useMoneyStore((s) => s.transactions);
-  const loadTxs = useMoneyStore((s) => s.load);
+  const { data: budgets = [] } = useBudgets();
+  const deleteBudgetMut = useDeleteBudget();
+  const { data: transactions = [] } = useTransactions();
   const [showForm, setShowForm] = useState(false);
 
   // Month navigation
@@ -386,13 +417,10 @@ export default function BudgetsScreen() {
   }, [monthOffset]);
   const monthLabel = useMemo(() => getMonthLabel(currentMonth), [currentMonth]);
 
-  useEffect(() => {
-    loadBudgets();
-    loadTxs();
-  }, [loadBudgets, loadTxs]);
+  // No load() needed — React Query auto-fetches
 
   const monthTotals = useMemo(
-    () => computeMonthTotals(transactions, currentMonth),
+    () => computeCloudMonthTotals(transactions, currentMonth),
     [transactions, currentMonth],
   );
 
@@ -403,7 +431,7 @@ export default function BudgetsScreen() {
 
   // Total budget vs total spent (only for budgeted categories)
   const totalBudget = useMemo(
-    () => budgets.reduce((sum, b) => sum + b.monthlyLimit, 0),
+    () => budgets.reduce((sum, b) => sum + b.monthly_limit, 0),
     [budgets],
   );
   const totalBudgeted = useMemo(
@@ -420,8 +448,8 @@ export default function BudgetsScreen() {
     return [...budgets].sort((a, b) => {
       const aSpent = monthTotals.byCategory[a.category] ?? 0;
       const bSpent = monthTotals.byCategory[b.category] ?? 0;
-      const aPct = a.monthlyLimit > 0 ? aSpent / a.monthlyLimit : 0;
-      const bPct = b.monthlyLimit > 0 ? bSpent / b.monthlyLimit : 0;
+      const aPct = a.monthly_limit > 0 ? aSpent / a.monthly_limit : 0;
+      const bPct = b.monthly_limit > 0 ? bSpent / b.monthly_limit : 0;
 
       // Over-budget items first
       const aOver = aPct > 1 ? 1 : 0;
@@ -434,7 +462,7 @@ export default function BudgetsScreen() {
   }, [budgets, monthTotals.byCategory]);
 
   const handleDelete = useCallback(
-    (id: number) => {
+    (id: string) => {
       Alert.alert("Delete Budget", "Remove this budget?", [
         { text: "Cancel", style: "cancel" },
         {
@@ -442,12 +470,12 @@ export default function BudgetsScreen() {
           style: "destructive",
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            deleteBudget(id);
+            deleteBudgetMut.mutate(id);
           },
         },
       ]);
     },
-    [deleteBudget],
+    [deleteBudgetMut],
   );
 
   const renderBudgetCard = useCallback(
@@ -463,7 +491,7 @@ export default function BudgetsScreen() {
     [monthTotals.byCategory, currentMonth, handleDelete],
   );
 
-  const budgetKeyExtractor = useCallback((item: Budget) => String(item.id), []);
+  const budgetKeyExtractor = useCallback((item: Budget) => item.id, []);
 
   const listHeader = useMemo(
     () => (

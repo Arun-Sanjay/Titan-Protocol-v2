@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+// Note: useEffect is still needed for the type->category sync in AddTransactionForm
 import {
   View,
   Text,
@@ -28,20 +29,88 @@ import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import {
   useMoneyStore,
-  computeMonthTotals,
-  getMonthTransactions,
-  getCategoryTotals,
-  getMonthComparison,
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   CATEGORY_ICONS,
   CATEGORY_COLORS,
-  type MoneyTx,
   type MoneyLoan,
   type CategoryTotal,
 } from "../../src/stores/useMoneyStore";
+import {
+  useTransactions,
+  useCreateTransaction,
+  useDeleteTransaction,
+} from "../../src/hooks/queries/useMoney";
+import type { MoneyTransaction } from "../../src/services/money";
 import { getTodayKey, getMonthKey, getMonthLabel, addDays } from "../../src/lib/date";
 import { formatCurrency, CURRENCIES, getSelectedCurrency, setSelectedCurrency, type CurrencyCode } from "../../src/lib/format";
+
+// ─── Cloud-compatible helpers (use date_key instead of dateISO) ─────────────
+
+function r2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function computeCloudMonthTotals(
+  txs: MoneyTransaction[],
+  monthKey: string,
+): { spent: number; earned: number; net: number; byCategory: Record<string, number> } {
+  let spent = 0;
+  let earned = 0;
+  const byCategory: Record<string, number> = {};
+  for (const tx of txs) {
+    if (!tx.date_key.startsWith(monthKey)) continue;
+    if (tx.type === "expense") {
+      spent += tx.amount;
+      byCategory[tx.category] = (byCategory[tx.category] ?? 0) + tx.amount;
+    } else {
+      earned += tx.amount;
+    }
+  }
+  for (const key of Object.keys(byCategory)) {
+    byCategory[key] = r2(byCategory[key]);
+  }
+  return { spent: r2(spent), earned: r2(earned), net: r2(earned - spent), byCategory };
+}
+
+function getCloudMonthTransactions(txs: MoneyTransaction[], monthKey: string): MoneyTransaction[] {
+  return txs.filter((tx) => tx.date_key.startsWith(monthKey));
+}
+
+function getCloudCategoryTotals(txs: MoneyTransaction[], monthKey: string): CategoryTotal[] {
+  const totals = computeCloudMonthTotals(txs, monthKey);
+  const entries = Object.entries(totals.byCategory).sort(([, a], [, b]) => b - a);
+  const totalSpent = totals.spent || 1;
+  return entries.map(([category, total]) => ({
+    category,
+    total,
+    percentage: r2((total / totalSpent) * 100),
+    icon: CATEGORY_ICONS[category] ?? "ellipsis-horizontal-circle-outline",
+    color: CATEGORY_COLORS[category] ?? "#6b7280",
+  }));
+}
+
+function getCloudMonthComparison(txs: MoneyTransaction[], monthKey: string) {
+  const current = computeCloudMonthTotals(txs, monthKey);
+  const [yearStr, monthStr] = monthKey.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevKey = `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
+  const prev = computeCloudMonthTotals(txs, prevKey);
+  return {
+    earned: current.earned,
+    spent: current.spent,
+    net: current.net,
+    prevEarned: prev.earned,
+    prevSpent: prev.spent,
+    prevNet: prev.net,
+    earnedDelta: prev.earned > 0 ? r2(((current.earned - prev.earned) / prev.earned) * 100) : 0,
+    spentDelta: prev.spent > 0 ? r2(((current.spent - prev.spent) / prev.spent) * 100) : 0,
+    netDelta: prev.net !== 0 ? r2(((current.net - prev.net) / Math.abs(prev.net)) * 100) : 0,
+  };
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -324,7 +393,7 @@ const AddTransactionForm = React.memo(function AddTransactionForm({
 }: {
   onClose: () => void;
 }) {
-  const addTransaction = useMoneyStore((s) => s.addTransaction);
+  const createTxMut = useCreateTransaction();
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
@@ -351,12 +420,12 @@ const AddTransactionForm = React.memo(function AddTransactionForm({
     const roundedAmount = Math.round(parsed * 100) / 100;
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addTransaction({
-      dateISO: txDate,
+    createTxMut.mutate({
+      dateKey: txDate,
       type,
       amount: roundedAmount,
       category,
-      note: note.trim(),
+      note: note.trim() || undefined,
     });
     // Reset form
     setAmount("");
@@ -364,7 +433,7 @@ const AddTransactionForm = React.memo(function AddTransactionForm({
     setCategory(type === "expense" ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0]);
     setTxDate(getTodayKey());
     onClose();
-  }, [amount, txDate, type, category, note, addTransaction, onClose]);
+  }, [amount, txDate, type, category, note, createTxMut, onClose]);
 
   const today = getTodayKey();
   const yesterday = addDays(today, -1);
@@ -507,8 +576,8 @@ const AddTransactionForm = React.memo(function AddTransactionForm({
 
 // ─── Transaction Row ─────────────────────────────────────────────────────────
 
-const TransactionRow = React.memo(function TransactionRow({ tx }: { tx: MoneyTx }) {
-  const deleteTransaction = useMoneyStore((s) => s.deleteTransaction);
+const TransactionRow = React.memo(function TransactionRow({ tx }: { tx: MoneyTransaction }) {
+  const deleteTxMut = useDeleteTransaction();
 
   const handleDelete = useCallback(() => {
     Alert.alert("Delete Transaction", "Are you sure?", [
@@ -518,11 +587,11 @@ const TransactionRow = React.memo(function TransactionRow({ tx }: { tx: MoneyTx 
         style: "destructive",
         onPress: () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          deleteTransaction(tx.id);
+          deleteTxMut.mutate(tx.id);
         },
       },
     ]);
-  }, [tx.id, deleteTransaction]);
+  }, [tx.id, deleteTxMut]);
 
   const icon = CATEGORY_ICONS[tx.category] ?? "ellipsis-horizontal-circle-outline";
   const catColor = CATEGORY_COLORS[tx.category] ?? colors.textMuted;
@@ -536,9 +605,9 @@ const TransactionRow = React.memo(function TransactionRow({ tx }: { tx: MoneyTx 
       </View>
       <View style={styles.txInfo}>
         <Text style={styles.txCategory} numberOfLines={1}>
-          {tx.note || tx.category}
+          {tx.note ?? tx.category}
         </Text>
-        {tx.note ? (
+        {tx.note && tx.note.length > 0 ? (
           <Text style={styles.txNote} numberOfLines={1}>{tx.category}</Text>
         ) : null}
       </View>
@@ -687,11 +756,15 @@ const AddLoanForm = React.memo(function AddLoanForm({
 
 export default function CashflowScreen() {
   const router = useRouter();
-  const transactions = useMoneyStore((s) => s.transactions);
+  const { data: transactions = [] } = useTransactions();
+  // Loans remain on MMKV — no cloud table for them yet
   const loans = useMoneyStore((s) => s.loans);
-  const load = useMoneyStore((s) => s.load);
+  const loadLoans = useMoneyStore((s) => s.load);
   const markLoanPaid = useMoneyStore((s) => s.markLoanPaid);
   const deleteLoan = useMoneyStore((s) => s.deleteLoan);
+
+  // Load loans from MMKV (transactions auto-fetched by React Query)
+  useEffect(() => { loadLoans(); }, [loadLoans]);
 
   const [showForm, setShowForm] = useState(false);
   const [showLoanForm, setShowLoanForm] = useState(false);
@@ -712,23 +785,19 @@ export default function CashflowScreen() {
   }, [monthOffset]);
   const monthLabel = useMemo(() => getMonthLabel(currentMonth), [currentMonth]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
   // Computed data
   const monthTxs = useMemo(
-    () => getMonthTransactions(transactions, currentMonth),
+    () => getCloudMonthTransactions(transactions, currentMonth),
     [transactions, currentMonth],
   );
 
   const comparison = useMemo(
-    () => getMonthComparison(transactions, currentMonth),
+    () => getCloudMonthComparison(transactions, currentMonth),
     [transactions, currentMonth],
   );
 
   const categoryTotals = useMemo(
-    () => getCategoryTotals(transactions, currentMonth),
+    () => getCloudCategoryTotals(transactions, currentMonth),
     [transactions, currentMonth],
   );
 
@@ -736,7 +805,7 @@ export default function CashflowScreen() {
 
   // Daily mode data
   const dayTxs = useMemo(
-    () => transactions.filter((tx) => tx.dateISO === selectedDate),
+    () => transactions.filter((tx) => tx.date_key === selectedDate),
     [transactions, selectedDate],
   );
 
@@ -771,13 +840,13 @@ export default function CashflowScreen() {
   // Group filtered transactions by date for SectionList
   const sections = useMemo(() => {
     const sorted = [...filteredTxs].sort(
-      (a, b) => b.dateISO.localeCompare(a.dateISO) || b.id - a.id,
+      (a, b) => b.date_key.localeCompare(a.date_key) || a.id.localeCompare(b.id),
     );
-    const groups: { title: string; data: MoneyTx[] }[] = [];
+    const groups: { title: string; data: MoneyTransaction[] }[] = [];
     let currentDate = "";
     for (const tx of sorted) {
-      if (tx.dateISO !== currentDate) {
-        currentDate = tx.dateISO;
+      if (tx.date_key !== currentDate) {
+        currentDate = tx.date_key;
         groups.push({ title: currentDate, data: [] });
       }
       groups[groups.length - 1].data.push(tx);
@@ -1037,7 +1106,7 @@ export default function CashflowScreen() {
   );
 
   const renderTxItem = useCallback(
-    ({ item, index }: { item: MoneyTx; index: number }) => (
+    ({ item, index }: { item: MoneyTransaction; index: number }) => (
       <View style={styles.txPanelItem}>
         {index > 0 && <View style={styles.txDivider} />}
         <TransactionRow tx={item} />
@@ -1070,7 +1139,7 @@ export default function CashflowScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           sections={sections}
-          keyExtractor={(item) => String(item.id)}
+          keyExtractor={(item) => item.id}
           renderItem={renderTxItem}
           renderSectionHeader={({ section }) => (
             <DateSectionHeader title={section.title} />

@@ -26,6 +26,12 @@ import {
   DeepWorkCategory,
   DeepWorkTask,
 } from "../../src/stores/useDeepWorkStore";
+import {
+  useDeepWorkSessions,
+  useCreateDeepWorkSession,
+  useDeleteDeepWorkSession,
+} from "../../src/hooks/queries/useDeepWork";
+import type { DeepWorkSession } from "../../src/services/deep-work";
 import { getTodayKey, toLocalDateKey, addDays } from "../../src/lib/date";
 import { formatCurrency } from "../../src/lib/format";
 
@@ -169,7 +175,7 @@ const TaskRow = React.memo(function TaskRow({
 export default function DeepWorkScreen() {
   const router = useRouter();
 
-  // Bug 7: Use individual selectors instead of `const store = useDeepWorkStore()`
+  // Task templates remain on MMKV — cloud doesn't store them
   const load = useDeepWorkStore((s) => s.load);
   const tasks = useDeepWorkStore((s) => s.tasks);
   const logs = useDeepWorkStore((s) => s.logs);
@@ -179,7 +185,11 @@ export default function DeepWorkScreen() {
   const getLogsByDate = useDeepWorkStore((s) => s.getLogsByDate);
   const getWeeklyEarnings = useDeepWorkStore((s) => s.getWeeklyEarnings);
 
-  // Bug 3: AppState listener to refresh todayKey past midnight
+  // Cloud hooks for sessions
+  const { data: cloudSessions = [] } = useDeepWorkSessions(30);
+  const createSessionMut = useCreateDeepWorkSession();
+
+  // AppState listener to refresh todayKey past midnight
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -198,7 +208,7 @@ export default function DeepWorkScreen() {
     load();
   }, [load]);
 
-  // Today's logs
+  // Today's logs (local MMKV)
   const todayLogs = useMemo(() => getLogsByDate(todayKey), [logs, todayKey, getLogsByDate]);
 
   // Today's total earnings
@@ -225,7 +235,7 @@ export default function DeepWorkScreen() {
     [logs, todayKey, getWeeklyEarnings]
   );
 
-  // Bug 4: Count days with ANY log entry (earnings > 0 OR completed), not just completed
+  // Count days with ANY log entry (earnings > 0 OR completed), not just completed
   const weeklyDaysWorked = useMemo(() => {
     const startKey = addDays(todayKey, -6);
     const daysSet = new Set(
@@ -273,8 +283,20 @@ export default function DeepWorkScreen() {
   const handleToggle = useCallback(
     (taskId: number, completed: boolean, currentEarnings: number) => {
       logWork(taskId, todayKey, completed, currentEarnings);
+      // Also create a cloud session when marking as completed
+      if (completed) {
+        const task = tasks.find((t) => t.id === taskId);
+        if (task) {
+          createSessionMut.mutate({
+            dateKey: todayKey,
+            taskName: task.taskName,
+            category: task.category,
+            minutes: 0, // duration not tracked in legacy model
+          });
+        }
+      }
     },
-    [logWork, todayKey]
+    [logWork, todayKey, tasks, createSessionMut]
   );
 
   const handleEarningsChange = useCallback(

@@ -11,10 +11,11 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { Panel } from "../../src/components/ui/Panel";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { HeatmapGrid } from "../../src/components/ui/HeatmapGrid";
-import { useEngineStore } from "../../src/stores/useEngineStore";
-import { useHabitStore, type HabitStats } from "../../src/stores/useHabitStore";
 import { useModeStore } from "../../src/stores/useModeStore";
 import type { EngineKey } from "../../src/db/schema";
+import { useAllTasks, useAllCompletionsForDate } from "../../src/hooks/queries/useTasks";
+import { computeEngineScore } from "../../src/services/tasks";
+import { useHabits, useHabitLogsForDate, useHabitLogsForRange } from "../../src/hooks/queries/useHabits";
 import { getTodayKey, addDays } from "../../src/lib/date";
 
 const ENGINES: EngineKey[] = ["body", "mind", "money", "charisma"];
@@ -40,9 +41,6 @@ export default function AnalyticsScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const [range, setRange] = useState<Range>(30);
-  const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
-  const loadDateRange = useEngineStore((s) => s.loadDateRange);
-  const scores = useEngineStore((s) => s.scores);
 
   // AppState refresh for midnight crossing
   const [appActive, setAppActive] = useState(0);
@@ -54,17 +52,29 @@ export default function AnalyticsScreen() {
   }, []);
   const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
+  // Cloud hooks — today's data only
+  const { data: allTasks = [] } = useAllTasks();
+  const { data: todayCompletions = [] } = useAllCompletionsForDate(todayKey);
+
+  // Compute per-engine scores from cloud data (today only)
+  const todayScores: Record<string, number> = useMemo(() => {
+    const result: Record<string, number> = {};
+    const completedTaskIds = new Set(todayCompletions.map((c) => c.task_id));
+    for (const engine of ENGINES) {
+      const engineTasks = allTasks.filter((t) => t.engine === engine);
+      result[`${engine}:${todayKey}`] = computeEngineScore(engineTasks, completedTaskIds);
+    }
+    return result;
+  }, [allTasks, todayCompletions, todayKey]);
+
+  // v1.1 TODO: Add a date-range completions query to populate historical scores.
+  // For now, the multi-day chart/heatmap only shows today's data point.
+  const scores = todayScores;
+
   const dateKeys = useMemo(() => getDateKeys(range, todayKey), [range, todayKey]);
 
   // Always load 90 days so heatmap has data regardless of selected range
   const allDateKeys = useMemo(() => getDateKeys(90, todayKey), [todayKey]);
-
-  useEffect(() => {
-    loadAllEngines(todayKey);
-    if (allDateKeys.length > 0) {
-      loadDateRange(allDateKeys[0], allDateKeys[allDateKeys.length - 1]);
-    }
-  }, [todayKey, loadAllEngines, loadDateRange, allDateKeys]);
 
   const dailyScores = useMemo(() => {
     return dateKeys.map((dk) => {
@@ -288,21 +298,16 @@ export default function AnalyticsScreen() {
 // ─── Habit Performance Section ───────────────────────────────────────────
 
 function HabitPerformanceSection({ todayKey }: { todayKey: string }) {
-  const habits = useHabitStore((s) => s.habits);
-  const loadHabits = useHabitStore((s) => s.load);
-  const loadHabitDateRange = useHabitStore((s) => s.loadDateRange);
-  const getHabitStats = useHabitStore((s) => s.getHabitStats);
-  const overallScore = useHabitStore((s) => s.getOverallHabitScore(todayKey));
+  const { data: habits = [] } = useHabits();
+  const { data: todayLogs = [] } = useHabitLogsForDate(todayKey);
 
-  // Ensure habits + the 30-day stat window are loaded into the store
-  // cache before getHabitStats runs in render (Phase 2.3F).
-  useEffect(() => {
-    loadHabits(todayKey);
-    const start = new Date(`${todayKey}T00:00:00`);
-    start.setDate(start.getDate() - 29);
-    const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
-    loadHabitDateRange(startKey, todayKey);
-  }, [todayKey, loadHabits, loadHabitDateRange]);
+  // Compute today's completion score from cloud data
+  const overallScore = useMemo(() => {
+    if (habits.length === 0) return 0;
+    const completedIds = new Set(todayLogs.map((l) => l.habit_id));
+    const completed = habits.filter((h) => completedIds.has(h.id)).length;
+    return Math.round((completed / habits.length) * 100);
+  }, [habits, todayLogs]);
 
   if (habits.length === 0) return null;
 
@@ -315,14 +320,15 @@ function HabitPerformanceSection({ todayKey }: { todayKey: string }) {
           <Text style={hStyles.overallValue}>{overallScore}%</Text>
         </View>
         {habits.map((h, idx) => {
-          const stats = getHabitStats(h.id!, 30);
+          // v1.1 TODO: Compute per-habit stats (chain, rate) from cloud habit logs range query
+          const isCompleted = todayLogs.some((l) => l.habit_id === h.id);
           return (
             <View key={h.id} style={[hStyles.habitRow, idx < habits.length - 1 && hStyles.habitBorder]}>
               <Text style={hStyles.habitIcon}>{h.icon}</Text>
               <View style={hStyles.habitInfo}>
                 <Text style={hStyles.habitName} numberOfLines={1}>{h.title}</Text>
                 <Text style={hStyles.habitMeta}>
-                  {stats.currentChain}d chain · {stats.completionRate}% rate · best {stats.longestChain}d
+                  {isCompleted ? "Done today" : "Pending"} · {h.current_chain ?? 0}d chain · best {h.best_chain ?? 0}d
                 </Text>
               </View>
             </View>

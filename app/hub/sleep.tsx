@@ -27,7 +27,6 @@ import { MetricValue } from "../../src/components/ui/MetricValue";
 import { SparklineChart } from "../../src/components/ui/SparklineChart";
 import { getTodayKey, addDays, formatDateShort, getDayOfWeek } from "../../src/lib/date";
 import {
-  useSleepStore,
   computeDurationMinutes,
   computeSleepScore,
   computeSleepDebt,
@@ -38,6 +37,30 @@ import {
   type SleepEntry,
   type SleepScore,
 } from "../../src/stores/useSleepStore";
+import { useSleepLogs, useUpsertSleepLog, useDeleteSleepLog } from "../../src/hooks/queries/useSleep";
+import type { SleepLog } from "../../src/services/sleep";
+
+// ─── Cloud-to-legacy adapter ────────────────────────────────────────────────
+// Cloud SleepLog stores hours_slept (no bedtime/wakeTime). We synthesize
+// default bedtime from duration for the pure helpers that expect SleepEntry.
+
+function toSleepEntry(log: SleepLog): SleepEntry {
+  const hours = log.hours_slept ?? 0;
+  const durationMinutes = Math.round(hours * 60);
+  // Synthesize bedtime/wakeTime (cloud doesn't store them)
+  const wakeMinutes = 7 * 60; // default 07:00
+  const bedMinutes = ((wakeMinutes - durationMinutes) % 1440 + 1440) % 1440;
+  const bedtime = minutesToTime(bedMinutes);
+  const wakeTime = minutesToTime(wakeMinutes);
+  return {
+    dateKey: log.date_key,
+    bedtime,
+    wakeTime,
+    durationMinutes,
+    quality: (log.quality ?? 3) as 1 | 2 | 3 | 4 | 5,
+    notes: log.notes ?? "",
+  };
+}
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -626,10 +649,25 @@ export default function SleepScreen() {
   }, []);
   const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
-  const entries = useSleepStore((s) => s.entries);
-  const loadEntry = useSleepStore((s) => s.loadEntry);
-  const addEntry = useSleepStore((s) => s.addEntry);
-  const deleteEntry = useSleepStore((s) => s.deleteEntry);
+  const { data: sleepLogs = [] } = useSleepLogs(90); // fetch up to 90 days
+  const upsertSleepLogMut = useUpsertSleepLog();
+  const deleteSleepLogMut = useDeleteSleepLog();
+
+  // Convert cloud logs to legacy SleepEntry shape for pure helpers
+  const entriesMap = useMemo(() => {
+    const m: Record<string, SleepEntry> = {};
+    for (const log of sleepLogs) {
+      m[log.date_key] = toSleepEntry(log);
+    }
+    return m;
+  }, [sleepLogs]);
+
+  // Map dateKey -> cloud id for deletion
+  const dateKeyToId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const log of sleepLogs) m.set(log.date_key, log.id);
+    return m;
+  }, [sleepLogs]);
 
   // Form state
   const [bedtime, setBedtime] = useState("22:00");
@@ -641,48 +679,42 @@ export default function SleepScreen() {
   // How many days of history to show
   const [historyDays, setHistoryDays] = useState(7);
 
-  // Load entries for stats + visible history
-  useEffect(() => {
-    const daysToLoad = Math.max(historyDays, 14); // always load 14 for stats
-    for (let i = 0; i <= daysToLoad; i++) {
-      loadEntry(addDays(todayKey, -i));
-    }
-  }, [todayKey, loadEntry, historyDays]);
+  // No load() needed — React Query auto-fetches
 
-  const todayEntry = entries[todayKey] ?? null;
+  const todayEntry = entriesMap[todayKey] ?? null;
 
   // Build sorted entries array for stats
   const allEntries = useMemo(() => {
     const result: SleepEntry[] = [];
     for (let i = 0; i <= 14; i++) {
       const key = addDays(todayKey, -i);
-      const entry = entries[key];
+      const entry = entriesMap[key];
       if (entry) result.push(entry);
     }
     return result.sort((a, b) => a.dateKey.localeCompare(b.dateKey));
-  }, [entries, todayKey]);
+  }, [entriesMap, todayKey]);
 
   // 7-day entries for the week chart (today + 6 previous days = 7 total)
   const weekEntries = useMemo(() => {
     const result: SleepEntry[] = [];
     for (let i = 0; i < 7; i++) {
       const key = addDays(todayKey, -i);
-      const entry = entries[key];
+      const entry = entriesMap[key];
       if (entry) result.push(entry);
     }
     return result;
-  }, [entries, todayKey]);
+  }, [entriesMap, todayKey]);
 
   // History (excluding today) — shows up to historyDays
   const history = useMemo(() => {
     const result: SleepEntry[] = [];
     for (let i = 1; i <= historyDays; i++) {
       const key = addDays(todayKey, -i);
-      const entry = entries[key];
+      const entry = entriesMap[key];
       if (entry) result.push(entry);
     }
     return result;
-  }, [entries, todayKey, historyDays]);
+  }, [entriesMap, todayKey, historyDays]);
 
   // Sleep consistency (needs 3+ entries)
   const consistency = useMemo(
@@ -731,13 +763,11 @@ export default function SleepScreen() {
       return;
     }
 
-    addEntry({
+    upsertSleepLogMut.mutate({
       dateKey: todayKey,
-      bedtime,
-      wakeTime,
-      durationMinutes,
+      hoursSlept: durationMinutes / 60,
       quality,
-      notes: notes.trim(),
+      notes: notes.trim() || null,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -746,23 +776,25 @@ export default function SleepScreen() {
     setWakeTime("07:00");
     setQuality(3);
     setNotes("");
-  }, [bedtime, wakeTime, quality, notes, todayKey, addEntry]);
+  }, [bedtime, wakeTime, quality, notes, todayKey, upsertSleepLogMut]);
 
   const handleDelete = useCallback(
     (dateKey: string) => {
+      const cloudId = dateKeyToId.get(dateKey);
+      if (!cloudId) return;
       Alert.alert("Delete Entry", "Remove this sleep entry?", [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            deleteEntry(dateKey);
+            deleteSleepLogMut.mutate(cloudId);
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           },
         },
       ]);
     },
-    [deleteEntry],
+    [dateKeyToId, deleteSleepLogMut],
   );
 
   const previewDuration = useMemo(() => {
