@@ -22,14 +22,15 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey } from "../../src/lib/date";
+// Phase 4.1: all nutrition types/helpers/store from barrel — no direct store import.
 import {
-  useNutritionStore,
+  useNutritionData,
   computeTDEE,
   computeDayMacros,
   type NutritionProfile as LegacyNutritionProfile,
   type Meal,
   type QuickMeal,
-} from "../../src/stores/useNutritionStore";
+} from "../../src/lib/nutrition-helpers";
 import { useWeightLogs } from "../../src/hooks/queries/useWeight";
 import {
   useNutritionProfile,
@@ -427,15 +428,15 @@ export default function NutritionScreen() {
   }, [weightLogs]);
 
   // Quick meals and water remain on MMKV
-  const quickMeals = useNutritionStore((s) => s.quickMeals);
-  const waterLog = useNutritionStore((s) => s.waterLog);
-  const waterTarget = useNutritionStore((s) => s.waterTarget);
-  const loadQuickMeals = useNutritionStore((s) => s.loadQuickMeals);
-  const addQuickMeal = useNutritionStore((s) => s.addQuickMeal);
-  const deleteQuickMeal = useNutritionStore((s) => s.deleteQuickMeal);
-  const loadWater = useNutritionStore((s) => s.loadWater);
-  const addWaterFn = useNutritionStore((s) => s.addWater);
-  const removeWaterFn = useNutritionStore((s) => s.removeWater);
+  const quickMeals = useNutritionData((s) => s.quickMeals);
+  const waterLog = useNutritionData((s) => s.waterLog);
+  const waterTarget = useNutritionData((s) => s.waterTarget);
+  const loadQuickMeals = useNutritionData((s) => s.loadQuickMeals);
+  const addQuickMeal = useNutritionData((s) => s.addQuickMeal);
+  const deleteQuickMeal = useNutritionData((s) => s.deleteQuickMeal);
+  const loadWater = useNutritionData((s) => s.loadWater);
+  const addWaterFn = useNutritionData((s) => s.addWater);
+  const removeWaterFn = useNutritionData((s) => s.removeWater);
 
   const [showMealForm, setShowMealForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);

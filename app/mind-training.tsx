@@ -9,7 +9,20 @@ import { Panel } from "../src/components/ui/Panel";
 import { PageHeader } from "../src/components/ui/PageHeader";
 // Phase 4.1: cloud-backed mind training results via React Query
 import { useMindTrainingResults, useRecordMindResult } from "../src/hooks/queries/useMindTraining";
-import type { Exercise } from "../src/stores/useMindTrainingStore";
+// Phase 4.1: Exercise type inlined — no store import needed.
+type Exercise = {
+  id: string;
+  type: "bias_check" | "decision_drill" | "knowledge_drop" | "recall";
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  category: string;
+  scenario: string;
+  question: string;
+  options: { id: string; text: string; description?: string }[];
+  correct: string;
+  explanation: string;
+  insight?: string;
+  identity_tags?: string[];
+};
 import { BiasCheck } from "../src/components/v2/mind-training/BiasCheck";
 import { DecisionDrill } from "../src/components/v2/mind-training/DecisionDrill";
 import { KnowledgeDrop } from "../src/components/v2/mind-training/KnowledgeDrop";

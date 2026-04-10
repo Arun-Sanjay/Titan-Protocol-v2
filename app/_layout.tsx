@@ -128,7 +128,8 @@ import { Day365Cinematic } from "../src/components/v2/story/Day365Cinematic";
 import { getStoryForDay, addEntry } from "../src/lib/narrative-engine";
 import { useIdentityStore } from "../src/stores/useIdentityStore";
 import { useStoryStore } from "../src/stores/useStoryStore";
-import { useProtocolStore } from "../src/stores/useProtocolStore";
+// Phase 4.1: legacy protocol store removed — streak read from MMKV
+// directly (root layout is above QueryClientProvider).
 import { getJSON, setJSON } from "../src/db/storage";
 import { getDayNumber } from "../src/data/chapters";
 import { getTodayKey } from "../src/lib/date";
@@ -155,7 +156,7 @@ import { SurpriseOverlay } from "../src/components/v2/story/SurpriseOverlay";
 import { StreakBreakCinematic } from "../src/components/v2/story/StreakBreakCinematic";
 import { BossDefeatCinematic } from "../src/components/v2/story/BossDefeatCinematic";
 import { BossFailCinematic } from "../src/components/v2/story/BossFailCinematic";
-import { useQuestStore, type BossChallenge } from "../src/stores/useQuestStore";
+// Phase 4.1: legacy quest store removed — boss state read from MMKV.
 import { ComebackCinematic } from "../src/components/v2/story/ComebackCinematic";
 import { IntegrityWarningOverlay } from "../src/components/v2/story/IntegrityWarningOverlay";
 import { useSurpriseStore } from "../src/stores/useSurpriseStore";
@@ -304,12 +305,14 @@ export default function RootLayout() {
   const getCinematicForDay = useStoryStore((s) => s.getCinematicForDay);
   const storyFlags = useStoryStore((s) => s.storyFlags);
   const userName = useStoryStore((s) => s.userName);
-  const streakCurrent = useProtocolStore((s) => s.streakCurrent);
+  // Phase 4.1: read streak directly from MMKV — root layout is above
+  // QueryClientProvider so React Query hooks are unavailable here.
+  const streakCurrent = getJSON<number>("protocol_streak", 0);
 
   // Phase 3.5d: Rank-up overlay moved to RankUpOverlayMount which lives
   // inside the QueryClientProvider tree and reads from the cloud-backed
   // rank_up_events table via usePendingRankUps. The old MMKV queue from
-  // useProfileStore is still loaded by the migration script (see Phase
+  // The legacy profile store is still loaded by the migration script (see Phase
   // 3.5a) but is no longer the source of truth.
 
   // Build context for transmission splash
@@ -372,7 +375,16 @@ export default function RootLayout() {
       setIntegrityChecked(true);
 
       // ─── Step 1b: Boss defeat/fail check ─────────────────────────────
-      const bossState = useQuestStore.getState().bossChallenge;
+      // Phase 4.1: read boss state directly from MMKV — root layout is
+      // above QueryClientProvider.
+      const bossState = getJSON<{
+        title: string;
+        daysRequired: number;
+        dayResults: boolean[];
+        xpReward: number;
+        completed: boolean;
+        failed: boolean;
+      } | null>("boss_challenges", null);
       const bossShownKey = `boss_cinematic_${getTodayKey()}`;
       if (bossState && !getJSON<boolean>(bossShownKey, false)) {
         if (bossState.completed) {

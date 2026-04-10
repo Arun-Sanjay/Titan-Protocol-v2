@@ -22,9 +22,9 @@ import { evaluateAllTrees } from "../src/lib/skill-tree-evaluator";
 
 // Phase 3.5e: all subcomponents now derive task/score data from cloud
 // hooks (useAllTasks + useAllCompletionsForDate + computeEngineScore).
-// useEngineStore and useHabitStore removed — no MMKV reads remain.
-// XP_REWARDS is a pure const export; no MMKV reads involved.
-import { XP_REWARDS } from "../src/stores/useProfileStore";
+// Engine+Habit stores removed — no MMKV reads remain.
+// Phase 4.1: XP_REWARDS extracted to shared constant module.
+import { XP_REWARDS } from "../src/lib/xp-rewards";
 import { useAllTasks, useAllCompletionsForDate } from "../src/hooks/queries/useTasks";
 import { computeEngineScore, ENGINES } from "../src/services/tasks";
 import { useAwardXP, useUpdateStreak } from "../src/hooks/queries/useProfile";
@@ -116,7 +116,7 @@ function MorningMissionPreviewPhase({
   dateKey: string;
   onNext: () => void;
 }) {
-  // Phase 3.5e: cloud-backed task list replaces useEngineStore reads.
+  // Phase 3.5e: cloud-backed task list replaces legacy engine store reads.
   const { data: cloudTasks = [] } = useAllTasks();
   const { data: cloudCompletions = [] } = useAllCompletionsForDate(dateKey);
 
@@ -237,7 +237,7 @@ function EveningScoreRevealPhase({
   onNext: () => void;
 }) {
   // Phase 3.5e: engine scores derived from cloud hooks instead of
-  // useEngineStore.scores. The parent already fetches allTasks +
+  // Legacy engine store scores removed. The parent already fetches allTasks +
   // allCompletions, but this component needs per-engine breakdowns
   // so it runs its own queries (React Query deduplicates the fetch).
   const { data: cloudTasks = [] } = useAllTasks();

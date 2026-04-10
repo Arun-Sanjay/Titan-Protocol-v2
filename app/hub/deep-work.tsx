@@ -21,11 +21,20 @@ import { colors, spacing, radius, fonts } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
-import {
-  useDeepWorkStore,
-  DeepWorkCategory,
-  DeepWorkTask,
-} from "../../src/stores/useDeepWorkStore";
+// Phase 4.1: types from barrel, MMKV reads inline — no store import.
+import { type DeepWorkCategory, type DeepWorkTask } from "../../src/lib/deep-work-helpers";
+import { getJSON, setJSON, nextId } from "../../src/db/storage";
+
+type DeepWorkLog = {
+  id: number;
+  taskId: number;
+  dateKey: string;
+  completed: boolean;
+  earningsToday: number;
+};
+
+const DW_TASKS_KEY = "deep_work_tasks";
+const DW_LOGS_KEY = "deep_work_logs";
 import {
   useDeepWorkSessions,
   useCreateDeepWorkSession,
@@ -175,15 +184,50 @@ const TaskRow = React.memo(function TaskRow({
 export default function DeepWorkScreen() {
   const router = useRouter();
 
-  // Task templates remain on MMKV — cloud doesn't store them
-  const load = useDeepWorkStore((s) => s.load);
-  const tasks = useDeepWorkStore((s) => s.tasks);
-  const logs = useDeepWorkStore((s) => s.logs);
-  const addTask = useDeepWorkStore((s) => s.addTask);
-  const deleteTask = useDeepWorkStore((s) => s.deleteTask);
-  const logWork = useDeepWorkStore((s) => s.logWork);
-  const getLogsByDate = useDeepWorkStore((s) => s.getLogsByDate);
-  const getWeeklyEarnings = useDeepWorkStore((s) => s.getWeeklyEarnings);
+  // Phase 4.1: MMKV reads inline — no store import.
+  const [tasks, setTasks] = useState<DeepWorkTask[]>(() => getJSON<DeepWorkTask[]>(DW_TASKS_KEY, []));
+  const [logs, setLogs] = useState<DeepWorkLog[]>(() => getJSON<DeepWorkLog[]>(DW_LOGS_KEY, []));
+  const addTask = useCallback((taskName: string, category: DeepWorkCategory) => {
+    const id = nextId();
+    const task: DeepWorkTask = { id, taskName, category, createdAt: Date.now() };
+    const updated = [...tasks, task];
+    setJSON(DW_TASKS_KEY, updated);
+    setTasks(updated);
+  }, [tasks]);
+  const deleteTask = useCallback((id: number) => {
+    const updatedTasks = tasks.filter((t) => t.id !== id);
+    const updatedLogs = logs.filter((l) => l.taskId !== id);
+    setJSON(DW_TASKS_KEY, updatedTasks);
+    setJSON(DW_LOGS_KEY, updatedLogs);
+    setTasks(updatedTasks);
+    setLogs(updatedLogs);
+  }, [tasks, logs]);
+  const logWork = useCallback((taskId: number, dateKey: string, completed: boolean, earnings: number) => {
+    const safeEarnings = Number.isFinite(earnings) ? Math.max(0, earnings) : 0;
+    const existing = logs.find((l) => l.taskId === taskId && l.dateKey === dateKey);
+    let updated: DeepWorkLog[];
+    if (existing) {
+      updated = logs.map((l) =>
+        l.id === existing.id ? { ...l, completed, earningsToday: safeEarnings } : l);
+    } else {
+      const log: DeepWorkLog = { id: nextId(), taskId, dateKey, completed, earningsToday: safeEarnings };
+      updated = [...logs, log];
+    }
+    setJSON(DW_LOGS_KEY, updated);
+    setLogs(updated);
+  }, [logs]);
+  const getLogsByDate = useCallback((dk: string) => logs.filter((l) => l.dateKey === dk), [logs]);
+  const getWeeklyEarnings = useCallback((endDate: string) => {
+    const end = new Date(endDate + "T00:00:00");
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6);
+    return logs
+      .filter((l) => {
+        const d = new Date(l.dateKey + "T00:00:00");
+        return d >= start && d <= end;
+      })
+      .reduce((sum, l) => sum + l.earningsToday, 0);
+  }, [logs]);
 
   // Cloud hooks for sessions
   const { data: cloudSessions = [] } = useDeepWorkSessions(30);
@@ -204,9 +248,7 @@ export default function DeepWorkScreen() {
   const [newTaskName, setNewTaskName] = useState("");
   const [newCategory, setNewCategory] = useState<DeepWorkCategory>("Main Job / College");
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Phase 4.1: no load() needed — useState initializer reads MMKV.
 
   // Today's logs (local MMKV)
   const todayLogs = useMemo(() => getLogsByDate(todayKey), [logs, todayKey, getLogsByDate]);

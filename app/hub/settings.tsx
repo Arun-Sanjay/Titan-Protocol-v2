@@ -22,11 +22,11 @@ import { storage, setJSON } from "../../src/db/storage";
 import { K } from "../../src/db/keys";
 import type { UserProfile } from "../../src/db/schema";
 import { useProfile } from "../../src/hooks/queries/useProfile";
-import { useEngineStore } from "../../src/stores/useEngineStore";
+// Phase 4.1: legacy engine store removed — React Query auto-fetches engines.
 import { useModeStore, type ExperienceMode } from "../../src/stores/useModeStore";
 import { useIdentityStore, IDENTITIES, selectIdentityMeta, type Archetype } from "../../src/stores/useIdentityStore";
 import { useOnboardingStore, type SchedulePreference } from "../../src/stores/useOnboardingStore";
-import { useTitanModeStore } from "../../src/stores/useTitanModeStore";
+import { useTitanMode } from "../../src/hooks/queries/useTitanMode";
 import { scheduleDailyReminder } from "../../src/lib/notifications";
 import { getHapticsEnabled, setHapticsEnabled } from "../../src/lib/haptics";
 import { getTodayKey } from "../../src/lib/date";
@@ -168,7 +168,9 @@ function V2SettingsSection() {
   const focusEngines = useModeStore((s) => s.focusEngines);
   const archetype = useIdentityStore((s) => s.archetype);
   const meta = selectIdentityMeta(archetype);
-  const titanUnlocked = useTitanModeStore((s) => s.unlocked);
+  // Phase 4.1: cloud-backed titan mode via React Query
+  const { data: titanState } = useTitanMode();
+  const titanUnlocked = titanState?.unlocked ?? false;
   const schedPref = useOnboardingStore((s) => s.schedulePreference);
 
   const handleChangeMode = () => {
@@ -317,7 +319,7 @@ export default function SettingsScreen() {
     }),
     [cloudProfile],
   );
-  const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
+  // Phase 4.1: loadAllEngines removed — React Query auto-refetches.
   const [exporting, setExporting] = useState(false);
 
   const handleExportData = useCallback(async () => {
@@ -385,7 +387,6 @@ export default function SettingsScreen() {
                     // independent and will be re-read via React Query
                     // on next focus. This button is a dev/debug utility
                     // and doesn't affect the Supabase backend.
-                    loadAllEngines(getTodayKey());
                     setDataPointCount(0);
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
                     Alert.alert("Done", "All local data has been cleared.");
@@ -397,7 +398,7 @@ export default function SettingsScreen() {
         },
       ],
     );
-  }, [loadAllEngines]);
+  }, []);
 
   const handleResetProfile = useCallback(() => {
     Alert.alert(

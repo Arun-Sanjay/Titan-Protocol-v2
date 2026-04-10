@@ -28,15 +28,28 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey, addDays, getDayOfWeek } from "../../src/lib/date";
-import { useFocusStore, type FocusSettings as LegacyFocusSettings } from "../../src/stores/useFocusStore";
+// Phase 4.1: legacy focus store removed — settings from MMKV directly,
+// sessions from cloud hooks.
+import { getJSON, setJSON } from "../../src/db/storage";
+import { type FocusSettings } from "../../src/lib/focus-helpers";
 import {
   useFocusSettings as useCloudFocusSettings,
   useUpsertFocusSettings,
   useRecordFocusSession,
   useFocusSessions,
 } from "../../src/hooks/queries/useFocus";
+
+const FOCUS_SETTINGS_KEY = "focus_settings";
+function focusDailyKey(dk: string) { return `focus_daily:${dk}`; }
+const DEFAULT_SETTINGS: FocusSettings = {
+  focusMinutes: 25,
+  breakMinutes: 5,
+  longBreakMinutes: 15,
+  longBreakAfter: 4,
+  dailyTarget: 8,
+};
 // Phase 3.5d: XP writes go through the cloud mutation.
-import { XP_REWARDS } from "../../src/stores/useProfileStore";
+import { XP_REWARDS } from "../../src/lib/xp-rewards";
 import { useAwardXP } from "../../src/hooks/queries/useProfile";
 import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
 
@@ -190,8 +203,8 @@ function SettingsPanel({
   onUpdate,
   onClose,
 }: {
-  settings: LegacyFocusSettings;
-  onUpdate: (s: Partial<LegacyFocusSettings>) => void;
+  settings: FocusSettings;
+  onUpdate: (s: Partial<FocusSettings>) => void;
   onClose: () => void;
 }) {
   const [focusMin, setFocusMin] = useState(String(settings.focusMinutes));
@@ -333,13 +346,35 @@ export default function FocusTimerScreen() {
   }, []);
   const dateKey = useMemo(() => getTodayKey(), [appActive]);
 
-  const settings = useFocusStore((s) => s.settings);
-  const loadSettings = useFocusStore((s) => s.loadSettings);
-  const updateSettings = useFocusStore((s) => s.updateSettings);
-  const loadDaily = useFocusStore((s) => s.loadDaily);
-  const completeSession = useFocusStore((s) => s.completeSession);
-  const getSessions = useFocusStore((s) => s.getSessions);
-  const sessions = getSessions(dateKey);
+  // Phase 4.1: settings from MMKV directly, sessions from cloud.
+  const [settings, setSettings] = useState<FocusSettings>(
+    () => getJSON<FocusSettings>(FOCUS_SETTINGS_KEY, DEFAULT_SETTINGS),
+  );
+  const updateSettings = useCallback((partial: Partial<FocusSettings>) => {
+    const merged = { ...settings, ...partial };
+    if (merged.focusMinutes < 1 || merged.breakMinutes < 1 || merged.longBreakMinutes < 1
+        || merged.longBreakAfter < 1 || merged.dailyTarget < 1) return;
+    setJSON(FOCUS_SETTINGS_KEY, merged);
+    setSettings(merged);
+  }, [settings]);
+  // Daily session tracking via MMKV
+  const [dailySessions, setDailySessions] = useState<Record<string, number>>({});
+  const loadDaily = useCallback((dk: string) => {
+    const d = getJSON<{ sessionsCompleted: number }>(focusDailyKey(dk), { sessionsCompleted: 0 });
+    setDailySessions((prev) => ({ ...prev, [dk]: d.sessionsCompleted }));
+  }, []);
+  const completeSession = useCallback((dk: string) => {
+    const current = dailySessions[dk] ?? 0;
+    const updated = current + 1;
+    setJSON(focusDailyKey(dk), { sessionsCompleted: updated });
+    setDailySessions((prev) => ({ ...prev, [dk]: updated }));
+  }, [dailySessions]);
+  const getSessions = useCallback((dk: string) => {
+    // Read from state if available, else fall back to MMKV
+    if (dailySessions[dk] !== undefined) return dailySessions[dk];
+    return getJSON<{ sessionsCompleted: number }>(focusDailyKey(dk), { sessionsCompleted: 0 }).sessionsCompleted;
+  }, [dailySessions]);
+  const sessions = dailySessions[dateKey] ?? 0;
   const awardXPMutation = useAwardXP();
   const enqueueRankUpMutation = useEnqueueRankUp();
 
@@ -367,9 +402,8 @@ export default function FocusTimerScreen() {
   dateKeyRef.current = dateKey;
 
   useEffect(() => {
-    loadSettings();
     loadDaily(dateKey);
-  }, [dateKey, loadSettings, loadDaily]);
+  }, [dateKey, loadDaily]);
 
   const getPhaseDuration = useCallback(
     (p: Phase) => {

@@ -12,10 +12,13 @@ import { useProfile } from "../../src/hooks/queries/useProfile";
 import { useUnlockedAchievements } from "../../src/hooks/queries/useAchievements";
 import { useSkillProgress } from "../../src/hooks/queries/useSkillTree";
 import { useTitanMode } from "../../src/hooks/queries/useTitanMode";
-// Phase 3.5e: selectUnlockProgress / selectDaysRemaining are pure math
-// helpers with no store dependency — safe to keep importing from the
-// store module even though the store itself is no longer read.
-import { selectUnlockProgress, selectDaysRemaining } from "../../src/stores/useTitanModeStore";
+// Phase 4.1: pure math helpers inlined — no store import needed.
+function selectUnlockProgress(days: number): number {
+  return Math.min(100, Math.round((days / 30) * 100));
+}
+function selectDaysRemaining(days: number): number {
+  return Math.max(0, 30 - days);
+}
 import { useModeStore, checkFeatureVisible } from "../../src/stores/useModeStore";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { NarrativeTimeline } from "../../src/components/v2/narrative/NarrativeTimeline";
@@ -28,7 +31,7 @@ export default function ProfileScreen() {
   const showSkillTrees = checkFeatureVisible(profileMode, "skill_trees");
   const router = useRouter();
   // Phase 3.5d: read profile from React Query (Supabase-backed). The
-  // old useProfileStore.load() bootstrap is no longer needed —
+  // old legacy profile store load() bootstrap is no longer needed —
   // React Query handles the fetch on mount and refetches on focus.
   const { data: profile } = useProfile();
   const xp = profile?.xp ?? 0;

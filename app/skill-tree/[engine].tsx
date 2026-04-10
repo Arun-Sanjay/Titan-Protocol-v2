@@ -13,7 +13,8 @@ import { colors, spacing, fonts, radius } from "../../src/theme";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 // Phase 4.1: cloud-backed skill tree via React Query
 import { useSkillProgress, useClaimSkillNode } from "../../src/hooks/queries/useSkillTree";
-import { SKILL_TREES, type SkillBranch } from "../../src/stores/useSkillTreeStore";
+// Phase 4.1: import tree data + types from data module — no store import.
+import { SKILL_TREES, type SkillBranch } from "../../src/data/skill-tree-defs";
 import type { SkillProgress } from "../../src/services/skill-tree";
 import type { EngineKey } from "../../src/db/schema";
 

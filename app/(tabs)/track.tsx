@@ -43,8 +43,8 @@ import {
   useDeleteGoal as useDeleteGoalMutation,
 } from "../../src/hooks/queries/useGoals";
 import type { Goal as CloudGoal } from "../../src/services/goals";
-// XP_REWARDS is a pure const export.
-import { XP_REWARDS } from "../../src/stores/useProfileStore";
+// Phase 4.1: XP_REWARDS extracted to shared constant module.
+import { XP_REWARDS } from "../../src/lib/xp-rewards";
 import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdentityStore";
 import { getSuggestedHabits, type SuggestedHabit } from "../../src/lib/mission-suggester";
 import { addDays } from "../../src/lib/date";
@@ -316,7 +316,7 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
               </View>
             </Pressable>
             {/* 14-day HabitChain is temporarily hidden after the cloud
-                migration — HabitChain reads MMKV via useHabitStore and
+                migration — HabitChain reads MMKV via the habit store and
                 expects numeric habit IDs. Its 14-day view is a subset
                 of the 12-week grid below (which reads cloud), so
                 hiding it doesn't lose information. Re-enable once
@@ -428,7 +428,7 @@ type JournalView = "list" | "write";
 
 function JournalTab({ dateKey }: { dateKey: string }) {
   // Phase 3.5e: cloud-backed journal. All reads/writes go through
-  // React Query hooks — useJournalStore is no longer imported.
+  // React Query hooks — journal store is no longer imported.
   const { data: recentEntries = [] } = useJournalEntries(90);
   const { data: todayEntryCloud } = useJournalEntry(dateKey);
   const upsertMutation = useUpsertJournalEntry();

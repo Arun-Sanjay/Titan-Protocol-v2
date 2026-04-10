@@ -33,8 +33,8 @@ type CommandTask = {
   engine: CloudTask["engine"];
   completed: boolean;
 };
-// Phase 3.5e: everything cloud-backed. XP_REWARDS is a pure const.
-import { XP_REWARDS } from "../../src/stores/useProfileStore";
+// Phase 4.1: XP_REWARDS extracted to shared constant module.
+import { XP_REWARDS } from "../../src/lib/xp-rewards";
 import {
   useProfile,
   useAwardXP,

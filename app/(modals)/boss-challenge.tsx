@@ -2,7 +2,20 @@ import React from "react";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { BossDefeatCelebration } from "../../src/components/v2/celebrations/BossDefeatCelebration";
-import type { BossChallenge } from "../../src/stores/useQuestStore";
+// Phase 4.1: BossChallenge type inlined — no store import needed.
+type BossChallenge = {
+  id: string;
+  title: string;
+  description: string;
+  requirement: string;
+  daysRequired: number;
+  currentDay: number;
+  dayResults: boolean[];
+  xpReward: number;
+  active: boolean;
+  completed: boolean;
+  failed: boolean;
+};
 
 export default function BossChallengeModal() {
   const router = useRouter();

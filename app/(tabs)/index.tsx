@@ -18,7 +18,7 @@ import { SystemVoice } from "../../src/components/ui/SystemVoice";
 // Phase 2.4: LevelUpOverlay is mounted in app/_layout.tsx via
 // RankUpOverlayMount, which subscribes to the cloud rank_up_events
 // table (services/rank-ups.ts). The legacy MMKV queue
-// (useProfileStore.pendingRankUps) was deleted as dead code.
+// (legacy pendingRankUps queue) was deleted as dead code.
 import { colors, spacing, fonts, radius } from "../../src/theme";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";

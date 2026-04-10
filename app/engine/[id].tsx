@@ -16,7 +16,7 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { getTodayKey } from "../../src/lib/date";
 import { getJSON, setJSON } from "../../src/db/storage";
-import { XP_REWARDS } from "../../src/stores/useProfileStore";
+import { XP_REWARDS } from "../../src/lib/xp-rewards";
 import { evaluateAllTrees } from "../../src/lib/skill-tree-evaluator";
 import {
   useEngineTasks,
@@ -173,7 +173,7 @@ export default function EngineScreen() {
 
   useEffect(() => { setDateKey(todayKey); }, [todayKey]);
 
-  // Phase 3.5c: switched from useEngineStore to React Query hooks. Tasks
+  // Phase 3.5c: switched from legacy engine store to React Query hooks. Tasks
   // and completions are now Supabase-backed; the cache hydrates from
   // MMKV via the persister so the offline experience is unchanged.
   const { data: tasks = [] } = useEngineTasks(engine);

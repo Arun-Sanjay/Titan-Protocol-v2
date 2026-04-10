@@ -27,15 +27,16 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { PageHeader } from "../../src/components/ui/PageHeader";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { MetricValue } from "../../src/components/ui/MetricValue";
+// Phase 4.1: pure constants/types from barrel — no store import.
 import {
-  useMoneyStore,
   EXPENSE_CATEGORIES,
   INCOME_CATEGORIES,
   CATEGORY_ICONS,
   CATEGORY_COLORS,
   type MoneyLoan,
   type CategoryTotal,
-} from "../../src/stores/useMoneyStore";
+} from "../../src/lib/money-helpers";
+import { getJSON, setJSON, nextId } from "../../src/db/storage";
 import {
   useTransactions,
   useCreateTransaction,
@@ -686,10 +687,11 @@ const LoanCard = React.memo(function LoanCard({
 
 const AddLoanForm = React.memo(function AddLoanForm({
   onClose,
+  onAdd,
 }: {
   onClose: () => void;
+  onAdd: (loan: Omit<MoneyLoan, "id">) => void;
 }) {
-  const addLoan = useMoneyStore((s) => s.addLoan);
   const [lender, setLender] = useState("");
   const [amountStr, setAmountStr] = useState("");
 
@@ -698,7 +700,7 @@ const AddLoanForm = React.memo(function AddLoanForm({
     if (!lender.trim() || !Number.isFinite(parsed) || parsed <= 0 || parsed > 999999.99) return;
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addLoan({
+    onAdd({
       lender: lender.trim(),
       amount: Math.round(parsed * 100) / 100,
       paid: 0,
@@ -707,7 +709,7 @@ const AddLoanForm = React.memo(function AddLoanForm({
       status: "unpaid",
     });
     onClose();
-  }, [lender, amountStr, addLoan, onClose]);
+  }, [lender, amountStr, onAdd, onClose]);
 
   return (
     <Animated.View entering={FadeInDown.duration(300).easing(Easing.out(Easing.cubic))}>
@@ -757,14 +759,28 @@ const AddLoanForm = React.memo(function AddLoanForm({
 export default function CashflowScreen() {
   const router = useRouter();
   const { data: transactions = [] } = useTransactions();
-  // Loans remain on MMKV — no cloud table for them yet
-  const loans = useMoneyStore((s) => s.loans);
-  const loadLoans = useMoneyStore((s) => s.load);
-  const markLoanPaid = useMoneyStore((s) => s.markLoanPaid);
-  const deleteLoan = useMoneyStore((s) => s.deleteLoan);
-
-  // Load loans from MMKV (transactions auto-fetched by React Query)
-  useEffect(() => { loadLoans(); }, [loadLoans]);
+  // Phase 4.1: Loans managed via direct MMKV reads — no store import.
+  const LOANS_KEY = "money_loans";
+  const [loans, setLoans] = useState<MoneyLoan[]>(() => getJSON<MoneyLoan[]>(LOANS_KEY, []));
+  const addLoan = useCallback((loan: Omit<MoneyLoan, "id">) => {
+    const id = nextId();
+    const entry: MoneyLoan = { id, ...loan, paid: loan.paid ?? 0 };
+    const updated = [entry, ...loans];
+    setJSON(LOANS_KEY, updated);
+    setLoans(updated);
+  }, [loans]);
+  const markLoanPaid = useCallback((id: number) => {
+    const updated = loans.map((l) =>
+      l.id === id ? { ...l, status: "paid" as const, paid: l.amount } : l,
+    );
+    setJSON(LOANS_KEY, updated);
+    setLoans(updated);
+  }, [loans]);
+  const deleteLoan = useCallback((id: number) => {
+    const updated = loans.filter((l) => l.id !== id);
+    setJSON(LOANS_KEY, updated);
+    setLoans(updated);
+  }, [loans]);
 
   const [showForm, setShowForm] = useState(false);
   const [showLoanForm, setShowLoanForm] = useState(false);
@@ -1038,7 +1054,7 @@ export default function CashflowScreen() {
 
         {/* Add Loan button — always accessible outside collapsible */}
         {showLoanForm ? (
-          <AddLoanForm onClose={() => setShowLoanForm(false)} />
+          <AddLoanForm onClose={() => setShowLoanForm(false)} onAdd={addLoan} />
         ) : (
           <Pressable
             style={styles.addLoanBtn}

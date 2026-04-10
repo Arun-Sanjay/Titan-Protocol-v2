@@ -9,13 +9,48 @@ import { PageHeader } from "../src/components/ui/PageHeader";
 import { SectionHeader } from "../src/components/ui/SectionHeader";
 import { QuestCard } from "../src/components/v2/quests/QuestCard";
 import { BossChallengeCard } from "../src/components/v2/quests/BossChallengeCard";
-// Phase 4.1: weekly quests now cloud-backed; boss challenge stays in store (no cloud table yet)
-import { useQuestStore } from "../src/stores/useQuestStore";
+// Phase 4.1: weekly quests + boss challenges both cloud-backed
 import { useActiveQuests } from "../src/hooks/queries/useQuests";
+import {
+  useActiveBossChallenges,
+  useStartBossChallenge,
+} from "../src/hooks/queries/useBossChallenges";
+import type { BossChallenge as CloudBoss } from "../src/services/boss-challenges";
 import { useProgression } from "../src/hooks/queries/useProgression";
 import { useIdentityStore } from "../src/stores/useIdentityStore";
 import { useModeStore } from "../src/stores/useModeStore";
-import type { Quest as LocalQuest } from "../src/stores/useQuestStore";
+import bossDefinitions from "../src/data/boss-challenges.json";
+
+// Local Quest shape for QuestCard component
+type LocalQuest = {
+  id: string;
+  templateId?: string;
+  type: "engine" | "cross_engine" | "wildcard";
+  title: string;
+  description: string;
+  targetType: "score" | "streak" | "completion" | "rank";
+  targetValue: number;
+  currentValue: number;
+  xpReward: number;
+  status: "active" | "completed" | "failed";
+  createdAt: string;
+  completedAt?: string;
+};
+
+type BossDef = {
+  id: string;
+  title: string;
+  description: string;
+  requirement: string;
+  phase: string;
+  unlockWeek: number | null;
+  daysRequired: number;
+  xpReward: number;
+  titanOnly: boolean;
+  evaluator: string;
+  evaluatorThreshold: number;
+  evaluatorEngine?: string;
+};
 
 function getWeekLabel(): string {
   const now = new Date();
@@ -47,10 +82,28 @@ export default function QuestsScreen() {
     completedAt: q.status === "completed" ? q.updated_at : undefined,
   })), [cloudQuests]);
 
-  // Phase 4.1: boss challenge stays in MMKV store (no cloud table yet)
-  const bossChallenge = useQuestStore((s) => s.bossChallenge);
-  const startBoss = useQuestStore((s) => s.startBossChallenge);
-  const getAvailableBoss = useQuestStore((s) => s.getAvailableBoss);
+  // Phase 4.1: boss challenges now cloud-backed via React Query
+  const { data: activeBosses = [] } = useActiveBossChallenges();
+  const startBossMutation = useStartBossChallenge();
+  // Map cloud boss to the shape BossChallengeCard expects
+  const bossChallenge = useMemo(() => {
+    const active = activeBosses[0];
+    if (!active) return null;
+    const dayResults = Array.isArray(active.day_results) ? (active.day_results as boolean[]) : [];
+    return {
+      id: active.boss_id,
+      title: (bossDefinitions as BossDef[]).find((d) => d.id === active.boss_id)?.title ?? "Boss",
+      description: (bossDefinitions as BossDef[]).find((d) => d.id === active.boss_id)?.description ?? "",
+      requirement: (bossDefinitions as BossDef[]).find((d) => d.id === active.boss_id)?.requirement ?? "",
+      daysRequired: active.days_required,
+      currentDay: dayResults.length,
+      dayResults,
+      xpReward: (bossDefinitions as BossDef[]).find((d) => d.id === active.boss_id)?.xpReward ?? 200,
+      active: active.status === "active",
+      completed: active.status === "defeated",
+      failed: active.status === "failed",
+    };
+  }, [activeBosses]);
 
   // Phase 4.1: progression from cloud React Query hook
   const { data: progression } = useProgression();
@@ -69,12 +122,21 @@ export default function QuestsScreen() {
   };
   const phaseLabel = PHASE_LABELS[phase] ?? "FOUNDATION PHASE";
 
-  const availableBoss = useMemo(
-    () => (!bossChallenge || (!bossChallenge.active && !bossChallenge.completed))
-      ? getAvailableBoss(phase, currentWeek, isTitanMode)
-      : null,
-    [bossChallenge, phase, currentWeek, isTitanMode],
-  );
+  // Phase 4.1: derive available boss from static definitions
+  const availableBoss = useMemo(() => {
+    if (bossChallenge && (bossChallenge.active || bossChallenge.completed)) return null;
+    const defs = bossDefinitions as BossDef[];
+    return defs.find((d) => {
+      if (d.titanOnly && !isTitanMode) return false;
+      if (d.phase !== phase) return false;
+      if (d.unlockWeek !== null && currentWeek < d.unlockWeek) return false;
+      // Skip bosses the user already completed
+      const alreadyDone = activeBosses.some(
+        (b) => b.boss_id === d.id && (b.status === "defeated"),
+      );
+      return !alreadyDone;
+    }) ?? null;
+  }, [bossChallenge, phase, currentWeek, isTitanMode, activeBosses]);
 
   // React Query auto-fetches — no need for useEffect load calls
   const activeQuests = useMemo(() => weeklyQuests.filter((q) => q.status === "active"), [weeklyQuests]);
@@ -136,13 +198,11 @@ export default function QuestsScreen() {
           <BossChallengeCard
             challenge={bossChallenge}
             onAccept={() => {
-              startBoss({
-                id: bossChallenge.id,
-                title: bossChallenge.title,
-                description: bossChallenge.description,
-                requirement: bossChallenge.requirement,
+              const def = (bossDefinitions as BossDef[]).find((d) => d.id === bossChallenge.id);
+              startBossMutation.mutate({
+                bossId: bossChallenge.id,
                 daysRequired: bossChallenge.daysRequired,
-                xpReward: bossChallenge.xpReward,
+                evaluatorType: def?.evaluator ?? "titan_score",
               });
             }}
             delay={400}
@@ -163,13 +223,10 @@ export default function QuestsScreen() {
               failed: false,
             }}
             onAccept={() => {
-              startBoss({
-                id: availableBoss.id,
-                title: availableBoss.title,
-                description: availableBoss.description,
-                requirement: availableBoss.requirement,
+              startBossMutation.mutate({
+                bossId: availableBoss.id,
                 daysRequired: availableBoss.daysRequired,
-                xpReward: availableBoss.xpReward,
+                evaluatorType: availableBoss.evaluator,
               });
             }}
             delay={400}

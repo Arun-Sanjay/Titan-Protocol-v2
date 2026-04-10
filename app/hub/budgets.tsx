@@ -25,17 +25,18 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { PageHeader } from "../../src/components/ui/PageHeader";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { MetricValue } from "../../src/components/ui/MetricValue";
+// Phase 4.1: pure helpers from barrel — no store import.
 import {
   getBudgetStatus,
   getBudgetStatusColor,
   getDailyRemaining,
   type BudgetStatus,
-} from "../../src/stores/useBudgetStore";
+} from "../../src/lib/budget-helpers";
 import {
   EXPENSE_CATEGORIES,
   CATEGORY_ICONS,
   CATEGORY_COLORS,
-} from "../../src/stores/useMoneyStore";
+} from "../../src/lib/money-helpers";
 import { useBudgets, useCreateBudget, useDeleteBudget } from "../../src/hooks/queries/useBudgets";
 import { useTransactions } from "../../src/hooks/queries/useMoney";
 import type { Budget } from "../../src/services/budgets";

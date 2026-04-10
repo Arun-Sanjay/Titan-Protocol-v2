@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, radius, fonts } from "../../src/theme";
-import { XP_REWARDS } from "../../src/stores/useProfileStore";
+import { XP_REWARDS } from "../../src/lib/xp-rewards";
 import { getTodayKey } from "../../src/lib/date";
 import { ENGINES, type EngineKey } from "../../src/services/tasks";
 import { useCreateTask } from "../../src/hooks/queries/useTasks";

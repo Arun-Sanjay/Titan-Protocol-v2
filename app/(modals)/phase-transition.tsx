@@ -1,8 +1,9 @@
 import React from "react";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { PhaseTransition } from "../../src/components/v2/progression/PhaseTransition";
-import { useProgressionStore } from "../../src/stores/useProgressionStore";
-import { useNarrativeStore } from "../../src/stores/useNarrativeStore";
+// Phase 4.1: cloud-backed hooks replace legacy stores.
+import { useProgression } from "../../src/hooks/queries/useProgression";
+import { useAddNarrativeLogEntry } from "../../src/hooks/queries/useNarrative";
 import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdentityStore";
 import { getTodayKey } from "../../src/lib/date";
 import type { Phase, PhaseStats } from "../../src/lib/progression-engine";
@@ -21,7 +22,10 @@ export default function PhaseTransitionModal() {
 
   const archetype = useIdentityStore((s) => s.archetype);
   const meta = selectIdentityMeta(archetype);
-  const firstUseDate = useProgressionStore((s) => s.firstUseDate);
+  // Phase 4.1: cloud-backed progression
+  const { data: progression } = useProgression();
+  const firstUseDate = progression?.first_use_date ?? null;
+  const addNarrativeEntry = useAddNarrativeLogEntry();
 
   const oldPhase = (params.oldPhase ?? "foundation") as Phase;
   const newPhase = (params.newPhase ?? "building") as Phase;
@@ -45,16 +49,10 @@ export default function PhaseTransitionModal() {
     }
 
     const newLabel = newPhase.charAt(0).toUpperCase() + newPhase.slice(1);
-    useNarrativeStore.getState().addEntry({
-      date: today,
-      dayNumber,
+    addNarrativeEntry.mutate({
+      dateKey: today,
       type: "phase",
-      title: `${newLabel} Phase Begins`,
-      body: `${meta?.name ?? "You"} enters ${newLabel} Phase. Average improved to ${stats.avgScore}%. ${stats.daysCompleted} days completed.`,
-      stats: {
-        titanScore: stats.avgScore,
-        streak: stats.bestStreak,
-      },
+      text: `${meta?.name ?? "You"} enters ${newLabel} Phase. Average improved to ${stats.avgScore}%. ${stats.daysCompleted} days completed.`,
     });
 
     router.back();

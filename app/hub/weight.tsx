@@ -32,11 +32,11 @@ import {
   type WeightEntry,
   type GoalProgress,
   type WeightTrend,
-} from "../../src/stores/useWeightStore";
+} from "../../src/lib/weight-helpers";
 import {
   computeBMI,
   getBMICategory,
-} from "../../src/stores/useNutritionStore";
+} from "../../src/lib/nutrition-helpers";
 import { useWeightLogs, useCreateWeightLog, useDeleteWeightLog } from "../../src/hooks/queries/useWeight";
 import { useNutritionProfile } from "../../src/hooks/queries/useNutrition";
 import type { WeightLog } from "../../src/services/weight";

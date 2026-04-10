@@ -26,6 +26,7 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { SparklineChart } from "../../src/components/ui/SparklineChart";
 import { getTodayKey, addDays, formatDateShort, getDayOfWeek } from "../../src/lib/date";
+// Phase 4.1: pure sleep helpers imported from barrel — no store import.
 import {
   computeDurationMinutes,
   computeSleepScore,
@@ -36,7 +37,7 @@ import {
   getDurationColor,
   type SleepEntry,
   type SleepScore,
-} from "../../src/stores/useSleepStore";
+} from "../../src/lib/sleep-helpers";
 import { useSleepLogs, useUpsertSleepLog, useDeleteSleepLog } from "../../src/hooks/queries/useSleep";
 import type { SleepLog } from "../../src/services/sleep";
 

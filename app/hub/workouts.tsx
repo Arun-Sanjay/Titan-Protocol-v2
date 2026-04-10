@@ -30,18 +30,19 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { PageHeader } from "../../src/components/ui/PageHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
+// Phase 4.1: all gym types/constants/store from barrel — no direct store import.
 import {
-  useGymStore,
-  Exercise,
-  Template,
-  GymSession,
-  GymSet,
-  SetType,
+  useGymData,
+  type Exercise,
+  type Template,
+  type GymSession,
+  type GymSet,
+  type SetType,
+  type MuscleGroup,
+  type PersonalRecord,
   MUSCLE_GROUPS,
   EQUIPMENT_LIST,
-  MuscleGroup,
-  PersonalRecord,
-} from "../../src/stores/useGymStore";
+} from "../../src/lib/gym-helpers";
 import { getTodayKey } from "../../src/lib/date";
 // Phase 3.5d: XP writes go through the cloud mutation.
 import { useAwardXP } from "../../src/hooks/queries/useProfile";
@@ -739,39 +740,39 @@ export default function WorkoutsScreen() {
   const router = useRouter();
 
   // Store selectors
-  const exercises = useGymStore((s) => s.exercises);
-  const templates = useGymStore((s) => s.templates);
-  const sessions = useGymStore((s) => s.sessions);
-  const sets = useGymStore((s) => s.sets);
-  const activeSessionId = useGymStore((s) => s.activeSessionId);
-  const templateExercises = useGymStore((s) => s.templateExercises);
-  const personalRecords = useGymStore((s) => s.personalRecords);
-  const restTimer = useGymStore((s) => s.restTimer);
+  const exercises = useGymData((s) => s.exercises);
+  const templates = useGymData((s) => s.templates);
+  const sessions = useGymData((s) => s.sessions);
+  const sets = useGymData((s) => s.sets);
+  const activeSessionId = useGymData((s) => s.activeSessionId);
+  const templateExercises = useGymData((s) => s.templateExercises);
+  const personalRecords = useGymData((s) => s.personalRecords);
+  const restTimer = useGymData((s) => s.restTimer);
 
   const awardXPMutation = useAwardXP();
   const enqueueRankUpMutation = useEnqueueRankUp();
 
-  const load = useGymStore((s) => s.load);
-  const addExercise = useGymStore((s) => s.addExercise);
-  const createTemplate = useGymStore((s) => s.createTemplate);
-  const startSession = useGymStore((s) => s.startSession);
-  const addSet = useGymStore((s) => s.addSet);
-  const updateSet = useGymStore((s) => s.updateSet);
-  const completeSet = useGymStore((s) => s.completeSet);
-  const removeSet = useGymStore((s) => s.removeSet);
-  const endSession = useGymStore((s) => s.endSession);
-  const cancelSession = useGymStore((s) => s.cancelSession);
-  const getSessionSets = useGymStore((s) => s.getSessionSets);
-  const getTemplateExercises = useGymStore((s) => s.getTemplateExercises);
-  const getPreviousSets = useGymStore((s) => s.getPreviousSets);
-  const deleteTemplate = useGymStore((s) => s.deleteTemplate);
-  const startRestTimer = useGymStore((s) => s.startRestTimer);
-  const tickRestTimer = useGymStore((s) => s.tickRestTimer);
-  const cancelRestTimer = useGymStore((s) => s.cancelRestTimer);
-  const getTotalWorkouts = useGymStore((s) => s.getTotalWorkouts);
-  const getWeekWorkouts = useGymStore((s) => s.getWeekWorkouts);
-  const getTotalVolume = useGymStore((s) => s.getTotalVolume);
-  const getCurrentStreak = useGymStore((s) => s.getCurrentStreak);
+  const load = useGymData((s) => s.load);
+  const addExercise = useGymData((s) => s.addExercise);
+  const createTemplate = useGymData((s) => s.createTemplate);
+  const startSession = useGymData((s) => s.startSession);
+  const addSet = useGymData((s) => s.addSet);
+  const updateSet = useGymData((s) => s.updateSet);
+  const completeSet = useGymData((s) => s.completeSet);
+  const removeSet = useGymData((s) => s.removeSet);
+  const endSession = useGymData((s) => s.endSession);
+  const cancelSession = useGymData((s) => s.cancelSession);
+  const getSessionSets = useGymData((s) => s.getSessionSets);
+  const getTemplateExercises = useGymData((s) => s.getTemplateExercises);
+  const getPreviousSets = useGymData((s) => s.getPreviousSets);
+  const deleteTemplate = useGymData((s) => s.deleteTemplate);
+  const startRestTimer = useGymData((s) => s.startRestTimer);
+  const tickRestTimer = useGymData((s) => s.tickRestTimer);
+  const cancelRestTimer = useGymData((s) => s.cancelRestTimer);
+  const getTotalWorkouts = useGymData((s) => s.getTotalWorkouts);
+  const getWeekWorkouts = useGymData((s) => s.getWeekWorkouts);
+  const getTotalVolume = useGymData((s) => s.getTotalVolume);
+  const getCurrentStreak = useGymData((s) => s.getCurrentStreak);
 
   // ─── Local UI State ─────────────────────────────────────────────────────
 

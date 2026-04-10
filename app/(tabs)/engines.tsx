@@ -10,7 +10,7 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { Panel } from "../../src/components/ui/Panel";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { getTodayKey } from "../../src/lib/date";
-// Wave 1: Cloud hooks replace useEngineStore
+// Wave 1: Cloud hooks replace legacy engine store
 import { useAllTasks, useAllCompletionsForDate } from "../../src/hooks/queries/useTasks";
 import { computeEngineScore, ENGINES, type EngineKey } from "../../src/services/tasks";
 import { useModeStore, selectActiveEngines } from "../../src/stores/useModeStore";

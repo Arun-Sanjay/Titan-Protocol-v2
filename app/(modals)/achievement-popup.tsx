@@ -1,14 +1,15 @@
 import React, { useEffect, useCallback } from "react";
 import { useRouter } from "expo-router";
 import { AchievementPopup } from "../../src/components/v2/achievements/AchievementPopup";
-import { useAchievementStore } from "../../src/stores/useAchievementStore";
+// Phase 4.1: achievement store from barrel — no direct store import.
+import { useAchievementData } from "../../src/lib/achievement-helpers";
 import { useAwardXP } from "../../src/hooks/queries/useProfile";
 import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
 
 export default function AchievementPopupModal() {
   const router = useRouter();
-  const pendingCelebration = useAchievementStore((s) => s.pendingCelebration);
-  const dismissCelebration = useAchievementStore((s) => s.dismissCelebration);
+  const pendingCelebration = useAchievementData((s) => s.pendingCelebration);
+  const dismissCelebration = useAchievementData((s) => s.dismissCelebration);
   // Phase 3.5d: achievement XP is awarded via the cloud mutation so it
   // survives cross-device sync. The pending queue itself stays in the
   // legacy achievement store for now (it's an unlock queue, not a
