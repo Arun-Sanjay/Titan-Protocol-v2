@@ -5,33 +5,43 @@ import { useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../src/theme";
-import { useFieldOpStore } from "../src/stores/useFieldOpStore";
-import { useRankStore } from "../src/stores/useRankStore";
+// Phase 4.1: cloud-backed field ops via React Query
+import { useActiveFieldOp, useFieldOpCooldown, useStartFieldOp, useResolveFieldOp } from "../src/hooks/queries/useFieldOps";
 import { OpsBanner } from "../src/components/ui/OpsBanner";
 import { OpsCard } from "../src/components/ui/OpsCard";
-import { getFieldOpDef, isOnCooldown, type FieldOpDef } from "../src/lib/field-ops";
+import { getFieldOpDef, type FieldOpDef } from "../src/lib/field-ops";
 import fieldOpDefs from "../src/data/field-ops.json";
+import { loadRank } from "../src/lib/ranks-v2";
 import { RANK_ORDER, type Rank } from "../src/lib/ranks-v2";
 
 export default function FieldOpsScreen() {
   const router = useRouter();
-  const fieldOpStore = useFieldOpStore();
-  const rankStore = useRankStore();
 
-  const activeFieldOp = fieldOpStore.activeFieldOp;
-  const activeDef = activeFieldOp ? getFieldOpDef(activeFieldOp.fieldOpId) : null;
+  // Phase 4.1: cloud-backed field op data via React Query
+  const { data: activeFieldOp } = useActiveFieldOp();
+  const { data: cooldown } = useFieldOpCooldown();
+  const startFieldOpMutation = useStartFieldOp();
+  const resolveFieldOpMutation = useResolveFieldOp();
 
-  const currentRankIndex = RANK_ORDER.indexOf(rankStore.rank);
+  const activeDef = activeFieldOp ? getFieldOpDef(activeFieldOp.field_op_id) : null;
+
+  // Phase 4.1: rank FSM reads MMKV directly — acceptable for v1
+  const rankState = useMemo(() => loadRank(), []);
+  const currentRankIndex = RANK_ORDER.indexOf(rankState.rank);
+
+  // Check cooldown from cloud
+  const onCooldown = useMemo(() => {
+    if (!cooldown?.cooldown_until) return false;
+    return new Date(cooldown.cooldown_until) > new Date();
+  }, [cooldown]);
 
   const availableFieldOps = useMemo(() => {
-    const allDefs: FieldOpDef[] = fieldOpStore.getAvailable(rankStore.rank);
-
-    return allDefs
+    return (fieldOpDefs as FieldOpDef[])
       .filter((def: FieldOpDef) => {
-        if (activeFieldOp && def.id === activeFieldOp.fieldOpId) return false;
+        if (activeFieldOp && def.id === activeFieldOp.field_op_id) return false;
         const minRankIndex = RANK_ORDER.indexOf(def.minRank as Rank);
         if (minRankIndex > currentRankIndex) return false;
-        if (isOnCooldown()) return false;
+        if (onCooldown) return false;
         return true;
       })
       .sort((a: FieldOpDef, b: FieldOpDef) => {
@@ -39,17 +49,18 @@ export default function FieldOpsScreen() {
         if (rankDiff !== 0) return rankDiff;
         return a.durationDays - b.durationDays;
       });
-  }, [fieldOpStore, rankStore.rank, activeFieldOp, currentRankIndex]);
+  }, [activeFieldOp, currentRankIndex, onCooldown]);
 
   const lockedFieldOps = useMemo(() => {
     return (fieldOpDefs as FieldOpDef[]).filter((def: FieldOpDef) => {
-      if (activeFieldOp && def.id === activeFieldOp.fieldOpId) return false;
+      if (activeFieldOp && def.id === activeFieldOp.field_op_id) return false;
       const minRankIndex = RANK_ORDER.indexOf(def.minRank as Rank);
       return minRankIndex > currentRankIndex;
     });
   }, [activeFieldOp, currentRankIndex]);
 
   const handleAbandon = () => {
+    if (!activeFieldOp) return;
     Alert.alert(
       "Abandon Field Op",
       "Are you sure? All progress will be lost and cooldown will apply.",
@@ -60,7 +71,7 @@ export default function FieldOpsScreen() {
           style: "destructive",
           onPress: () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            fieldOpStore.abandon();
+            resolveFieldOpMutation.mutate({ id: activeFieldOp.id, status: "abandoned" });
           },
         },
       ],
@@ -80,7 +91,7 @@ export default function FieldOpsScreen() {
           text: "Begin",
           onPress: () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            fieldOpStore.start(fieldOpId);
+            startFieldOpMutation.mutate({ fieldOpId });
           },
         },
       ],
@@ -118,10 +129,10 @@ export default function FieldOpsScreen() {
             <Text style={styles.sectionTitle}>ACTIVE MISSION</Text>
             <OpsBanner
               opName={activeDef.name}
-              currentDay={activeFieldOp.currentDay}
+              currentDay={activeFieldOp.current_day}
               totalDays={activeDef.durationDays}
-              dailyResults={activeFieldOp.dailyResults}
-              onPress={() => router.push(`/field-op/${activeFieldOp.fieldOpId}`)}
+              dailyResults={activeFieldOp.day_results as boolean[]}
+              onPress={() => router.push(`/field-op/${activeFieldOp.field_op_id}`)}
             />
             <Pressable onPress={handleAbandon} style={styles.abandonButton}>
               <Text style={styles.abandonText}>ABANDON</Text>

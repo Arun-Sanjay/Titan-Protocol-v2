@@ -7,7 +7,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, fonts } from "../src/theme";
 import { Panel } from "../src/components/ui/Panel";
 import { PageHeader } from "../src/components/ui/PageHeader";
-import { useMindTrainingStore, type Exercise } from "../src/stores/useMindTrainingStore";
+// Phase 4.1: cloud-backed mind training results via React Query
+import { useMindTrainingResults, useRecordMindResult } from "../src/hooks/queries/useMindTraining";
+import type { Exercise } from "../src/stores/useMindTrainingStore";
 import { BiasCheck } from "../src/components/v2/mind-training/BiasCheck";
 import { DecisionDrill } from "../src/components/v2/mind-training/DecisionDrill";
 import { KnowledgeDrop } from "../src/components/v2/mind-training/KnowledgeDrop";
@@ -29,9 +31,36 @@ export default function MindTrainingScreen() {
   const [mode, setMode] = useState<TrainingMode>("menu");
   const [currentExercise, setCurrentExercise] = useState<Exercise | null>(null);
 
-  const stats = useMindTrainingStore((s) => s.stats);
-  const seenIds = useMindTrainingStore((s) => s.seenIds);
-  const submitAnswer = useMindTrainingStore((s) => s.submitAnswer);
+  // Phase 4.1: cloud-backed results via React Query
+  const { data: results = [] } = useMindTrainingResults();
+  const recordMindResult = useRecordMindResult();
+
+  // Derive stats from cloud results (same shape the old store computed)
+  const stats = useMemo(() => {
+    if (results.length === 0) return { totalCompleted: 0, accuracy: 0, byType: {} as Record<string, { completed: number; correct: number; accuracy: number }> };
+    let totalCorrect = 0;
+    const byType: Record<string, { completed: number; correct: number; accuracy: number }> = {};
+    for (const r of results) {
+      if (r.correct) totalCorrect++;
+      const t = r.type ?? "unknown";
+      if (!byType[t]) byType[t] = { completed: 0, correct: 0, accuracy: 0 };
+      byType[t].completed++;
+      if (r.correct) byType[t].correct++;
+      byType[t].accuracy = Math.round((byType[t].correct / byType[t].completed) * 100);
+    }
+    return {
+      totalCompleted: results.length,
+      accuracy: Math.round((totalCorrect / results.length) * 100),
+      byType,
+    };
+  }, [results]);
+
+  // Derive seen exercise IDs from cloud results
+  const seenIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const r of results) ids.add(r.exercise_id);
+    return [...ids];
+  }, [results]);
 
   const biasStats = stats.byType["bias_check"];
   const drillStats = stats.byType["decision_drill"];
@@ -55,7 +84,14 @@ export default function MindTrainingScreen() {
 
   function handleComplete(selectedId: string, correct: boolean) {
     if (!currentExercise) return;
-    submitAnswer(currentExercise.id, selectedId, correct, currentExercise.type, currentExercise.category);
+    // Phase 4.1: record result via cloud mutation
+    recordMindResult.mutate({
+      exerciseId: currentExercise.id,
+      type: currentExercise.type,
+      category: currentExercise.category,
+      correct,
+      selectedOption: selectedId,
+    });
     setCurrentExercise(null);
     setMode("menu");
   }

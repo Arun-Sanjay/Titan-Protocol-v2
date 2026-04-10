@@ -7,8 +7,12 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { colors, spacing, fonts } from "../src/theme";
 import { PageHeader } from "../src/components/ui/PageHeader";
 import { SectionHeader } from "../src/components/ui/SectionHeader";
-import { useAchievementStore, type AchievementRarity } from "../src/stores/useAchievementStore";
+import { useUnlockedAchievements } from "../src/hooks/queries/useAchievements";
 import achievementDefs from "../src/data/achievements.json";
+
+// Phase 4.1: AchievementRarity was previously imported from the MMKV store;
+// defined inline now that the screen reads cloud-backed data.
+type AchievementRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
 type AchDef = {
   id: string;
@@ -39,7 +43,9 @@ const RARITY_LABELS: Record<AchievementRarity, string> = {
 
 export default function AchievementsScreen() {
   const router = useRouter();
-  const unlockedIds = useAchievementStore((s) => s.unlockedIds);
+  // Phase 4.1: cloud-backed unlocked achievements via React Query
+  const { data: achievements = [] } = useUnlockedAchievements();
+  const unlockedIds = useMemo(() => achievements.map((a) => a.achievement_id), [achievements]);
 
   const grouped = useMemo(() => {
     const groups: Record<AchievementRarity, AchDef[]> = {

@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
 } from "react-native";
@@ -11,12 +11,11 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../src/theme";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
-import { useSkillTreeStore, SKILL_TREES, type SkillBranch } from "../../src/stores/useSkillTreeStore";
-import { initializeAllTrees, evaluateAllTrees } from "../../src/lib/skill-tree-evaluator";
+// Phase 4.1: cloud-backed skill tree via React Query
+import { useSkillProgress, useClaimSkillNode } from "../../src/hooks/queries/useSkillTree";
+import { SKILL_TREES, type SkillBranch } from "../../src/stores/useSkillTreeStore";
+import type { SkillProgress } from "../../src/services/skill-tree";
 import type { EngineKey } from "../../src/db/schema";
-
-// Stable empty array to prevent Zustand getSnapshot infinite loop
-const EMPTY_PROGRESS: never[] = [];
 
 // ─── Engine meta ──────────────────────────────────────────────────────────────
 
@@ -181,25 +180,22 @@ function BranchSection({
   engineColor,
   engineDim,
   onClaim,
+  cloudProgress,
 }: {
   branch: SkillBranch;
   engine: string;
   engineColor: string;
   engineDim: string;
   onClaim: (nodeId: string) => void;
+  cloudProgress: SkillProgress[];
 }) {
-  const progress = useSkillTreeStore((s) => s.progress[engine] ?? EMPTY_PROGRESS);
-  const unlockedNodes = useSkillTreeStore((s) => s.unlockedNodes);
-
-  // Determine node status from the progress store
-  const getNodeStatus = (nodeId: string, index: number): "locked" | "ready" | "claimed" => {
-    const nodeProgress = progress.find((n) => n.nodeId === nodeId);
+  // Phase 4.1: derive node status from cloud progress data
+  const getNodeStatus = (nodeId: string, _index: number): "locked" | "ready" | "claimed" => {
+    const nodeProgress = cloudProgress.find((n) => n.node_id === nodeId);
     if (nodeProgress) {
-      if (nodeProgress.status === "claimed") return "claimed";
-      if (nodeProgress.status === "ready") return "ready";
+      if (nodeProgress.state === "claimed") return "claimed";
+      if (nodeProgress.state === "ready") return "ready";
     }
-    // Fallback: check unlockedNodes set for backward compat
-    if (unlockedNodes.has(nodeId)) return "claimed";
     return "locked";
   };
 
@@ -278,23 +274,22 @@ export default function SkillTreePage() {
   const { engine: engineParam } = useLocalSearchParams<{ engine: string }>();
   const engine = (engineParam ?? "body") as EngineKey;
 
-  const claimNode = useSkillTreeStore((s) => s.claimNode);
-  const getProgress = useSkillTreeStore((s) => s.getProgress);
-  const progress = useSkillTreeStore((s) => s.progress);
-
-  // Initialize and evaluate skill trees on mount
-  useEffect(() => {
-    initializeAllTrees();
-    evaluateAllTrees();
-  }, []);
+  // Phase 4.1: cloud-backed skill progress via React Query (auto-fetches, no init needed)
+  const { data: allProgress = [] } = useSkillProgress(engine as import("../../src/services/skill-tree").EngineKey);
+  const claimNodeMutation = useClaimSkillNode();
 
   const branches = SKILL_TREES[engine] ?? [];
   const engineColor = ENGINE_COLORS[engine] ?? colors.text;
   const engineDim = ENGINE_DIM[engine] ?? colors.bodyDim;
-  const { unlocked, total } = useMemo(() => getProgress(engine), [progress, engine]);
+
+  // Derive progress stats from cloud data
+  const { unlocked, total } = useMemo(() => {
+    const claimed = allProgress.filter((n) => n.state === "claimed").length;
+    return { unlocked: claimed, total: allProgress.length };
+  }, [allProgress]);
 
   const handleClaim = (nodeId: string) => {
-    claimNode(engine, nodeId);
+    claimNodeMutation.mutate({ engine: engine as import("../../src/services/skill-tree").EngineKey, nodeId });
   };
 
   return (
@@ -348,6 +343,7 @@ export default function SkillTreePage() {
             engineColor={engineColor}
             engineDim={engineDim}
             onClaim={handleClaim}
+            cloudProgress={allProgress}
           />
         ))}
 

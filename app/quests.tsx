@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,11 +9,13 @@ import { PageHeader } from "../src/components/ui/PageHeader";
 import { SectionHeader } from "../src/components/ui/SectionHeader";
 import { QuestCard } from "../src/components/v2/quests/QuestCard";
 import { BossChallengeCard } from "../src/components/v2/quests/BossChallengeCard";
+// Phase 4.1: weekly quests now cloud-backed; boss challenge stays in store (no cloud table yet)
 import { useQuestStore } from "../src/stores/useQuestStore";
-import { useProgressionStore } from "../src/stores/useProgressionStore";
+import { useActiveQuests } from "../src/hooks/queries/useQuests";
+import { useProgression } from "../src/hooks/queries/useProgression";
 import { useIdentityStore } from "../src/stores/useIdentityStore";
 import { useModeStore } from "../src/stores/useModeStore";
-import { getTodayKey } from "../src/lib/date";
+import type { Quest as LocalQuest } from "../src/stores/useQuestStore";
 
 function getWeekLabel(): string {
   const now = new Date();
@@ -26,16 +28,47 @@ function getWeekLabel(): string {
 
 export default function QuestsScreen() {
   const router = useRouter();
-  const weeklyQuests = useQuestStore((s) => s.weeklyQuests);
+
+  // Phase 4.1: weekly quests from cloud React Query hook
+  const { data: cloudQuests = [] } = useActiveQuests();
+  // Map cloud Quest (snake_case) → local Quest shape for QuestCard component
+  const weeklyQuests: LocalQuest[] = useMemo(() => cloudQuests.map((q) => ({
+    id: q.id,
+    templateId: undefined,
+    type: (q.type ?? "engine") as LocalQuest["type"],
+    title: q.title,
+    description: q.description ?? "",
+    targetType: "completion" as const,
+    targetValue: q.target,
+    currentValue: q.progress,
+    xpReward: q.xp_reward,
+    status: q.status as LocalQuest["status"],
+    createdAt: q.created_at,
+    completedAt: q.status === "completed" ? q.updated_at : undefined,
+  })), [cloudQuests]);
+
+  // Phase 4.1: boss challenge stays in MMKV store (no cloud table yet)
   const bossChallenge = useQuestStore((s) => s.bossChallenge);
-  const generateQuests = useQuestStore((s) => s.generateWeeklyQuests);
   const startBoss = useQuestStore((s) => s.startBossChallenge);
-  const phase = useProgressionStore((s) => s.currentPhase);
-  const archetype = useIdentityStore((s) => s.archetype);
-  const phaseLabel = useProgressionStore((s) => s.getPhaseInfo().label);
-  const currentWeek = useProgressionStore((s) => s.currentWeek);
-  const isTitanMode = useModeStore((s) => s.mode) === "titan";
   const getAvailableBoss = useQuestStore((s) => s.getAvailableBoss);
+
+  // Phase 4.1: progression from cloud React Query hook
+  const { data: progression } = useProgression();
+  const phase = progression?.current_phase ?? "foundation";
+  const currentWeek = progression?.current_week ?? 1;
+
+  const archetype = useIdentityStore((s) => s.archetype);
+  const isTitanMode = useModeStore((s) => s.mode) === "titan";
+
+  // Phase label derived from cloud progression
+  const PHASE_LABELS: Record<string, string> = {
+    foundation: "FOUNDATION PHASE",
+    building: "BUILDING PHASE",
+    intensify: "INTENSIFY PHASE",
+    sustain: "SUSTAIN PHASE",
+  };
+  const phaseLabel = PHASE_LABELS[phase] ?? "FOUNDATION PHASE";
+
   const availableBoss = useMemo(
     () => (!bossChallenge || (!bossChallenge.active && !bossChallenge.completed))
       ? getAvailableBoss(phase, currentWeek, isTitanMode)
@@ -43,13 +76,7 @@ export default function QuestsScreen() {
     [bossChallenge, phase, currentWeek, isTitanMode],
   );
 
-  // Auto-generate quests if none exist
-  useEffect(() => {
-    if (weeklyQuests.length === 0 && archetype) {
-      generateQuests(phase, archetype);
-    }
-  }, [weeklyQuests.length, phase, archetype]);
-
+  // React Query auto-fetches — no need for useEffect load calls
   const activeQuests = useMemo(() => weeklyQuests.filter((q) => q.status === "active"), [weeklyQuests]);
   const completedQuests = useMemo(() => weeklyQuests.filter((q) => q.status === "completed"), [weeklyQuests]);
 

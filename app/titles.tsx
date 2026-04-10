@@ -6,25 +6,36 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../src/theme";
 import { TitleWall } from "../src/components/ui/TitleWall";
-import { useTitleStore } from "../src/stores/useTitleStore";
+// Phase 4.1: cloud-backed titles via React Query
+import { useUserTitles, useEquipTitle, useUnequipAllTitles } from "../src/hooks/queries/useTitles";
 import { getAllTitleDefs } from "../src/lib/titles";
 
 export default function TitlesScreen() {
   const router = useRouter();
-  const titleStore = useTitleStore();
+
+  // Phase 4.1: cloud-backed user titles via React Query
+  const { data: userTitles = [] } = useUserTitles();
+  const equipTitleMutation = useEquipTitle();
+  const unequipAllMutation = useUnequipAllTitles();
 
   const allTitles = useMemo(() => getAllTitleDefs(), []);
-  const earnedCount = titleStore.unlockedIds.length;
+  const earnedCount = userTitles.length;
   const totalCount = allTitles.length;
+
+  // Derive equipped title_id from cloud data
+  const equippedId = useMemo(() => {
+    const equipped = userTitles.find((t) => t.equipped);
+    return equipped?.title_id ?? null;
+  }, [userTitles]);
 
   const handleEquip = (titleId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    titleStore.equip(titleId);
+    equipTitleMutation.mutate(titleId);
   };
 
   const handleUnequip = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    titleStore.unequip();
+    unequipAllMutation.mutate();
   };
 
   return (
@@ -56,7 +67,7 @@ export default function TitlesScreen() {
           <TitleWall
             onEquip={handleEquip}
             onUnequip={handleUnequip}
-            equippedId={titleStore.equippedId}
+            equippedId={equippedId}
           />
         </Animated.View>
       </ScrollView>

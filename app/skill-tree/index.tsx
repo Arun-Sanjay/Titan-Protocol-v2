@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions,
 } from "react-native";
@@ -10,8 +10,8 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { colors, spacing, fonts, radius } from "../../src/theme";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
-import { useSkillTreeStore } from "../../src/stores/useSkillTreeStore";
-import { initializeAllTrees, evaluateAllTrees } from "../../src/lib/skill-tree-evaluator";
+// Phase 4.1: cloud-backed skill tree progress via React Query
+import { useSkillProgress } from "../../src/hooks/queries/useSkillTree";
 import type { EngineKey } from "../../src/db/schema";
 
 const ENGINES: EngineKey[] = ["body", "mind", "money", "charisma"];
@@ -40,25 +40,20 @@ export default function SkillTreeSelector() {
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = (screenWidth - spacing.lg * 2 - spacing.md) / 2;
 
-  const progress = useSkillTreeStore((s) => s.progress);
+  // Phase 4.1: cloud-backed skill progress via React Query (auto-fetches, no init needed)
+  const { data: cloudProgress = [] } = useSkillProgress();
 
-  // Initialize and evaluate trees on mount
-  useEffect(() => {
-    initializeAllTrees();
-    evaluateAllTrees();
-  }, []);
-
-  // Calculate per-engine stats
+  // Calculate per-engine stats from cloud data
   const engineStats = useMemo(() => {
     return ENGINES.map((engine) => {
-      const nodes = progress[engine] ?? [];
+      const nodes = cloudProgress.filter((n) => n.engine === engine);
       const total = nodes.length;
-      const claimed = nodes.filter((n) => n.status === "claimed").length;
-      const ready = nodes.filter((n) => n.status === "ready").length;
+      const claimed = nodes.filter((n) => n.state === "claimed").length;
+      const ready = nodes.filter((n) => n.state === "ready").length;
       const percent = total > 0 ? Math.round((claimed / total) * 100) : 0;
       return { engine, total, claimed, ready, percent };
     });
-  }, [progress]);
+  }, [cloudProgress]);
 
   // Overall stats
   const overallTotal = engineStats.reduce((s, e) => s + e.total, 0);
