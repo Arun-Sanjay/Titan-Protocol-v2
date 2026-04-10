@@ -14,7 +14,6 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { PageHeader } from "../../src/components/ui/PageHeader";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { HabitGrid } from "../../src/components/ui/HabitGrid";
-import { ProgressRing } from "../../src/components/ui/ProgressRing";
 import { getTodayKey, formatDateShort, getDayOfWeek } from "../../src/lib/date";
 // Phase 3.5d: Habits (reads + writes) go through cloud hooks. The
 // journal tab keeps its local store (no cloud service yet) but its
@@ -30,13 +29,24 @@ import {
 import type { Habit as CloudHabit } from "../../src/services/habits";
 import { useAwardXP } from "../../src/hooks/queries/useProfile";
 import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
-import { useJournalStore } from "../../src/stores/useJournalStore";
-import { useGoalStore } from "../../src/stores/useGoalStore";
+// Phase 3.5e: Journal and Goals tabs now use cloud hooks.
+import {
+  useJournalEntries,
+  useJournalEntry,
+  useUpsertJournalEntry,
+  useDeleteJournalEntry,
+} from "../../src/hooks/queries/useJournal";
+import type { JournalEntry } from "../../src/services/journal";
+import {
+  useGoals,
+  useCreateGoal,
+  useDeleteGoal as useDeleteGoalMutation,
+} from "../../src/hooks/queries/useGoals";
+import type { Goal as CloudGoal } from "../../src/services/goals";
 // XP_REWARDS is a pure const export.
 import { XP_REWARDS } from "../../src/stores/useProfileStore";
 import { useIdentityStore, selectIdentityMeta } from "../../src/stores/useIdentityStore";
 import { getSuggestedHabits, type SuggestedHabit } from "../../src/lib/mission-suggester";
-import type { Goal } from "../../src/db/schema";
 import { addDays } from "../../src/lib/date";
 import { getJSON, setJSON } from "../../src/db/storage";
 
@@ -379,7 +389,7 @@ function JournalEntryCard({
   onPress,
 }: {
   dateKey: string;
-  entry: { content: string; updated_at: number };
+  entry: { content: string; updated_at: string };
   isToday: boolean;
   onPress: () => void;
 }) {
@@ -417,27 +427,37 @@ function JournalEntryCard({
 type JournalView = "list" | "write";
 
 function JournalTab({ dateKey }: { dateKey: string }) {
-  const entries = useJournalStore((s) => s.entries);
-  const recentKeys = useJournalStore((s) => s.recentKeys);
-  const loadEntry = useJournalStore((s) => s.loadEntry);
-  const loadRecentEntries = useJournalStore((s) => s.loadRecentEntries);
-  const saveEntry = useJournalStore((s) => s.saveEntry);
-  const deleteEntry = useJournalStore((s) => s.deleteEntry);
-  // Phase 3.5d: XP on journal save goes to cloud. Journal content
-  // itself stays in MMKV — there's no journal service layer yet.
+  // Phase 3.5e: cloud-backed journal. All reads/writes go through
+  // React Query hooks — useJournalStore is no longer imported.
+  const { data: recentEntries = [] } = useJournalEntries(90);
+  const { data: todayEntryCloud } = useJournalEntry(dateKey);
+  const upsertMutation = useUpsertJournalEntry();
+  const deleteMutation = useDeleteJournalEntry();
   const awardXPMutation = useAwardXP();
   const enqueueRankUpMutation = useEnqueueRankUp();
+
+  // Build entries map and recentKeys from cloud data
+  const entries = useMemo(() => {
+    const map: Record<string, JournalEntry> = {};
+    for (const e of recentEntries) {
+      map[e.date_key] = e;
+    }
+    // Ensure todayEntry is present even if the list query hasn't refreshed
+    if (todayEntryCloud) {
+      map[todayEntryCloud.date_key] = todayEntryCloud;
+    }
+    return map;
+  }, [recentEntries, todayEntryCloud]);
+
+  const recentKeys = useMemo(
+    () => Object.keys(entries).sort((a, b) => b.localeCompare(a)),
+    [entries],
+  );
 
   const [view, setView] = useState<JournalView>("list");
   const [editingKey, setEditingKey] = useState(dateKey); // which date we're editing
   const [content, setContent] = useState("");
   const [saved, setSaved] = useState(false);
-
-  // Load all recent entries on mount
-  useEffect(() => {
-    loadRecentEntries(90);
-    loadEntry(dateKey);
-  }, [dateKey, loadRecentEntries, loadEntry]);
 
   // When switching to write view, populate content
   useEffect(() => {
@@ -453,11 +473,11 @@ function JournalTab({ dateKey }: { dateKey: string }) {
 
   const handleSave = useCallback(async () => {
     if (!content.trim()) return;
-    saveEntry(editingKey, content);
     // Only award XP for new entries (not edits of existing ones)
     const wasNew = !entries[editingKey] || !entries[editingKey]?.content?.trim();
-    if (wasNew) {
-      try {
+    try {
+      await upsertMutation.mutateAsync({ dateKey: editingKey, content });
+      if (wasNew) {
         const xpResult = await awardXPMutation.mutateAsync(XP_REWARDS.JOURNAL_ENTRY);
         if (xpResult.leveledUp) {
           await enqueueRankUpMutation.mutateAsync({
@@ -465,14 +485,14 @@ function JournalTab({ dateKey }: { dateKey: string }) {
             toLevel: xpResult.toLevel,
           });
         }
-      } catch (_e) {
-        // Non-fatal; the journal entry itself is saved.
       }
+    } catch (_e) {
+      // Non-fatal; mutation hook logs the error.
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  }, [content, editingKey, entries, saveEntry, awardXPMutation, enqueueRankUpMutation]);
+  }, [content, editingKey, entries, upsertMutation, awardXPMutation, enqueueRankUpMutation]);
 
   const handleDelete = useCallback((dk: string) => {
     Alert.alert("Delete Entry", "Remove this journal entry?", [
@@ -481,7 +501,7 @@ function JournalTab({ dateKey }: { dateKey: string }) {
         text: "Delete",
         style: "destructive",
         onPress: () => {
-          deleteEntry(dk);
+          deleteMutation.mutate(dk);
           if (view === "write" && editingKey === dk) {
             setView("list");
           }
@@ -489,7 +509,7 @@ function JournalTab({ dateKey }: { dateKey: string }) {
         },
       },
     ]);
-  }, [deleteEntry, view, editingKey]);
+  }, [deleteMutation, view, editingKey]);
 
   const openEntry = useCallback((dk: string) => {
     setEditingKey(dk);
@@ -651,152 +671,88 @@ function JournalTab({ dateKey }: { dateKey: string }) {
 // ─── Goals Tab ─────────────────────────────────────────────────────────────
 
 function GoalsTab({ dateKey }: { dateKey: string }) {
-  const goals = useGoalStore((s) => s.goals);
-  const goalTasks = useGoalStore((s) => s.goalTasks);
-  const load = useGoalStore((s) => s.load);
-  const loadGoalTasks = useGoalStore((s) => s.loadGoalTasks);
-  const addGoal = useGoalStore((s) => s.addGoal);
-  const deleteGoal = useGoalStore((s) => s.deleteGoal);
-  const addGoalTask = useGoalStore((s) => s.addGoalTask);
-  const toggleGoalTask = useGoalStore((s) => s.toggleGoalTask);
+  // Phase 3.5e: cloud-backed goals. Sub-tasks are not in the cloud
+  // schema — the simplified model stores title + optional target_date.
+  const { data: goals = [] } = useGoals();
+  const createGoalMutation = useCreateGoal();
+  const deleteGoalMutation = useDeleteGoalMutation();
 
   const [showAdd, setShowAdd] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDeadline, setNewDeadline] = useState("");
-  const [addingTaskFor, setAddingTaskFor] = useState<number | null>(null);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  useEffect(() => {
-    for (const g of goals) {
-      loadGoalTasks(g.id!);
-    }
-  }, [goals]);
-
-  const handleAddGoal = () => {
+  const handleAddGoal = useCallback(async () => {
     if (!newTitle.trim()) return;
-    addGoal({
-      title: newTitle.trim(),
-      engine: "charisma",
-      type: "count",
-      target: 1,
-      unit: "tasks",
-      deadline: newDeadline || (() => { const dd = new Date(Date.now() + 30 * 86400000); return `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(dd.getDate()).padStart(2, "0")}`; })(),
-    });
-    setNewTitle("");
-    setNewDeadline("");
-    setShowAdd(false);
-  };
+    try {
+      await createGoalMutation.mutateAsync({
+        title: newTitle.trim(),
+        targetDate: newDeadline || undefined,
+      });
+      setNewTitle("");
+      setNewDeadline("");
+      setShowAdd(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (_e) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  }, [newTitle, newDeadline, createGoalMutation]);
 
-  const handleAddTask = (goalId: number) => {
-    if (!newTaskTitle.trim()) return;
-    addGoalTask(goalId, newTaskTitle.trim());
-    setNewTaskTitle("");
-    setAddingTaskFor(null);
-  };
-
-  const handleDeleteGoal = (id: number) => {
+  const handleDeleteGoal = useCallback((id: string) => {
     Alert.alert("Delete Goal", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => deleteGoal(id) },
+      { text: "Delete", style: "destructive", onPress: () => deleteGoalMutation.mutate(id) },
     ]);
-  };
+  }, [deleteGoalMutation]);
 
-  const getDaysRemaining = (deadline: string) => {
-    const diff = new Date(deadline).getTime() - Date.now();
+  const getDaysRemaining = (targetDate: string | null) => {
+    if (!targetDate) return null;
+    const diff = new Date(targetDate).getTime() - Date.now();
     const days = Math.ceil(diff / 86400000);
     if (days < 0) return "Expired";
     if (days === 0) return "Today";
     return `${days}d left`;
   };
 
+  const activeGoals = useMemo(
+    () => goals.filter((g) => g.status === "active"),
+    [goals],
+  );
+
   return (
     <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-      <SectionHeader title="ACTIVE GOALS" right={`${goals.length}`} />
+      <SectionHeader title="ACTIVE GOALS" right={`${activeGoals.length}`} />
 
-      {goals.length === 0 ? (
+      {activeGoals.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>🎯</Text>
           <Text style={styles.emptyText}>No goals yet</Text>
           <Text style={styles.emptyHint}>Set your first goal to start tracking</Text>
         </View>
       ) : (
-        goals.map((g) => {
-          const tasks = goalTasks[g.id!] ?? [];
-          const completedCount = tasks.filter((t) => t.completed === 1).length;
-          const progress = tasks.length > 0 ? completedCount / tasks.length : 0;
-          const daysLeft = getDaysRemaining(g.deadline);
+        activeGoals.map((g) => {
+          const daysLeft = getDaysRemaining(g.target_date);
 
           return (
             <Panel key={g.id} style={styles.goalCard}>
               <View style={styles.goalHeader}>
-                <ProgressRing
-                  progress={progress}
-                  label={tasks.length > 0 ? `${completedCount}/${tasks.length}` : "0"}
-                  size={56}
-                  strokeWidth={4}
-                />
                 <View style={styles.goalInfo}>
                   <Text style={styles.goalTitle}>{g.title}</Text>
                   <View style={styles.goalMeta}>
-                    <Text style={styles.goalEngine}>{g.engine.toUpperCase()}</Text>
-                    <Text style={[
-                      styles.goalDeadline,
-                      daysLeft === "Expired" && { color: colors.danger },
-                    ]}>
-                      {daysLeft}
-                    </Text>
+                    <Text style={styles.goalEngine}>{g.status.toUpperCase()}</Text>
+                    {daysLeft && (
+                      <Text style={[
+                        styles.goalDeadline,
+                        daysLeft === "Expired" && { color: colors.danger },
+                      ]}>
+                        {daysLeft}
+                      </Text>
+                    )}
                   </View>
                 </View>
-                <Pressable onPress={() => handleDeleteGoal(g.id!)} hitSlop={12}>
+                <Pressable onPress={() => handleDeleteGoal(g.id)} hitSlop={12}>
                   <Text style={styles.deleteBtn}>×</Text>
                 </Pressable>
               </View>
-
-              {/* Sub-tasks */}
-              {tasks.length > 0 && (
-                <View style={styles.goalTasks}>
-                  {tasks.map((t) => (
-                    <Pressable
-                      key={t.id}
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        toggleGoalTask(t.id!, g.id!);
-                      }}
-                      style={styles.goalTaskRow}
-                    >
-                      <View style={[styles.goalTaskCheck, t.completed === 1 && styles.goalTaskCheckDone]}>
-                        {t.completed === 1 && <Text style={styles.goalTaskCheckmark}>✓</Text>}
-                      </View>
-                      <Text style={[styles.goalTaskTitle, t.completed === 1 && styles.goalTaskTitleDone]}>
-                        {t.title}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-
-              {/* Add task inline */}
-              {addingTaskFor === g.id ? (
-                <View style={styles.addRow}>
-                  <TextInput
-                    value={newTaskTitle} onChangeText={setNewTaskTitle}
-                    placeholder="Task name..." placeholderTextColor={colors.textMuted}
-                    style={styles.addInput} autoFocus
-                    onSubmitEditing={() => handleAddTask(g.id!)}
-                  />
-                  <Pressable onPress={() => handleAddTask(g.id!)} style={styles.addBtn}>
-                    <Text style={styles.addBtnText}>Add</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable onPress={() => setAddingTaskFor(g.id!)} style={styles.inlineAdd}>
-                  <Text style={styles.inlineAddText}>+ Add Task</Text>
-                </Pressable>
-              )}
             </Panel>
           );
         })

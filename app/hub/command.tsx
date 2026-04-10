@@ -19,8 +19,9 @@ import { PageHeader } from "../../src/components/ui/PageHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { ScoreGauge } from "../../src/components/ui/ScoreGauge";
 import { getTodayKey } from "../../src/lib/date";
-import { ENGINES } from "../../src/stores/useEngineStore";
-import type { Task as CloudTask } from "../../src/services/tasks";
+// Phase 3.5e: ENGINES constant now imported from the cloud service
+// module instead of the legacy MMKV store.
+import { ENGINES, type Task as CloudTask } from "../../src/services/tasks";
 
 // Structural type that both the legacy CommandTask and the new
 // cloud-backed Task + completed flag satisfy. Only fields TaskRow
@@ -32,10 +33,7 @@ type CommandTask = {
   engine: CloudTask["engine"];
   completed: boolean;
 };
-// Phase 3.5d: everything cloud-backed now. Tasks/completions/scores
-// come from React Query; XP writes use the awardXP mutation; the
-// legacy useEngineStore imports below are kept ONLY for the ENGINES
-// constant and CommandTask type alias.
+// Phase 3.5e: everything cloud-backed. XP_REWARDS is a pure const.
 import { XP_REWARDS } from "../../src/stores/useProfileStore";
 import {
   useProfile,

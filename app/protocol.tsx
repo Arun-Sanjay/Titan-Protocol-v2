@@ -20,28 +20,18 @@ import { getCurrentChapter, getDayNumber } from "../src/data/chapters";
 import { getLatestNarrative } from "../src/lib/narrative-engine";
 import { evaluateAllTrees } from "../src/lib/skill-tree-evaluator";
 
-// Phase 3.5d: The main ProtocolScreen component at the bottom of this
-// file now writes via cloud mutations (useSaveMorningSession /
-// useSaveEveningSession / useAwardXP / useUpdateStreak / useEnqueueRankUp).
-// Read-only subcomponents (MorningMissionPreviewPhase, EveningScoreRevealPhase)
-// still read from useEngineStore — they don't write, so they can't cause
-// data loss; they'll move to cloud when the engines tab does.
-import {
-  useEngineStore,
-  selectTotalScore,
-  selectAllTasksForDate,
-  ENGINES,
-} from "../src/stores/useEngineStore";
+// Phase 3.5e: all subcomponents now derive task/score data from cloud
+// hooks (useAllTasks + useAllCompletionsForDate + computeEngineScore).
+// useEngineStore and useHabitStore removed — no MMKV reads remain.
 // XP_REWARDS is a pure const export; no MMKV reads involved.
 import { XP_REWARDS } from "../src/stores/useProfileStore";
 import { useAllTasks, useAllCompletionsForDate } from "../src/hooks/queries/useTasks";
-import { computeEngineScore } from "../src/services/tasks";
+import { computeEngineScore, ENGINES } from "../src/services/tasks";
 import { useAwardXP, useUpdateStreak } from "../src/hooks/queries/useProfile";
 import { useEnqueueRankUp } from "../src/hooks/queries/useRankUps";
 import { useProtocolSession, useSaveMorningSession, useSaveEveningSession } from "../src/hooks/queries/useProtocol";
 import { useModeStore, type IdentityArchetype, IDENTITY_LABELS } from "../src/stores/useModeStore";
 import { useIdentityStore, selectIdentityMeta, IDENTITIES } from "../src/stores/useIdentityStore";
-import { useHabitStore } from "../src/stores/useHabitStore";
 import type { EngineKey } from "../src/db/schema";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -126,13 +116,14 @@ function MorningMissionPreviewPhase({
   dateKey: string;
   onNext: () => void;
 }) {
-  const tasks = useEngineStore((s) => s.tasks);
-  const completions = useEngineStore((s) => s.completions);
+  // Phase 3.5e: cloud-backed task list replaces useEngineStore reads.
+  const { data: cloudTasks = [] } = useAllTasks();
+  const { data: cloudCompletions = [] } = useAllCompletionsForDate(dateKey);
 
-  const allTasks = useMemo(
-    () => selectAllTasksForDate(tasks, completions, dateKey),
-    [tasks, completions, dateKey],
-  );
+  const allTasks = useMemo(() => {
+    const completedIds = new Set(cloudCompletions.map((c) => c.task_id));
+    return cloudTasks.map((t) => ({ ...t, completed: completedIds.has(t.id) }));
+  }, [cloudTasks, cloudCompletions]);
 
   // Group tasks by engine
   const grouped = useMemo(() => {
@@ -245,7 +236,24 @@ function EveningScoreRevealPhase({
   dateKey: string;
   onNext: () => void;
 }) {
-  const scores = useEngineStore((s) => s.scores);
+  // Phase 3.5e: engine scores derived from cloud hooks instead of
+  // useEngineStore.scores. The parent already fetches allTasks +
+  // allCompletions, but this component needs per-engine breakdowns
+  // so it runs its own queries (React Query deduplicates the fetch).
+  const { data: cloudTasks = [] } = useAllTasks();
+  const { data: cloudCompletions = [] } = useAllCompletionsForDate(dateKey);
+  const completedIds = useMemo(
+    () => new Set(cloudCompletions.map((c) => c.task_id)),
+    [cloudCompletions],
+  );
+  const engineScores = useMemo(() => {
+    const out: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
+    for (const e of ENGINES) {
+      const engineTasks = cloudTasks.filter((t) => t.engine === e);
+      out[e] = engineTasks.length > 0 ? Math.round(computeEngineScore(engineTasks, completedIds)) : 0;
+    }
+    return out;
+  }, [cloudTasks, completedIds]);
   const rank = getDailyRank(score);
 
   // Animated counter
@@ -301,7 +309,7 @@ function EveningScoreRevealPhase({
       {/* Engine scores */}
       <View style={scoreRevealStyles.enginesWrap}>
         {ENGINES.map((engine, idx) => {
-          const engineScore = scores[`${engine}:${dateKey}`] ?? 0;
+          const engineScore = engineScores[engine];
           return (
             <Animated.View
               key={engine}

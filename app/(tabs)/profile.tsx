@@ -9,9 +9,13 @@ import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
 import { Card } from "../../src/components/ui/Card";
 import { useProfile } from "../../src/hooks/queries/useProfile";
-import { useSkillTreeStore } from "../../src/stores/useSkillTreeStore";
-import { useAchievementStore } from "../../src/stores/useAchievementStore";
-import { useTitanModeStore, selectUnlockProgress, selectDaysRemaining } from "../../src/stores/useTitanModeStore";
+import { useUnlockedAchievements } from "../../src/hooks/queries/useAchievements";
+import { useSkillProgress } from "../../src/hooks/queries/useSkillTree";
+import { useTitanMode } from "../../src/hooks/queries/useTitanMode";
+// Phase 3.5e: selectUnlockProgress / selectDaysRemaining are pure math
+// helpers with no store dependency — safe to keep importing from the
+// store module even though the store itself is no longer read.
+import { selectUnlockProgress, selectDaysRemaining } from "../../src/stores/useTitanModeStore";
 import { useModeStore, checkFeatureVisible } from "../../src/stores/useModeStore";
 import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { NarrativeTimeline } from "../../src/components/v2/narrative/NarrativeTimeline";
@@ -139,7 +143,9 @@ export default function ProfileScreen() {
 
 function AchievementLink() {
   const router = useRouter();
-  const count = useAchievementStore((s) => s.unlockedIds.length);
+  // Phase 3.5e: cloud-backed achievement count.
+  const { data: unlocked = [] } = useUnlockedAchievements();
+  const count = unlocked.length;
   return (
     <Pressable onPress={() => router.push("/achievements")} style={styles.settingsBtn}>
       <Ionicons name="ribbon-outline" size={20} color={colors.mind} />
@@ -150,9 +156,11 @@ function AchievementLink() {
 }
 
 function TitanModeCard() {
-  const unlocked = useTitanModeStore((s) => s.unlocked);
-  const days = useTitanModeStore((s) => s.consecutiveDays);
-  const avg = useTitanModeStore((s) => s.averageScore);
+  // Phase 3.5e: cloud-backed titan mode state.
+  const { data: titanState } = useTitanMode();
+  const unlocked = titanState?.unlocked ?? false;
+  const days = titanState?.consecutive_days ?? 0;
+  const avg = titanState?.average_score ?? 0;
   const mode = useModeStore((s) => s.mode);
 
   if (mode === "titan") {
@@ -222,8 +230,19 @@ const SKILL_ENGINES = [
 
 function SkillTreesOverview() {
   const router = useRouter();
-  const progress = useSkillTreeStore((s) => s.progress);
-  const overview = React.useMemo(() => useSkillTreeStore.getState().getOverview(), [progress]);
+  // Phase 3.5e: cloud-backed skill tree progress.
+  const { data: allProgress = [] } = useSkillProgress();
+  const overview = React.useMemo(() => {
+    const engines = ["body", "mind", "money", "charisma"];
+    return engines.map((engine) => {
+      const nodes = allProgress.filter((n) => n.engine === engine);
+      return {
+        engine,
+        totalNodes: nodes.length,
+        totalCompleted: nodes.filter((n) => n.state === "claimed").length,
+      };
+    });
+  }, [allProgress]);
 
   return (
     <View style={skillStyles.container}>
