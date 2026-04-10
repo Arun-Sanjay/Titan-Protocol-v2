@@ -276,107 +276,113 @@ export function BeatReveal({ archetype, onComplete }: Props) {
     barWidths,
   ]);
 
-  // Phase 1: "IDENTITY CONFIRMED" types out
+  // ── Master timing engine ────────────────────────────────────────────
   //
-  // Fix: delay the audio call by 200ms to let the JS thread settle
-  // after the component mount (Reanimated worklet initialization on
-  // Hermes release builds can cause brief thread contention that
-  // swallows setTimeout callbacks). Also add a safety auto-advance
-  // to phase 2 after 4s in case the typewriter freezes for any
-  // reason — the user should never get permanently stuck on this
-  // screen.
+  // All phase transitions, the typewriter, and the name-slam sequence
+  // are driven by a single setInterval(100ms) that checks elapsed time.
+  // This replaces the original design of 5+ independent setTimeout
+  // calls, which were getting swallowed by Hermes JS thread contention
+  // on Android release builds (the root cause of the "hangs at I" and
+  // "black screen forever" bugs).
+  //
+  // A single interval is self-correcting: even if a few ticks are
+  // missed due to native bridge calls or Reanimated worklet init, the
+  // next tick catches up by checking `elapsed` against the milestones.
+  //
+  // Milestones:
+  //   200ms  — play ONBO-009 voice (delayed so it doesn't compete)
+  //   500ms  — start typewriter
+  //  ~1400ms — typewriter finishes (18 chars × 50ms = 900ms + 500ms)
+  //   2000ms — phase 2 (black tension pause)
+  //   4000ms — phase 3 (name slam + bars + continue)
+  //   5200ms — show bars (4000 + BAR_START_OFFSET)
+  //   7000ms — show CONTINUE button (4000 + CONTINUE_APPEAR_MS)
+  //  12000ms — auto-stop interval (safety ceiling)
+
+  const phase3FiredRef = useRef(false);
+  const barsFiredRef = useRef(false);
+  const continueFiredRef = useRef(false);
+  const audioFiredRef = useRef(false);
+
   useEffect(() => {
-    // Delay audio slightly so the typewriter timers aren't competing
-    // with native audio module initialization on first render.
-    const audioDelay = setTimeout(() => {
-      try {
-        playVoiceLineAsync("ONBO-009");
-      } catch {
-        // Audio failures must never block the flow.
-      }
-    }, 200);
-    timeoutsRef.current.push(audioDelay);
+    const startTime = Date.now();
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    // Type out character by character using a single interval instead
-    // of 19 separate timeouts — more resilient to JS thread pauses.
-    let charIndex = 0;
-    const interval = setInterval(() => {
-      charIndex += 1;
-      setConfirmTypedChars(charIndex);
-      if (charIndex >= CONFIRM_TEXT.length) {
-        clearInterval(interval);
+    const masterInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+
+      // ── Audio (200ms) ─────────────────────────────────────────────
+      if (!audioFiredRef.current && elapsed >= 200) {
+        audioFiredRef.current = true;
+        try {
+          playVoiceLineAsync("ONBO-009");
+        } catch {
+          // Audio failures must never block the flow.
+        }
       }
-    }, 50);
-    // Start typing after 500ms
-    const startDelay = setTimeout(() => {
-      setConfirmTypedChars(0);
-    }, 500);
-    timeoutsRef.current.push(startDelay);
 
-    // Safety: if we're still in phase 1 after 4s, force phase 2.
-    const safetyTimer = setTimeout(() => {
-      setConfirmTypedChars(CONFIRM_TEXT.length);
-    }, 4000);
-    timeoutsRef.current.push(safetyTimer);
+      // ── Typewriter (500ms–1400ms) ─────────────────────────────────
+      if (elapsed >= 500 && elapsed < PHASE_2_START) {
+        const chars = Math.min(
+          CONFIRM_TEXT.length,
+          Math.floor((elapsed - 500) / 50),
+        );
+        setConfirmTypedChars(chars);
+      }
 
-    return () => {
-      clearInterval(interval);
-    };
-  }, []);
+      // ── Phase 2: black screen (2000ms) ────────────────────────────
+      if (elapsed >= PHASE_2_START && elapsed < PHASE_3_START) {
+        setConfirmTypedChars(CONFIRM_TEXT.length);
+        setPhase(2);
+      }
 
-  // Phase 2: Black screen pause at 2s
-  useEffect(() => {
-    const t = setTimeout(() => setPhase(2), PHASE_2_START);
-    timeoutsRef.current.push(t);
-  }, []);
+      // ── Phase 3: name slam (4000ms) ───────────────────────────────
+      if (elapsed >= PHASE_3_START && !phase3FiredRef.current) {
+        phase3FiredRef.current = true;
+        setPhase(3);
+        setShowName(true);
 
-  // Phase 3: Name slam at 4s
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setPhase(3);
-      setShowName(true);
+        // Name slam: scale 1.3 -> 1.0 spring
+        nameOpacity.value = withTiming(1, { duration: 100 });
+        nameScale.value = withSpring(1.0, {
+          damping: 12,
+          stiffness: 300,
+          mass: 0.5,
+        });
 
-      // Name slam: scale 1.3 -> 1.0 spring
-      nameOpacity.value = withTiming(1, { duration: 100 });
-      nameScale.value = withSpring(1.0, {
-        damping: 12,
-        stiffness: 300,
-        mass: 0.5,
-      });
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-      // Heavy haptic
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        // Radial glow burst
+        radialGlowOpacity.value = withSequence(
+          withTiming(0.15, { duration: 100 }),
+          withDelay(300, withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) })),
+        );
+        radialGlowScale.value = withTiming(2.0, {
+          duration: 400,
+          easing: Easing.out(Easing.cubic),
+        });
 
-      // Radial glow burst: scales from 0 to 2.0 over 400ms then fades
-      radialGlowOpacity.value = withSequence(
-        withTiming(0.15, { duration: 100 }),
-        withDelay(300, withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) })),
-      );
-      radialGlowScale.value = withTiming(2.0, {
-        duration: 400,
-        easing: Easing.out(Easing.cubic),
-      });
+        // Legacy particle burst (background ring)
+        particleOpacity.value = withSequence(
+          withTiming(1, { duration: 150 }),
+          withDelay(400, withTiming(0, { duration: 600 })),
+        );
+        particleScale.value = withSequence(
+          withTiming(1.0, { duration: 150 }),
+          withTiming(2.5, { duration: 800, easing: Easing.out(Easing.cubic) }),
+        );
 
-      // Legacy particle burst (background ring)
-      particleOpacity.value = withSequence(
-        withTiming(1, { duration: 150 }),
-        withDelay(400, withTiming(0, { duration: 600 })),
-      );
-      particleScale.value = withSequence(
-        withTiming(1.0, { duration: 150 }),
-        withTiming(2.5, { duration: 800, easing: Easing.out(Easing.cubic) }),
-      );
+        // Activate burst particles (30 dots flying outward)
+        setBurstActive(true);
 
-      // Activate burst particles (30 dots flying outward)
-      setBurstActive(true);
+        // Play archetype voice line
+        playVoiceLineAsync(getArchetypeVoiceId(archetypeKey));
+      }
 
-      // Play archetype voice line
-      playVoiceLineAsync(getArchetypeVoiceId(archetypeKey));
-
-      // Start bar fills after a beat
-      const barTimer = setTimeout(() => {
+      // ── Bars (4000 + BAR_START_OFFSET = 5200ms) ───────────────────
+      if (elapsed >= PHASE_3_START + BAR_START_OFFSET && !barsFiredRef.current) {
+        barsFiredRef.current = true;
         setShowBars(true);
         ENGINE_ORDER.forEach((engine, i) => {
           const weight = weights[engine] ?? 0;
@@ -385,13 +391,12 @@ export function BeatReveal({ archetype, onComplete }: Props) {
             withTiming(weight, { duration: BAR_FILL_MS, easing: Easing.out(Easing.cubic) }),
           );
         });
-      }, BAR_START_OFFSET);
-      timeoutsRef.current.push(barTimer);
+      }
 
-      // Show continue button
-      const continueTimer = setTimeout(() => {
+      // ── Continue button (4000 + CONTINUE_APPEAR_MS = 7000ms) ──────
+      if (elapsed >= PHASE_3_START + CONTINUE_APPEAR_MS && !continueFiredRef.current) {
+        continueFiredRef.current = true;
         setShowContinue(true);
-        // Pulse animation
         continuePulse.value = withRepeat(
           withSequence(
             withTiming(0.5, { duration: 1200 }),
@@ -400,10 +405,17 @@ export function BeatReveal({ archetype, onComplete }: Props) {
           -1,
           true,
         );
-      }, CONTINUE_APPEAR_MS);
-      timeoutsRef.current.push(continueTimer);
-    }, PHASE_3_START);
-    timeoutsRef.current.push(t);
+      }
+
+      // ── Safety ceiling (12s) ──────────────────────────────────────
+      if (elapsed >= 12000) {
+        clearInterval(masterInterval);
+      }
+    }, 100); // 10fps tick — smooth enough for sequencing, low CPU cost
+
+    return () => {
+      clearInterval(masterInterval);
+    };
   }, []);
 
   const handleContinue = () => {
