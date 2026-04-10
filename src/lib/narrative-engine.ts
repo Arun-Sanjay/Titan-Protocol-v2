@@ -2,13 +2,19 @@
  * Dynamic Narrative Engine
  *
  * Generates story text based on user behavior.
- * Entries are stored in MMKV as narrative_entries array.
+ *
+ * Wave 4: entries now write to the cloud `narrative_log` table via the
+ * narrative service. The MMKV write is kept as a local fallback for
+ * backward compat (a few callers still read from MMKV directly during
+ * the transition — they'll be cleaned up in Wave 5).
  */
 
 import { getJSON, setJSON } from "../db/storage";
 import { selectIdentityMeta, type Archetype } from "../stores/useIdentityStore";
 import { getCurrentChapter, type Chapter } from "../data/chapters";
 import { ARCHETYPE_STORIES, type StoryEntry } from "../data/archetype-stories";
+import { addNarrativeLogEntry } from "../services/narrative";
+import { logError } from "./error-log";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -33,13 +39,23 @@ export function getLatestNarrative(): NarrativeEntry | null {
 }
 
 export function addEntry(entry: NarrativeEntry): void {
+  // Local MMKV write (kept for backward compat during transition)
   const entries = getNarrativeEntries();
   entries.push(entry);
-  // Keep only the latest MAX_ENTRIES
   if (entries.length > MAX_ENTRIES) {
     entries.splice(0, entries.length - MAX_ENTRIES);
   }
   setJSON(STORAGE_KEY, entries);
+
+  // Wave 4: cloud write — fire-and-forget so narrative generation
+  // never blocks the calling code path (protocol completion, etc.)
+  addNarrativeLogEntry({
+    dateKey: entry.date,
+    type: entry.type,
+    text: entry.text,
+  }).catch((e) => {
+    logError("narrative-engine.addEntry.cloud", e, { type: entry.type });
+  });
 }
 
 // ─── Day counter ────────────────────────────────────────────────────────────
