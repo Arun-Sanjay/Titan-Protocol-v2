@@ -299,16 +299,21 @@ export function BeatReveal({ archetype, onComplete }: Props) {
   //   7000ms — show CONTINUE button (4000 + CONTINUE_APPEAR_MS)
   //  12000ms — auto-stop interval (safety ceiling)
 
+  const audioFiredRef = useRef(false);
+  const phase2FiredRef = useRef(false);
   const phase3FiredRef = useRef(false);
   const barsFiredRef = useRef(false);
   const continueFiredRef = useRef(false);
-  const audioFiredRef = useRef(false);
+  const lastCharRef = useRef(-1);
 
   useEffect(() => {
     const startTime = Date.now();
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
+    // 33ms tick (~30fps) so the typewriter at 40ms/char is smooth.
+    // Every milestone uses a ref guard so setState fires exactly once
+    // per transition — no redundant calls that churn the reconciler.
     const masterInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
 
@@ -322,17 +327,22 @@ export function BeatReveal({ archetype, onComplete }: Props) {
         }
       }
 
-      // ── Typewriter (500ms–1400ms) ─────────────────────────────────
-      if (elapsed >= 500 && elapsed < PHASE_2_START) {
+      // ── Typewriter (500ms–1220ms at 40ms/char) ────────────────────
+      if (elapsed >= 500 && !phase2FiredRef.current) {
         const chars = Math.min(
           CONFIRM_TEXT.length,
-          Math.floor((elapsed - 500) / 50),
+          Math.floor((elapsed - 500) / 40),
         );
-        setConfirmTypedChars(chars);
+        // Only setState when the char count actually changes
+        if (chars !== lastCharRef.current) {
+          lastCharRef.current = chars;
+          setConfirmTypedChars(chars);
+        }
       }
 
       // ── Phase 2: black screen (2000ms) ────────────────────────────
-      if (elapsed >= PHASE_2_START && elapsed < PHASE_3_START) {
+      if (elapsed >= PHASE_2_START && !phase2FiredRef.current) {
+        phase2FiredRef.current = true;
         setConfirmTypedChars(CONFIRM_TEXT.length);
         setPhase(2);
       }
@@ -343,7 +353,6 @@ export function BeatReveal({ archetype, onComplete }: Props) {
         setPhase(3);
         setShowName(true);
 
-        // Name slam: scale 1.3 -> 1.0 spring
         nameOpacity.value = withTiming(1, { duration: 100 });
         nameScale.value = withSpring(1.0, {
           damping: 12,
@@ -353,7 +362,6 @@ export function BeatReveal({ archetype, onComplete }: Props) {
 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-        // Radial glow burst
         radialGlowOpacity.value = withSequence(
           withTiming(0.15, { duration: 100 }),
           withDelay(300, withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) })),
@@ -363,7 +371,6 @@ export function BeatReveal({ archetype, onComplete }: Props) {
           easing: Easing.out(Easing.cubic),
         });
 
-        // Legacy particle burst (background ring)
         particleOpacity.value = withSequence(
           withTiming(1, { duration: 150 }),
           withDelay(400, withTiming(0, { duration: 600 })),
@@ -373,14 +380,11 @@ export function BeatReveal({ archetype, onComplete }: Props) {
           withTiming(2.5, { duration: 800, easing: Easing.out(Easing.cubic) }),
         );
 
-        // Activate burst particles (30 dots flying outward)
         setBurstActive(true);
-
-        // Play archetype voice line
         playVoiceLineAsync(getArchetypeVoiceId(archetypeKey));
       }
 
-      // ── Bars (4000 + BAR_START_OFFSET = 5200ms) ───────────────────
+      // ── Bars (5200ms) ─────────────────────────────────────────────
       if (elapsed >= PHASE_3_START + BAR_START_OFFSET && !barsFiredRef.current) {
         barsFiredRef.current = true;
         setShowBars(true);
@@ -393,7 +397,7 @@ export function BeatReveal({ archetype, onComplete }: Props) {
         });
       }
 
-      // ── Continue button (4000 + CONTINUE_APPEAR_MS = 7000ms) ──────
+      // ── Continue button (7000ms) ──────────────────────────────────
       if (elapsed >= PHASE_3_START + CONTINUE_APPEAR_MS && !continueFiredRef.current) {
         continueFiredRef.current = true;
         setShowContinue(true);
@@ -407,11 +411,11 @@ export function BeatReveal({ archetype, onComplete }: Props) {
         );
       }
 
-      // ── Safety ceiling (12s) ──────────────────────────────────────
+      // ── Auto-stop (12s) ───────────────────────────────────────────
       if (elapsed >= 12000) {
         clearInterval(masterInterval);
       }
-    }, 100); // 10fps tick — smooth enough for sequencing, low CPU cost
+    }, 33);
 
     return () => {
       clearInterval(masterInterval);
