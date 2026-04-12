@@ -23,8 +23,8 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import {
+  playVoiceLine,
   playVoiceLineAsync,
-  stopCurrentAudio,
   getArchetypeVoiceId,
 } from "../../../lib/protocol-audio";
 
@@ -246,16 +246,23 @@ export function BeatReveal({ archetype, onComplete }: Props) {
     opacity: continuePulse.value,
   }));
 
-  // Bar fill values - one per engine
-  const barWidths = ENGINE_ORDER.map(() => useSharedValue(0));
+  // Bar fill values - one per engine (stable refs via individual hooks)
+  const barW0 = useSharedValue(0);
+  const barW1 = useSharedValue(0);
+  const barW2 = useSharedValue(0);
+  const barW3 = useSharedValue(0);
+  const barWidths = useMemo(() => [barW0, barW1, barW2, barW3], [barW0, barW1, barW2, barW3]);
 
   const CONFIRM_TEXT = "IDENTITY CONFIRMED";
 
-  // Cleanup
+  // Phase 4.2: cleanup only on unmount. stopCurrentAudio removed — the
+  // parent CinematicOnboarding handles final audio teardown, and the next
+  // beat's playVoiceLine call naturally stops the previous line. Previously
+  // barWidths (a new array every render) was in the dep array, causing this
+  // cleanup to re-fire on every state change and kill playing audio.
   useEffect(() => {
     return () => {
       timeoutsRef.current.forEach(clearTimeout);
-      stopCurrentAudio();
       cancelAnimation(nameScale);
       cancelAnimation(nameOpacity);
       cancelAnimation(radialGlowOpacity);
@@ -265,16 +272,7 @@ export function BeatReveal({ archetype, onComplete }: Props) {
       cancelAnimation(continuePulse);
       barWidths.forEach((sv) => cancelAnimation(sv));
     };
-  }, [
-    nameScale,
-    nameOpacity,
-    radialGlowOpacity,
-    radialGlowScale,
-    particleOpacity,
-    particleScale,
-    continuePulse,
-    barWidths,
-  ]);
+  }, []);
 
   // ── Master timing engine ────────────────────────────────────────────
   //
@@ -300,6 +298,7 @@ export function BeatReveal({ archetype, onComplete }: Props) {
   //  12000ms — auto-stop interval (safety ceiling)
 
   const audioFiredRef = useRef(false);
+  const voiceDoneRef = useRef(false);
   const phase2FiredRef = useRef(false);
   const phase3FiredRef = useRef(false);
   const barsFiredRef = useRef(false);
@@ -317,14 +316,16 @@ export function BeatReveal({ archetype, onComplete }: Props) {
     const masterInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
 
-      // ── Audio (200ms) ─────────────────────────────────────────────
+      // ── Audio (200ms) ───────��─────────────────────────────────────
+      // Phase 4.2: await the voice so we know when it finishes. The
+      // archetype reveal voice in Phase 3 is gated on voiceDoneRef
+      // to prevent playVoiceLine's stopCurrentAudio from cutting off
+      // the "IDENTITY CONFIRMED" narration mid-sentence.
       if (!audioFiredRef.current && elapsed >= 200) {
         audioFiredRef.current = true;
-        try {
-          playVoiceLineAsync("ONBO-009");
-        } catch {
-          // Audio failures must never block the flow.
-        }
+        playVoiceLine("ONBO-009")
+          .then(() => { voiceDoneRef.current = true; })
+          .catch(() => { voiceDoneRef.current = true; });
       }
 
       // ── Typewriter (500ms–1220ms at 40ms/char) ────────────────────
@@ -347,8 +348,10 @@ export function BeatReveal({ archetype, onComplete }: Props) {
         setPhase(2);
       }
 
-      // ── Phase 3: name slam (4000ms) ───────────────────────────────
-      if (elapsed >= PHASE_3_START && !phase3FiredRef.current) {
+      // ── Phase 3: name slam (4000ms, after ONBO-009 finishes) ─────
+      // Phase 4.2: also gated on voiceDoneRef so the archetype voice
+      // doesn't clobber ONBO-009 if it runs longer than expected.
+      if (elapsed >= PHASE_3_START && voiceDoneRef.current && !phase3FiredRef.current) {
         phase3FiredRef.current = true;
         setPhase(3);
         setShowName(true);

@@ -19,7 +19,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
-import { playVoiceLineAsync, stopCurrentAudio } from "../../../lib/protocol-audio";
+import { playVoiceLineAsync } from "../../../lib/protocol-audio";
 import {
   RANK_ORDER,
   RANK_NAMES,
@@ -331,8 +331,9 @@ export function BeatLadder({ onComplete }: Props) {
     opacity: btnOpacity.value,
   }));
 
+  // Phase 4.2: stopCurrentAudio removed — the next beat's audio
+  // naturally replaces this one via playVoiceLine's own stop logic.
   const handleContinue = () => {
-    stopCurrentAudio();
     onComplete();
   };
 

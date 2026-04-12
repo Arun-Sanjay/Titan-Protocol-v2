@@ -18,8 +18,10 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
-import { useEngineStore } from "../../../stores/useEngineStore";
-import { useHabitStore } from "../../../stores/useHabitStore";
+import { useCreateTask, tasksKeys } from "../../../hooks/queries/useTasks";
+import { useCreateHabit, habitsKeys } from "../../../hooks/queries/useHabits";
+import { useQueryClient } from "@tanstack/react-query";
+import { logError } from "../../../lib/error-log";
 import type { EngineKey } from "../../../db/schema";
 
 // -- Types ------------------------------------------------------------------
@@ -334,29 +336,59 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [customHabitText]);
 
+  // -- Cloud mutations (Phase 4.2: write to Supabase, not MMKV) -----------
+
+  const createTaskMutation = useCreateTask();
+  const createHabitMutation = useCreateHabit();
+  const queryClient = useQueryClient();
+  const [saving, setSaving] = useState(false);
+
   // -- Confirm --------------------------------------------------------------
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = useCallback(async () => {
+    if (saving) return;
+    setSaving(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Persist tasks
-    const addTask = useEngineStore.getState().addTask;
-    for (const t of tasks) {
-      if (t.checked) {
-        addTask(t.engine, t.title, t.kind);
-      }
-    }
+    // Phase 4.2: persist tasks to Supabase so the dashboard (which reads
+    // from React Query / Supabase) sees them. The old code wrote to MMKV
+    // via useEngineStore.addTask, but the dashboard was migrated to cloud
+    // hooks — so onboarding tasks were invisible post-setup.
+    const taskPromises = tasks
+      .filter((t) => t.checked)
+      .map((t) =>
+        createTaskMutation.mutateAsync({
+          engine: t.engine as any,
+          title: t.title,
+          kind: t.kind,
+        }).catch((e) => {
+          logError("BeatSetup.createTask", e, { title: t.title, engine: t.engine });
+        }),
+      );
 
-    // Persist habits
-    const addHabit = useHabitStore.getState().addHabit;
-    for (const h of habits) {
-      if (h.checked) {
-        addHabit(h.title, h.icon, h.engine);
-      }
-    }
+    const habitPromises = habits
+      .filter((h) => h.checked)
+      .map((h) =>
+        createHabitMutation.mutateAsync({
+          title: h.title,
+          icon: h.icon,
+          engine: h.engine,
+        }).catch((e) => {
+          logError("BeatSetup.createHabit", e, { title: h.title });
+        }),
+      );
+
+    // Wait for all writes to settle. Use allSettled so a single failure
+    // doesn't block the rest — partial setup is better than none.
+    await Promise.allSettled([...taskPromises, ...habitPromises]);
+
+    // Force-invalidate task and habit caches so the dashboard picks up
+    // the newly created items immediately.
+    queryClient.invalidateQueries({ queryKey: tasksKeys.all });
+    queryClient.invalidateQueries({ queryKey: habitsKeys.all });
 
     onComplete();
-  }, [tasks, habits, onComplete]);
+  }, [tasks, habits, onComplete, saving, createTaskMutation, createHabitMutation, queryClient]);
 
   const canConfirm = hasMinOneMainPerEngine(tasks, engines);
 
@@ -544,18 +576,18 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
         <Pressable
           style={[
             styles.confirmButton,
-            !canConfirm && styles.confirmButtonDisabled,
+            (!canConfirm || saving) && styles.confirmButtonDisabled,
           ]}
-          onPress={canConfirm ? handleConfirm : undefined}
-          disabled={!canConfirm}
+          onPress={canConfirm && !saving ? handleConfirm : undefined}
+          disabled={!canConfirm || saving}
         >
           <Text
             style={[
               styles.confirmButtonText,
-              !canConfirm && styles.confirmButtonTextDisabled,
+              (!canConfirm || saving) && styles.confirmButtonTextDisabled,
             ]}
           >
-            CONFIRM SETUP
+            {saving ? "SAVING..." : "CONFIRM SETUP"}
           </Text>
         </Pressable>
         {!canConfirm && (

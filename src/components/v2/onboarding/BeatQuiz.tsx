@@ -19,7 +19,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
-import { playVoiceLineAsync, stopCurrentAudio } from "../../../lib/protocol-audio";
+import { playVoiceLineAsync } from "../../../lib/protocol-audio";
 import { QUIZ_QUESTIONS } from "../../../data/identity-quiz";
 import { scoreQuiz } from "../../../lib/quiz-scoring";
 import type { EngineKey } from "../../../db/schema";
@@ -72,10 +72,12 @@ export function BeatQuiz({ onComplete }: Props) {
   });
 
   // Play intro voice on mount
+  // Phase 4.2: stopCurrentAudio removed from cleanup — the next beat's
+  // playVoiceLine call naturally stops the previous line, and the parent
+  // CinematicOnboarding handles final audio teardown on exit.
   useEffect(() => {
     playVoiceLineAsync("ONBO-007");
     return () => {
-      stopCurrentAudio();
       if (slotIntervalRef.current) clearInterval(slotIntervalRef.current);
     };
   }, []);
