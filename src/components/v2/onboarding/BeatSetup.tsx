@@ -22,10 +22,8 @@ import { useCreateTask, tasksKeys } from "../../../hooks/queries/useTasks";
 import { useCreateHabit, habitsKeys } from "../../../hooks/queries/useHabits";
 import { useQueryClient } from "@tanstack/react-query";
 import { logError } from "../../../lib/error-log";
-// Phase 4.2: dual-write — MMKV mirror so the legacy operation engine
-// (src/lib/operation-engine.ts) can find tasks for Day 1 FIRST_LIGHT.
-import { useEngineStore } from "../../../stores/useEngineStore";
-import { useHabitStore } from "../../../stores/useHabitStore";
+// Phase 3.6: dual-write removed — operation engine now reads from
+// Supabase via cloud hooks. MMKV mirror no longer needed.
 import type { EngineKey } from "../../../db/schema";
 
 // -- Types ------------------------------------------------------------------
@@ -385,23 +383,6 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
     // Wait for all writes to settle. Use allSettled so a single failure
     // doesn't block the rest — partial setup is better than none.
     await Promise.allSettled([...taskPromises, ...habitPromises]);
-
-    // Phase 4.2: DUAL-WRITE — mirror to MMKV so the legacy operation engine
-    // can find tasks for Day 1 FIRST_LIGHT. The operation engine reads from
-    // MMKV `tasks:{engine}` keys, not Supabase. This bridge stays until the
-    // operation engine is migrated to React Query.
-    try {
-      const addTask = useEngineStore.getState().addTask;
-      for (const t of tasks.filter((t) => t.checked)) {
-        addTask(t.engine, t.title, t.kind);
-      }
-      const addHabit = useHabitStore.getState().addHabit;
-      for (const h of habits.filter((h) => h.checked)) {
-        addHabit(h.title, h.icon, h.engine);
-      }
-    } catch (e) {
-      logError("BeatSetup.mmkvMirror", e);
-    }
 
     // Force-invalidate task and habit caches so the dashboard picks up
     // the newly created items immediately.

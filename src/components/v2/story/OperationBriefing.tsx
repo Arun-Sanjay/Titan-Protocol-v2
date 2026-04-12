@@ -12,7 +12,8 @@ import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
 import { useProtocolStore } from "../../../stores/useProtocolStore";
-import { generateDailyOperation, type DailyOperation } from "../../../lib/operation-engine";
+import { generateDailyOperation } from "../../../lib/operation-engine";
+import { useAllTasks, useRecentCompletionMap } from "../../../hooks/queries/useTasks";
 import {
   playVoiceLineAsync,
   stopCurrentAudio,
@@ -55,10 +56,14 @@ export function OperationBriefing({
   // Use protocol store streak (loaded from MMKV on init) — profile.streak defaults to 0 before async load
   const streak = useProtocolStore((s) => s.streakCurrent);
 
-  // Generate the operation with real tasks
+  // Phase 3.6: cloud task data for the operation engine
+  const { data: cloudTasks = [] } = useAllTasks();
+  const completionMap = useRecentCompletionMap();
+
+  // Generate the operation with real tasks from Supabase
   const operation = useMemo(
-    () => generateDailyOperation(userName, dayNumber, streak, storyAct),
-    [userName, dayNumber, streak, storyAct],
+    () => generateDailyOperation(userName, dayNumber, streak, storyAct, cloudTasks as any, completionMap),
+    [userName, dayNumber, streak, storyAct, cloudTasks, completionMap],
   );
 
   const displayName = operationName ?? operation.displayName;

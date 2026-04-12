@@ -6,8 +6,10 @@
  * invalidate surgically without blowing the entire cache.
  */
 
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/useAuthStore";
+import { getTodayKey, addDays } from "../../lib/date";
 import {
   createTask,
   deleteTask,
@@ -70,6 +72,40 @@ export function useAllCompletionsForDate(dateKey: string) {
     queryFn: () => listAllCompletionsForDate(dateKey),
     enabled: Boolean(userId),
   });
+}
+
+// ─── Operation engine helpers ───────────────────────────────────────────────
+
+/**
+ * Phase 3.6: Build the CompletionsByEngineDate map the operation engine needs.
+ * Fetches completions for today + 2 prior days (3-day window for engine scores)
+ * and groups them as "{engine}:{dateKey}" → Set<taskId>.
+ *
+ * Uses 3 stable useQuery calls (not inside a loop) to satisfy Rules of Hooks.
+ */
+export function useRecentCompletionMap() {
+  const today = getTodayKey();
+  const yesterday = addDays(today, -1);
+  const dayBefore = addDays(today, -2);
+
+  const { data: d0 = [] } = useAllCompletionsForDate(today);
+  const { data: d1 = [] } = useAllCompletionsForDate(yesterday);
+  const { data: d2 = [] } = useAllCompletionsForDate(dayBefore);
+
+  return useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    const addRows = (rows: Completion[], dk: string) => {
+      for (const c of rows) {
+        const key = `${c.engine}:${dk}`;
+        if (!map[key]) map[key] = new Set();
+        map[key].add(c.task_id);
+      }
+    };
+    addRows(d0, today);
+    addRows(d1, yesterday);
+    addRows(d2, dayBefore);
+    return map;
+  }, [d0, d1, d2, today, yesterday, dayBefore]);
 }
 
 // ─── Mutations ──────────────────────────────────────────────────────────────

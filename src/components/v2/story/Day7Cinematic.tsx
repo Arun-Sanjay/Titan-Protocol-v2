@@ -12,6 +12,7 @@ import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 import { getTodayKey, addDays } from "../../../lib/date";
 import { generateDailyOperation } from "../../../lib/operation-engine";
+import { useAllTasks, useRecentCompletionMap } from "../../../hooks/queries/useTasks";
 import { playVoiceLineAsync, stopCurrentAudio } from "../../../lib/protocol-audio";
 
 type Props = { onComplete: () => void };
@@ -61,11 +62,15 @@ export function Day7Cinematic({ onComplete }: Props) {
 
   const rank = getRankLetter(averageScore);
 
+  // Phase 3.6: cloud task data for operation engine
+  const { data: cloudTasks = [] } = useAllTasks();
+  const completionMap = useRecentCompletionMap();
+
   // Get today's task count for the operation overview
   const taskCount = useMemo(() => {
-    const op = generateDailyOperation(userName, 7, streak, storyAct);
+    const op = generateDailyOperation(userName, 7, streak, storyAct, cloudTasks as any, completionMap);
     return op.taskCount;
-  }, [userName, streak, storyAct]);
+  }, [userName, streak, storyAct, cloudTasks, completionMap]);
 
   // Phase 1: Terminal stats
   const statsLines: TerminalLine[] = useMemo(

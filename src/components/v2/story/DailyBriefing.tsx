@@ -19,7 +19,8 @@ import { getDailyRank } from "../../../db/gamification";
 import { getTodayKey } from "../../../lib/date";
 import { getCurrentChapter, getDayNumber } from "../../../data/chapters";
 import { getLatestNarrative, getStoryForDay } from "../../../lib/narrative-engine";
-import { generateDailyOperation, type DailyOperation } from "../../../lib/operation-engine";
+import { generateDailyOperation } from "../../../lib/operation-engine";
+import { useAllTasks, useRecentCompletionMap } from "../../../hooks/queries/useTasks";
 import { useStoryStore } from "../../../stores/useStoryStore";
 import { useProtocolStore } from "../../../stores/useProtocolStore";
 import { checkIntegrityStatus, getIntegrityColor } from "../../../lib/protocol-integrity";
@@ -126,11 +127,15 @@ export function DailyBriefing({ onEnter }: Props) {
   const userName = useStoryStore((s) => s.userName) || "Recruit";
   const storyAct = useStoryStore((s) => s.currentAct);
   const protocolStreak = useProtocolStore((s) => s.streakCurrent);
+  // Phase 3.6: cloud task data for operation engine
+  const { data: cloudTasks = [] } = useAllTasks();
+  const completionMap = useRecentCompletionMap();
+
   const operation = useMemo(
     () => dayNumber > 1
-      ? generateDailyOperation(userName, dayNumber, protocolStreak, storyAct)
+      ? generateDailyOperation(userName, dayNumber, protocolStreak, storyAct, cloudTasks as any, completionMap)
       : null,
-    [dayNumber, userName, protocolStreak, storyAct],
+    [dayNumber, userName, protocolStreak, storyAct, cloudTasks, completionMap],
   );
 
   // Meta

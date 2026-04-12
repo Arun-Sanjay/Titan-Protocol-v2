@@ -13,14 +13,14 @@ import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../theme";
 import { generateDailyOperation, type OperationTask } from "../../lib/operation-engine";
 import { useStoryStore } from "../../stores/useStoryStore";
-import { useProfileStore } from "../../stores/useProfileStore";
-import { useEngineStore } from "../../stores/useEngineStore";
 import { useSystemNotification } from "./SystemNotification";
-import { evaluateAllTrees } from "../../lib/skill-tree-evaluator";
 import { getTodayKey } from "../../lib/date";
 import { getDayNumber } from "../../data/chapters";
 import { getJSON } from "../../db/storage";
-import type { EngineKey } from "../../db/schema";
+// Phase 3.6: cloud hooks replace legacy MMKV stores
+import { useAllTasks, useAllCompletionsForDate, useRecentCompletionMap, useToggleCompletion } from "../../hooks/queries/useTasks";
+import { useProfile, useAwardXP } from "../../hooks/queries/useProfile";
+import { useEnqueueRankUp } from "../../hooks/queries/useRankUps";
 
 const ENGINE_COLORS: Record<string, string> = {
   body: colors.body, mind: colors.mind, money: colors.money, charisma: colors.charisma,
@@ -36,32 +36,32 @@ type Props = {
 export function QuestCard({ delay = 0 }: Props) {
   const userName = useStoryStore((s) => s.userName) || "Recruit";
   const storyAct = useStoryStore((s) => s.currentAct);
-  const streak = useProfileStore((s) => s.profile.streak);
-  const toggleTask = useEngineStore((s) => s.toggleTask);
-  const awardXP = useProfileStore((s) => s.awardXP);
   const notify = useSystemNotification();
+
+  // Phase 3.6: cloud hooks replace legacy MMKV stores
+  const { data: profile } = useProfile();
+  const streak = profile?.streak_current ?? 0;
+  const { data: cloudTasks = [] } = useAllTasks();
+  const completionMap = useRecentCompletionMap();
+  const toggleCompletionMutation = useToggleCompletion();
+  const awardXPMutation = useAwardXP();
+  const enqueueRankUpMutation = useEnqueueRankUp();
 
   const firstActiveDate = getJSON<string | null>("first_active_date", null);
   const dayNumber = getDayNumber(firstActiveDate);
   const today = getTodayKey();
 
-  // Generate operation
+  // Generate operation from cloud task data
   const operation = useMemo(
-    () => generateDailyOperation(userName, dayNumber, streak, storyAct),
-    [userName, dayNumber, streak, storyAct],
+    () => generateDailyOperation(userName, dayNumber, streak, storyAct, cloudTasks as any, completionMap),
+    [userName, dayNumber, streak, storyAct, cloudTasks, completionMap],
   );
 
-  // Track completed tasks locally for UI
-  const completions = useEngineStore((s) => s.completions);
+  // Track completed tasks from cloud completions
+  const { data: allCompletions = [] } = useAllCompletionsForDate(today);
   const completedIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const engine of ["body", "mind", "money", "charisma"] as EngineKey[]) {
-      const key = `${engine}:${today}`;
-      const dayCompletions = completions[key] ?? [];
-      for (const id of dayCompletions) ids.add(id);
-    }
-    return ids;
-  }, [completions, today]);
+    return new Set(allCompletions.map((c) => c.task_id));
+  }, [allCompletions]);
 
   const completedCount = operation.tasks.filter((t) => completedIds.has(t.id)).length;
   const totalXp = operation.tasks.reduce((sum, t) => sum + t.xp, 0);
@@ -69,31 +69,38 @@ export function QuestCard({ delay = 0 }: Props) {
     .filter((t) => completedIds.has(t.id))
     .reduce((sum, t) => sum + t.xp, 0);
 
+  // Phase 3.6: cloud toggle + XP award (same pattern as dashboard)
   const handleToggleTask = (task: OperationTask) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const completed = toggleTask(task.engine, task.id, today);
-    if (completed) {
-      awardXP(today, "task_complete", task.xp);
-      evaluateAllTrees();
-      notify({
-        type: "xp",
-        title: `+${task.xp} XP`,
-        subtitle: task.title,
-      });
+    const wasCompleted = completedIds.has(task.id);
 
-      // Check if all tasks complete
-      if (completedCount + 1 === operation.tasks.length) {
-        setTimeout(() => {
-          notify({
-            type: "quest_complete",
-            title: "QUEST COMPLETE",
-            subtitle: `${operation.displayName} \u2014 All objectives cleared`,
-          });
-        }, 800);
-      }
-    } else {
-      awardXP(today, "task_uncomplete", -task.xp);
-    }
+    toggleCompletionMutation.mutate(
+      { task: { id: task.id, engine: task.engine }, dateKey: today },
+      {
+        onSuccess: () => {
+          if (!wasCompleted) {
+            awardXPMutation.mutate(task.xp, {
+              onSuccess: (result) => {
+                if (result.leveledUp) {
+                  enqueueRankUpMutation.mutate({ fromLevel: result.fromLevel, toLevel: result.toLevel });
+                }
+              },
+            });
+            notify({ type: "xp", title: `+${task.xp} XP`, subtitle: task.title });
+
+            if (completedCount + 1 === operation.tasks.length) {
+              setTimeout(() => {
+                notify({
+                  type: "quest_complete",
+                  title: "QUEST COMPLETE",
+                  subtitle: `${operation.displayName} \u2014 All objectives cleared`,
+                });
+              }, 800);
+            }
+          }
+        },
+      },
+    );
   };
 
   if (operation.tasks.length === 0) return null;

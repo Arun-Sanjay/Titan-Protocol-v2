@@ -31,7 +31,7 @@ import { SparklineChart } from "../../src/components/ui/SparklineChart";
 // Wave 1: Full cloud migration — all data reads come from React Query hooks.
 // Stores that STAY: useModeStore (UI mode), useIdentityStore (archetype UI),
 // useStoryStore (cinematic playback state). Everything else → cloud hooks.
-import { useAllTasks, useAllCompletionsForDate, useToggleCompletion } from "../../src/hooks/queries/useTasks";
+import { useAllTasks, useAllCompletionsForDate, useToggleCompletion, useRecentCompletionMap } from "../../src/hooks/queries/useTasks";
 import { computeEngineScore, ENGINES, type EngineKey } from "../../src/services/tasks";
 import { useProfile, useAwardXP, useUpdateStreak } from "../../src/hooks/queries/useProfile";
 import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
@@ -100,6 +100,8 @@ export default function HQScreen() {
   const { data: profile } = useProfile();
   const { data: allTasks = [] } = useAllTasks();
   const { data: allCompletions = [] } = useAllCompletionsForDate(today);
+  // Phase 3.6: 3-day completion map for operation engine
+  const recentCompletionMap = useRecentCompletionMap();
   const { data: protocolSession = null } = useProtocolSession(today);
 
   const toggleCompletion = useToggleCompletion();
@@ -201,9 +203,10 @@ export default function HQScreen() {
   const chapter = getCurrentChapter(dayNumber);
 
   // Daily operation (for codename banner)
+  // Phase 3.6: pass cloud tasks + completions so the operation engine reads Supabase data.
   const operation = useMemo(
-    () => generateDailyOperation(userName, dayNumber, protocolStreak, phase),
-    [dayNumber],
+    () => generateDailyOperation(userName, dayNumber, protocolStreak, phase, allTasks as any, recentCompletionMap),
+    [dayNumber, allTasks, recentCompletionMap],
   );
 
   // Skill tree ready count

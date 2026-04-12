@@ -18,8 +18,21 @@
 
 import { getJSON, setJSON } from "../db/storage";
 import { getTodayKey, addDays } from "./date";
-import type { EngineKey, Task } from "../db/schema";
+import type { EngineKey } from "../db/schema";
 import { checkIntegrityStatus } from "./protocol-integrity";
+
+// Phase 3.6: the engine now receives tasks from Supabase (via React Query)
+// instead of reading from MMKV. This type matches the Supabase Task shape.
+export type CloudTask = {
+  id: string;
+  engine: EngineKey;
+  title: string;
+  kind: "main" | "secondary";
+  is_active: boolean;
+};
+
+// Completions grouped by "{engine}:{dateKey}" → Set of task UUIDs
+export type CompletionsByEngineDate = Record<string, Set<string>>;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +64,7 @@ export type DailyOperation = {
 };
 
 export type OperationTask = {
-  id: number;
+  id: string; // Phase 3.6: UUID from Supabase (was number)
   engine: EngineKey;
   title: string;
   kind: "main" | "secondary";
@@ -165,27 +178,32 @@ export function calculateTaskCount(
 
 // ─── Engine Analysis ──────────────────────────────────────────────────────────
 
-function getEngineScores(): Record<EngineKey, number> {
+// Phase 3.6: accepts pre-loaded cloud data instead of reading MMKV.
+function getEngineScores(
+  tasksByEngine: Record<EngineKey, CloudTask[]>,
+  recentCompletions: CompletionsByEngineDate,
+): Record<EngineKey, number> {
   const today = getTodayKey();
   const scores: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
 
   for (const engine of ENGINES) {
-    // Average over last 3 days
+    const tasks = tasksByEngine[engine];
+    if (tasks.length === 0) continue;
+
     let total = 0;
     let days = 0;
     for (let i = 0; i < 3; i++) {
       const dk = addDays(today, -i);
-      const ids = getJSON<number[]>(`completions:${engine}:${dk}`, []);
-      const tasks = getJSON<Task[]>(`tasks:${engine}`, []).filter((t) => t.is_active === 1);
-      if (tasks.length > 0) {
-        let earned = 0;
-        let max = 0;
-        for (const t of tasks) {
-          const pts = t.kind === "main" ? 2 : 1;
-          max += pts;
-          if (ids.includes(t.id!)) earned += pts;
-        }
-        total += max > 0 ? (earned / max) * 100 : 0;
+      const completedSet = recentCompletions[`${engine}:${dk}`] ?? new Set<string>();
+      let earned = 0;
+      let max = 0;
+      for (const t of tasks) {
+        const pts = t.kind === "main" ? 2 : 1;
+        max += pts;
+        if (completedSet.has(t.id)) earned += pts;
+      }
+      if (max > 0) {
+        total += (earned / max) * 100;
         days++;
       }
     }
@@ -265,41 +283,37 @@ function selectOperationType(
 
 // ─── Task Selection (Priority-Based) ──────────────────────────────────────────
 
+// Phase 3.6: accepts pre-grouped cloud tasks instead of reading MMKV.
 function selectTasks(
   targetCount: number,
   operationType: OperationType,
   weakEngine: EngineKey | null,
   strongEngine: EngineKey | null,
+  tasksByEngine: Record<EngineKey, CloudTask[]>,
 ): OperationTask[] {
   const selected: OperationTask[] = [];
-  const usedIds = new Set<number>();
-
-  // Load all engine tasks
-  const allTasks: Record<EngineKey, Task[]> = { body: [], mind: [], money: [], charisma: [] };
-  for (const engine of ENGINES) {
-    allTasks[engine] = getJSON<Task[]>(`tasks:${engine}`, []).filter((t) => t.is_active === 1);
-  }
+  const usedIds = new Set<string>();
 
   // Load yesterday's assigned tasks to find skipped ones
   const yesterday = addDays(getTodayKey(), -1);
-  const yesterdayAssigned = getJSON<number[]>(`${ASSIGNED_KEY_PREFIX}ids:${yesterday}`, []);
-  const yesterdayCompleted = getJSON<number[]>(`${COMPLETED_KEY_PREFIX}ids:${yesterday}`, []);
+  const yesterdayAssigned = getJSON<string[]>(`${ASSIGNED_KEY_PREFIX}ids:${yesterday}`, []);
+  const yesterdayCompleted = getJSON<string[]>(`${COMPLETED_KEY_PREFIX}ids:${yesterday}`, []);
   const skippedIds = new Set(yesterdayAssigned.filter((id) => !yesterdayCompleted.includes(id)));
 
   // Load recently assigned to avoid repeats
-  const recentlyAssigned = getJSON<Record<number, number>>(LAST_ASSIGNED_KEY, {}); // id -> consecutive days
+  const recentlyAssigned = getJSON<Record<string, number>>(LAST_ASSIGNED_KEY, {});
 
   // Helper to add a task
-  function addTask(task: Task, engine: EngineKey, isReassigned: boolean): boolean {
-    if (usedIds.has(task.id!) || selected.length >= targetCount) return false;
+  function addTask(task: CloudTask, engine: EngineKey, isReassigned: boolean): boolean {
+    if (usedIds.has(task.id) || selected.length >= targetCount) return false;
 
     // Don't assign same task 3 days in a row unless it's the only option
-    const consecutiveDays = recentlyAssigned[task.id!] ?? 0;
-    if (consecutiveDays >= 3 && allTasks[engine].length > 1) return false;
+    const consecutiveDays = recentlyAssigned[task.id] ?? 0;
+    if (consecutiveDays >= 3 && tasksByEngine[engine].length > 1) return false;
 
-    usedIds.add(task.id!);
+    usedIds.add(task.id);
     selected.push({
-      id: task.id!,
+      id: task.id,
       engine,
       title: task.title,
       kind: task.kind,
@@ -311,8 +325,8 @@ function selectTasks(
 
   // Priority 1: Skipped tasks from yesterday (re-assigned)
   for (const engine of ENGINES) {
-    for (const task of allTasks[engine]) {
-      if (skippedIds.has(task.id!)) {
+    for (const task of tasksByEngine[engine]) {
+      if (skippedIds.has(task.id)) {
         addTask(task, engine, true);
       }
     }
@@ -320,12 +334,11 @@ function selectTasks(
 
   // Priority 2: Main missions from weakest engine
   if (weakEngine && (operationType === "ENGINE_RECOVERY" || operationType === "REBALANCE")) {
-    const weakMains = allTasks[weakEngine].filter((t) => t.kind === "main");
+    const weakMains = tasksByEngine[weakEngine].filter((t) => t.kind === "main");
     for (const task of weakMains) {
       addTask(task, weakEngine, false);
     }
-    // Also add side quests from weak engine if not enough
-    const weakSides = allTasks[weakEngine].filter((t) => t.kind === "secondary");
+    const weakSides = tasksByEngine[weakEngine].filter((t) => t.kind === "secondary");
     for (const task of weakSides) {
       addTask(task, weakEngine, false);
     }
@@ -337,7 +350,7 @@ function selectTasks(
     : [...ENGINES];
 
   for (const engine of engineOrder) {
-    const mains = allTasks[engine].filter((t) => t.kind === "main");
+    const mains = tasksByEngine[engine].filter((t) => t.kind === "main");
     for (const task of mains) {
       addTask(task, engine, false);
     }
@@ -345,7 +358,7 @@ function selectTasks(
 
   // Priority 4: Side quests to fill remaining slots
   for (const engine of engineOrder) {
-    const sides = allTasks[engine].filter((t) => t.kind === "secondary");
+    const sides = tasksByEngine[engine].filter((t) => t.kind === "secondary");
     for (const task of sides) {
       addTask(task, engine, false);
     }
@@ -410,27 +423,39 @@ function generateProtocolMessage(
 
 const CACHED_OP_KEY = "operation_cached_today";
 
+// Phase 3.6: cloudTasks and recentCompletions are now parameters (from
+// Supabase via React Query) instead of being read from MMKV internally.
+// This ensures new tasks created in the UI appear in future operations.
 export function generateDailyOperation(
   userName: string,
   dayNumber: number,
   streak: number,
   phase: string,
+  cloudTasks: CloudTask[],
+  recentCompletions: CompletionsByEngineDate,
 ): DailyOperation {
   // Return cached operation for today if available (prevents tasks changing on restart)
-  // BUT invalidate cache if streak changed significantly (e.g., profile loaded after first render)
   const today = getTodayKey();
   const cached = getJSON<{ dateKey: string; streak: number; operation: DailyOperation } | null>(CACHED_OP_KEY, null);
   if (cached && cached.dateKey === today && cached.operation) {
-    // Invalidate if streak changed from 0 to non-zero (profile wasn't loaded on first call)
-    // or from non-zero to 0 (streak broke)
     const streakMismatch = (cached.streak === 0 && streak > 0) || (cached.streak > 0 && streak === 0);
-    if (!streakMismatch) {
+    // Phase 3.6: also bust cache if it has legacy number IDs
+    const hasLegacyIds = cached.operation.tasks?.[0]?.id && typeof cached.operation.tasks[0].id === "number";
+    if (!streakMismatch && !hasLegacyIds) {
       return cached.operation;
     }
   }
 
+  // Group cloud tasks by engine (filter active only)
+  const tasksByEngine: Record<EngineKey, CloudTask[]> = { body: [], mind: [], money: [], charisma: [] };
+  for (const t of cloudTasks) {
+    if (t.is_active && tasksByEngine[t.engine]) {
+      tasksByEngine[t.engine].push(t);
+    }
+  }
+
   const { rate: consistencyRate, level: consistency } = calculateConsistency();
-  const scores = getEngineScores();
+  const scores = getEngineScores(tasksByEngine, recentCompletions);
   const weakEngine = findWeakEngine(scores);
   const strongEngine = findStrongEngine(scores);
 
@@ -444,7 +469,7 @@ export function generateDailyOperation(
 
   const operationType = selectOperationType(scores, consistency, streak, dayNumber);
   const taskCount = calculateTaskCount(dayNumber, consistency, phase);
-  const tasks = selectTasks(taskCount, operationType, weakEngine, strongEngine);
+  const tasks = selectTasks(taskCount, operationType, weakEngine, strongEngine, tasksByEngine);
 
   const reassignedCount = tasks.filter((t) => t.isReassigned).length;
   const protocolMessage = generateProtocolMessage(
@@ -454,13 +479,13 @@ export function generateDailyOperation(
 
   const opInfo = OPERATION_NAMES[operationType];
 
-  // Track what was assigned today (today already declared above from cache check)
+  // Track what was assigned today
   setJSON(`${ASSIGNED_KEY_PREFIX}${today}`, tasks.length);
   setJSON(`${ASSIGNED_KEY_PREFIX}ids:${today}`, tasks.map((t) => t.id));
 
-  // Update recently assigned tracking
-  const newRecent: Record<number, number> = {};
-  const oldRecent = getJSON<Record<number, number>>(LAST_ASSIGNED_KEY, {});
+  // Update recently assigned tracking (Phase 3.6: string keys)
+  const newRecent: Record<string, number> = {};
+  const oldRecent = getJSON<Record<string, number>>(LAST_ASSIGNED_KEY, {});
   for (const t of tasks) {
     newRecent[t.id] = (oldRecent[t.id] ?? 0) + 1;
   }
@@ -480,7 +505,6 @@ export function generateDailyOperation(
     dayNumber,
   };
 
-  // Cache for today so operation stays stable across app restarts
   setJSON(CACHED_OP_KEY, { dateKey: today, streak, operation });
 
   return operation;
@@ -488,7 +512,8 @@ export function generateDailyOperation(
 
 // ─── Track Completion (call after task toggle) ────────────────────────────────
 
-export function trackOperationCompletion(completedTaskIds: number[]): void {
+// Phase 3.6: string IDs (UUID from Supabase)
+export function trackOperationCompletion(completedTaskIds: string[]): void {
   const today = getTodayKey();
   setJSON(`${COMPLETED_KEY_PREFIX}${today}`, completedTaskIds.length);
   setJSON(`${COMPLETED_KEY_PREFIX}ids:${today}`, completedTaskIds);

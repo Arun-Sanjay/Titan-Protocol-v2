@@ -151,10 +151,12 @@ export function WarRoom() {
       // toggleTask is synchronous on Zustand store, so getState() is already fresh
       try {
         const freshState = useEngineStore.getState();
-        const completedIds: number[] = [];
+        // Phase 3.6: trackOperationCompletion now expects string[] (UUIDs).
+        // WarRoom still reads legacy MMKV numeric IDs — map to strings.
+        const completedIds: string[] = [];
         for (const e of ENGINES) {
           const ids = freshState.completions[`${e}:${dateKey}`];
-          if (Array.isArray(ids)) completedIds.push(...ids);
+          if (Array.isArray(ids)) completedIds.push(...ids.map(String));
         }
         trackOperationCompletion(completedIds);
       } catch {
