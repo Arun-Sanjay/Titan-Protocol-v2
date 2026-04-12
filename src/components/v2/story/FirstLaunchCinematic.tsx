@@ -20,6 +20,7 @@ import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { IDENTITIES } from "../../../stores/useIdentityStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 import { getStarterMissions } from "../../../data/starter-missions";
+import { getTodayKey } from "../../../lib/date";
 import { ProtocolTerminal, ProtocolNarration, type TerminalLine, type NarrationLine } from "./ProtocolTerminal";
 
 const FIRST_LAUNCH_KEY = "first_launch_seen";
@@ -160,10 +161,13 @@ export function FirstLaunchCinematic({ onComplete }: Props) {
     stopCurrentAudio();
     markFirstLaunchSeen();
     markPlayed(1);
-    // Set first_active_date for day counting
-    const today = new Date().toISOString().slice(0, 10);
+    // Phase 4.2: Set first_active_date for day counting. Uses getTodayKey()
+    // (local timezone) instead of toISOString().slice(0,10) (UTC) — the
+    // old UTC format could be off by a day in timezones east of UTC
+    // after midnight local time, making getDayNumber() return the wrong
+    // day number and skipping day cinematics.
     if (!getJSON<string | null>("first_active_date", null)) {
-      setJSON("first_active_date", today);
+      setJSON("first_active_date", getTodayKey());
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onComplete();

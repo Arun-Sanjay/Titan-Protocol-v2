@@ -65,8 +65,21 @@ export const useAuthStore = create<AuthState>()((set) => ({
       });
 
       // Subscribe to future auth events (sign-in, sign-out, token refresh).
-      const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-        set({ session, user: session?.user ?? null });
+      // Phase 4.2: filter by event type to prevent brief logouts during
+      // token refresh failures. Previously, ANY event with a null session
+      // (including transient refresh errors) would clear the user, causing
+      // the root layout to redirect to /(auth)/login for a few frames.
+      // Now we only clear on explicit SIGNED_OUT — all other events must
+      // carry a valid session to update state.
+      const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_OUT") {
+          set({ session: null, user: null });
+        } else if (session) {
+          set({ session, user: session.user });
+        }
+        // If session is null but event isn't SIGNED_OUT (e.g. transient
+        // refresh failure, INITIAL_SESSION race), keep current state.
+        // getSession() already set the authoritative initial state above.
       });
       authSubscription = sub.subscription;
     } catch (e) {

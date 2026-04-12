@@ -272,6 +272,22 @@ export default function RootLayout() {
   const [showCinematic, setShowCinematic] = useState(false);
   const [showDayCinematic, setShowDayCinematic] = useState<number | null>(null);
   const [showBriefing, setShowBriefing] = useState(false);
+
+  // Phase 4.2: Track the current date so the cinematic check effect
+  // re-runs when the day rolls over (midnight, device clock change, or
+  // app resume on a new day). Without this, the cinematic check only
+  // ran once per app session — after the splash was dismissed — and
+  // never re-checked even if getDayNumber() would now return a new day.
+  const [currentDate, setCurrentDate] = useState(getTodayKey);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        const today = getTodayKey();
+        setCurrentDate((prev) => (prev !== today ? today : prev));
+      }
+    });
+    return () => sub.remove();
+  }, []);
   // Integrity overlays
   const [showStreakBreak, setShowStreakBreak] = useState<{
     status: "BREACH" | "RESET";
@@ -326,9 +342,21 @@ export default function RootLayout() {
     SystemUI.setBackgroundColorAsync(colors.bg);
   }, []);
 
-  // After splash dismissal, determine what to show
+  // After splash dismissal (or date change on resume), determine what to show.
+  // Phase 4.2: `currentDate` is included in the dependency array so this
+  // effect re-runs when the day rolls over (midnight, device clock change,
+  // or app resume on a new day). Previously it only ran once after the
+  // splash was dismissed, so Day 2+ cinematics never triggered if the user
+  // advanced the device clock and then resumed the app.
   useEffect(() => {
     if (!showSplash && onboardingCompleted && walkthroughCompleted) {
+      // Phase 4.2: skip if a blocking overlay is already showing (prevents
+      // stacking cinematics when the effect re-fires on date change while
+      // the user is still viewing an overlay from the previous trigger).
+      if (showCinematic || showDayCinematic || showStreakBreak || showComeback || showBossDefeat) {
+        return;
+      }
+
       // ─── Step 1: Integrity check (runs BEFORE cinematics/briefing) ───
       const integrityCheckKey = `integrity_cinematic_${getTodayKey()}`;
       const alreadyShownToday = getJSON<boolean>(integrityCheckKey, false);
@@ -431,7 +459,8 @@ export default function RootLayout() {
         }
       }
     }
-  }, [showSplash, onboardingCompleted, walkthroughCompleted, archetype, storyFlags]);
+  }, [showSplash, onboardingCompleted, walkthroughCompleted, archetype, storyFlags, currentDate,
+      showCinematic, showDayCinematic, showStreakBreak, showComeback, showBossDefeat]);
 
   const handleCinematicComplete = () => {
     setShowCinematic(false);

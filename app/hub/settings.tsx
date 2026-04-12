@@ -30,6 +30,9 @@ import { useTitanMode } from "../../src/hooks/queries/useTitanMode";
 import { scheduleDailyReminder } from "../../src/lib/notifications";
 import { getHapticsEnabled, setHapticsEnabled } from "../../src/lib/haptics";
 import { getTodayKey } from "../../src/lib/date";
+import { useAuthStore } from "../../src/stores/useAuthStore";
+import { supabase } from "../../src/lib/supabase";
+import { queryClient } from "../../src/lib/query-client";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -432,6 +435,67 @@ export default function SettingsScreen() {
     );
   }, []);
 
+  const signOut = useAuthStore((s) => s.signOut);
+
+  // Phase 4.2: Sign out handler — clears React Query cache so the next
+  // user doesn't see stale data, then calls Supabase signOut which
+  // fires SIGNED_OUT via onAuthStateChange → root layout redirects to
+  // /(auth)/login.
+  const handleSignOut = useCallback(() => {
+    Alert.alert(
+      "Sign Out",
+      "Your cloud data will be preserved. You can sign back in anytime.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign Out",
+          onPress: async () => {
+            queryClient.clear();
+            await signOut();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ],
+    );
+  }, [signOut]);
+
+  // Phase 4.2: Full data wipe — clears local MMKV, cloud query cache,
+  // and signs out. Cloud profile rows are NOT deleted (only the user
+  // or a Supabase admin can do that). This is the production-safe
+  // alternative to the DEV-only Danger Zone buttons.
+  const handleDeleteAllAndSignOut = useCallback(() => {
+    Alert.alert(
+      "Delete All Data & Sign Out",
+      "This will permanently clear ALL local data (tasks, sessions, habits, progress) and sign you out. Your cloud data will remain unless you contact support.\n\nThis cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete & Sign Out",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Are you sure?",
+              "Last chance — all local data will be permanently deleted.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Yes, Delete All",
+                  style: "destructive",
+                  onPress: async () => {
+                    storage.clearAll();
+                    queryClient.clear();
+                    await signOut();
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  }, [signOut]);
+
   const [dataPointCount, setDataPointCount] = useState(() => getAllStorageKeys().length);
 
   return (
@@ -503,6 +567,26 @@ export default function SettingsScreen() {
               );
             }}
             color={colors.mind}
+          />
+        </Panel>
+
+        {/* ── Account ── */}
+        <SectionHeader title="Account" />
+        <Panel delay={150}>
+          <SettingRow
+            icon="log-out-outline"
+            label="Sign Out"
+            description="Your cloud data will be preserved"
+            onPress={handleSignOut}
+            color={colors.textSecondary}
+          />
+          <View style={styles.settingDivider} />
+          <SettingRow
+            icon="trash-outline"
+            label="Delete All Data & Sign Out"
+            description="Clear local data and sign out"
+            onPress={handleDeleteAllAndSignOut}
+            danger
           />
         </Panel>
 
