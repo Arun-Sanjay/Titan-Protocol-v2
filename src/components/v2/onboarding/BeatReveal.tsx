@@ -251,7 +251,8 @@ export function BeatReveal({ archetype, onComplete }: Props) {
   const barW1 = useSharedValue(0);
   const barW2 = useSharedValue(0);
   const barW3 = useSharedValue(0);
-  const barWidths = useMemo(() => [barW0, barW1, barW2, barW3], [barW0, barW1, barW2, barW3]);
+  // Phase 4.2: empty deps — useSharedValue returns stable refs across renders.
+  const barWidths = useMemo(() => [barW0, barW1, barW2, barW3], []);
 
   const CONFIRM_TEXT = "IDENTITY CONFIRMED";
 

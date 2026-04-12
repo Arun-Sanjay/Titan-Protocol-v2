@@ -10,10 +10,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { colors, spacing, fonts, radius } from "../../../theme";
-import {
-  playVoiceLineAsync,
-  stopCurrentAudio,
-} from "../../../lib/protocol-audio";
+import { playVoiceLine, stopCurrentAudio } from "../../../lib/protocol-audio";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -90,28 +87,40 @@ function Particle({
   );
 }
 
-// ── Text lines with timing ──
+// Phase 4.2: subtitle timing synced to ONBO-003 audio via ElevenLabs
+// character-level timestamps (generated 2026-04-13). Each line appears
+// exactly when the voice speaks that phrase and fades before the next.
 const LINES: { text: string; startMs: number; holdMs: number; emphasis?: boolean }[] = [
   {
     text: "You've been selected for something\nmost people will never see.",
     startMs: 0,
-    holdMs: 4000,
+    holdMs: 2600,
   },
   {
     text: "A personal operating system.",
-    startMs: 5000,
-    holdMs: 3000,
+    startMs: 2728,
+    holdMs: 2500,
   },
   {
-    text: "It tracks. It assigns. It pushes.",
-    startMs: 9000,
-    holdMs: 3000,
+    text: "It tracks. It assigns.\nIt monitors your consistency.",
+    startMs: 5317,
+    holdMs: 5100,
+  },
+  {
+    text: "And it pushes you beyond\nwhat you thought you were capable of.",
+    startMs: 10519,
+    holdMs: 2750,
   },
   {
     text: "This is not an app.\nThis is a system.",
-    startMs: 13000,
-    holdMs: 4000,
+    startMs: 13665,
+    holdMs: 3000,
     emphasis: true,
+  },
+  {
+    text: "And it just activated for you.",
+    startMs: 16997,
+    holdMs: 1800,
   },
 ];
 
@@ -169,28 +178,47 @@ export function BeatWhatIsThis({ onComplete }: Props) {
     onComplete();
   }, [onComplete]);
 
+  // Phase 4.2: play ONBO-003 with await so we auto-advance when the
+  // narration finishes (instead of a fixed 20s timeout that can drift).
+  // Keep 22s safety ceiling for edge cases (sound disabled, audio stall).
   useEffect(() => {
-    const t = (fn: () => void, ms: number) => {
-      const id = setTimeout(fn, ms);
-      timers.current.push(id);
-      return id;
-    };
+    let cancelled = false;
 
-    // Play the full briefing voice line on mount
-    playVoiceLineAsync("ONBO-003");
+    const safety = setTimeout(() => {
+      if (!cancelled) {
+        cancelled = true;
+        stopCurrentAudio();
+        onComplete();
+      }
+    }, 22000);
+    timers.current.push(safety);
 
     // Show tap hint after 5s
-    t(() => {
+    const hintTimer = setTimeout(() => {
       tapHintOpacity.value = withTiming(0.10, { duration: 600 });
     }, 5000);
+    timers.current.push(hintTimer);
 
-    // Auto-advance after 20s
-    t(() => {
-      stopCurrentAudio();
-      onComplete();
-    }, 20000);
+    // Play voice and auto-advance when it finishes
+    playVoiceLine("ONBO-003")
+      .then(() => {
+        if (!cancelled) {
+          // Brief hold after last subtitle fades
+          const holdTimer = setTimeout(() => {
+            if (!cancelled) {
+              cancelled = true;
+              onComplete();
+            }
+          }, 1200);
+          timers.current.push(holdTimer);
+        }
+      })
+      .catch(() => {
+        // Sound disabled or error — safety timeout handles advance
+      });
 
     return () => {
+      cancelled = true;
       timers.current.forEach(clearTimeout);
     };
   }, []);

@@ -33,6 +33,8 @@ import { getTodayKey } from "../../src/lib/date";
 import { useAuthStore } from "../../src/stores/useAuthStore";
 import { supabase } from "../../src/lib/supabase";
 import { queryClient } from "../../src/lib/query-client";
+import { deleteAllUserData } from "../../src/services/account";
+import { logError } from "../../src/lib/error-log";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -367,9 +369,11 @@ export default function SettingsScreen() {
   }, []);
 
   const handleClearAllData = useCallback(() => {
+    // Phase 4.2: delete ALL data (cloud + local), keep the auth account.
+    // Resets onboarding_completed so the user goes through setup again.
     Alert.alert(
-      "Clear All Data",
-      "This will permanently delete ALL your data including tasks, sessions, weight entries, meals, and progress. This cannot be undone.",
+      "Delete All Data",
+      "This will permanently delete ALL your data — tasks, habits, sessions, progress, completions — from both your device and the cloud.\n\nYour account stays signed in but you'll go through onboarding again.\n\nThis cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -378,21 +382,27 @@ export default function SettingsScreen() {
           onPress: () => {
             Alert.alert(
               "Are you sure?",
-              "This is your last chance. All data will be permanently lost.",
+              "Last chance. All your progress will be permanently lost.",
               [
                 { text: "Cancel", style: "cancel" },
                 {
                   text: "Yes, Delete All",
                   style: "destructive",
-                  onPress: () => {
-                    storage.clearAll();
-                    // Local MMKV is nuked; the cloud profile is
-                    // independent and will be re-read via React Query
-                    // on next focus. This button is a dev/debug utility
-                    // and doesn't affect the Supabase backend.
-                    setDataPointCount(0);
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-                    Alert.alert("Done", "All local data has been cleared.");
+                  onPress: async () => {
+                    try {
+                      await deleteAllUserData();
+                      setDataPointCount(0);
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                      Alert.alert(
+                        "Done",
+                        "All data has been cleared. You'll restart onboarding now.",
+                      );
+                      // OnboardingGate will detect onboarding_completed = false
+                      // and redirect to CinematicOnboarding on next render.
+                    } catch (e) {
+                      logError("settings.deleteAllData", e);
+                      Alert.alert("Error", "Failed to delete data. Please try again.");
+                    }
                   },
                 },
               ],

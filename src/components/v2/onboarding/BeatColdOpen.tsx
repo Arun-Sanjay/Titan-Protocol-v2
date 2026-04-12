@@ -11,7 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing } from "../../../theme";
-import { playVoiceLineAsync } from "../../../lib/protocol-audio";
+import { playVoiceLine } from "../../../lib/protocol-audio";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -99,8 +99,10 @@ function Particle({
   );
 }
 
+// Phase 4.2: helper — promisified delay for async sequencing
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 export function BeatColdOpen({ onComplete }: Props) {
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const particlesRef = useRef(generateParticles());
 
   // ── Shared values ──
@@ -112,44 +114,42 @@ export function BeatColdOpen({ onComplete }: Props) {
   const glowOpacity = useSharedValue(0);
   const glowRingOpacity = useSharedValue(0);
   const glowRingScale = useSharedValue(1);
+  const activatedOpacity = useSharedValue(0);
 
+  // Phase 4.2: audio-driven sequence — text appears synced to voice lines.
+  // playVoiceLine returns a Promise that resolves when the audio finishes,
+  // so each visual beat waits for the voice before advancing.
   useEffect(() => {
-    const t = (fn: () => void, ms: number) => {
-      const id = setTimeout(fn, ms);
-      timers.current.push(id);
-      return id;
-    };
+    let cancelled = false;
 
-    // ── 1.5s: Play "Welcome to Titan Protocol." + scan line sweep ──
-    t(() => {
-      playVoiceLineAsync("ONBO-001");
+    const run = async () => {
+      // ── Scan line sweep (immediate) ──
       scanOpacity.value = 1;
       scanY.value = withTiming(SCREEN_HEIGHT, {
-        duration: 1500,
+        duration: 1200,
         easing: Easing.linear,
       });
-    }, 1500);
 
-    // ── 2.0s: "WELCOME TO" fades in (smaller text above logo) ──
-    t(() => {
+      await delay(800);
+      if (cancelled) return;
+
+      // ── "WELCOME TO" subtitle + scan still sweeping ──
       welcomeOpacity.value = withTiming(1, {
-        duration: 500,
+        duration: 300,
         easing: Easing.out(Easing.cubic),
       });
-    }, 2000);
 
-    // Fade scan line out at end of sweep
-    t(() => {
-      scanOpacity.value = withTiming(0, { duration: 300 });
-    }, 2800);
+      await delay(500);
+      if (cancelled) return;
 
-    // ── 3.0s: "TITAN PROTOCOL" scale reveal + glow pulse + glow ring ──
-    t(() => {
+      // ── "TITAN PROTOCOL" scales in + ONBO-001 plays (voice says "Titan Protocol.") ──
       logoOpacity.value = withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) });
       logoScale.value = withTiming(1.0, {
         duration: 500,
         easing: Easing.out(Easing.cubic),
       });
+
+      // Start glow effects
       glowOpacity.value = withRepeat(
         withSequence(
           withTiming(0.25, { duration: 1200, easing: Easing.inOut(Easing.sin) }),
@@ -158,7 +158,6 @@ export function BeatColdOpen({ onComplete }: Props) {
         -1,
         true,
       );
-      // Glow ring pulsing
       glowRingOpacity.value = withRepeat(
         withSequence(
           withTiming(0.2, { duration: 1000, easing: Easing.inOut(Easing.sin) }),
@@ -175,34 +174,48 @@ export function BeatColdOpen({ onComplete }: Props) {
         -1,
         true,
       );
-    }, 3000);
 
-    // ── 5.0s: Play "Activated." + logo flare + heavy haptic ──
-    t(() => {
-      playVoiceLineAsync("ONBO-002");
+      // Voice: "Titan Protocol." — wait for it to finish
+      await playVoiceLine("ONBO-001");
+      if (cancelled) return;
+
+      // Scan fades out after voice
+      scanOpacity.value = withTiming(0, { duration: 300 });
+
+      await delay(600);
+      if (cancelled) return;
+
+      // ── "ACTIVATED" subtitle + ONBO-002 plays + haptic + logo flare ──
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      activatedOpacity.value = withTiming(1, { duration: 200 });
       logoScale.value = withSequence(
         withTiming(1.05, { duration: 200, easing: Easing.out(Easing.cubic) }),
         withTiming(1.0, { duration: 300, easing: Easing.inOut(Easing.cubic) }),
       );
-    }, 5000);
 
-    // ── 6.5s: Hold with breathing glow (already running) ──
+      // Voice: "Activated." — wait for it to finish
+      await playVoiceLine("ONBO-002");
+      if (cancelled) return;
 
-    // ── 7.5s: Everything fades out, call onComplete ──
-    t(() => {
+      // ── Hold with breathing glow ──
+      await delay(1500);
+      if (cancelled) return;
+
+      // ── Fade out everything + onComplete ──
       welcomeOpacity.value = withTiming(0, { duration: 400 });
       logoOpacity.value = withTiming(0, { duration: 400 });
       glowOpacity.value = withTiming(0, { duration: 400 });
       glowRingOpacity.value = withTiming(0, { duration: 400 });
-    }, 7500);
+      activatedOpacity.value = withTiming(0, { duration: 400 });
 
-    t(() => {
-      onComplete();
-    }, 8000);
+      await delay(500);
+      if (!cancelled) onComplete();
+    };
+
+    run();
 
     return () => {
-      timers.current.forEach(clearTimeout);
+      cancelled = true;
       cancelAnimation(scanY);
       cancelAnimation(scanOpacity);
       cancelAnimation(welcomeOpacity);
@@ -211,17 +224,9 @@ export function BeatColdOpen({ onComplete }: Props) {
       cancelAnimation(glowOpacity);
       cancelAnimation(glowRingOpacity);
       cancelAnimation(glowRingScale);
+      cancelAnimation(activatedOpacity);
     };
-  }, [
-    scanY,
-    scanOpacity,
-    welcomeOpacity,
-    logoOpacity,
-    logoScale,
-    glowOpacity,
-    glowRingOpacity,
-    glowRingScale,
-  ]);
+  }, []);
 
   // ── Animated styles ──
   const scanLineStyle = useAnimatedStyle(() => ({
@@ -245,6 +250,10 @@ export function BeatColdOpen({ onComplete }: Props) {
   const glowRingStyle = useAnimatedStyle(() => ({
     opacity: glowRingOpacity.value,
     transform: [{ scale: glowRingScale.value }],
+  }));
+
+  const activatedStyle = useAnimatedStyle(() => ({
+    opacity: activatedOpacity.value,
   }));
 
   return (
@@ -277,9 +286,14 @@ export function BeatColdOpen({ onComplete }: Props) {
           WELCOME TO
         </Animated.Text>
 
-        {/* "TITAN PROTOCOL" text */}
+        {/* "TITAN PROTOCOL" text — synced to ONBO-001 */}
         <Animated.Text style={[styles.logo, logoStyle]}>
           TITAN PROTOCOL
+        </Animated.Text>
+
+        {/* "ACTIVATED" subtitle — synced to ONBO-002 */}
+        <Animated.Text style={[styles.activatedText, activatedStyle]}>
+          ACTIVATED
         </Animated.Text>
       </View>
     </View>
@@ -316,6 +330,15 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(255, 255, 255, 0.40)",
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 12,
+  },
+  activatedText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.success,
+    letterSpacing: 4,
+    textTransform: "uppercase",
+    textAlign: "center",
+    marginTop: 16,
   },
   scanLine: {
     position: "absolute",
