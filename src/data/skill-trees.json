@@ -1,0 +1,181 @@
+{
+  "body": {
+    "branches": [
+      {
+        "id": "strength",
+        "name": "Strength",
+        "levels": [
+          { "nodeId": "body_strength_1", "level": 1, "name": "Beginner", "description": "Complete 2 body tasks", "requirementType": "task_count", "requirementEngine": "body", "targetValue": 2 },
+          { "nodeId": "body_strength_2", "level": 2, "name": "Consistent", "description": "Complete workouts 4x/week for 3 weeks", "requirementType": "weekly_consistency", "requirementEngine": "body", "requirementTag": "workout", "targetValue": 3 },
+          { "nodeId": "body_strength_3", "level": 3, "name": "Strong", "description": "Body engine average 80%+ for 4 weeks", "requirementType": "engine_avg_weeks", "requirementEngine": "body", "targetValue": 4, "threshold": 80 },
+          { "nodeId": "body_strength_4", "level": 4, "name": "Powerful", "description": "Complete a Body-focused boss challenge", "requirementType": "boss_complete", "requirementEngine": "body", "targetValue": 1 },
+          { "nodeId": "body_strength_5", "level": 5, "name": "Elite", "description": "Body engine 90%+ average for 8 weeks", "requirementType": "engine_avg_weeks", "requirementEngine": "body", "targetValue": 8, "threshold": 90 }
+        ]
+      },
+      {
+        "id": "endurance",
+        "name": "Endurance",
+        "levels": [
+          { "nodeId": "body_endurance_1", "level": 1, "name": "Moving", "description": "Complete 2 body tasks", "requirementType": "task_count", "requirementEngine": "body", "targetValue": 2 },
+          { "nodeId": "body_endurance_2", "level": 2, "name": "Runner", "description": "Complete cardio 3x/week for 4 weeks", "requirementType": "weekly_consistency", "requirementEngine": "body", "requirementTag": "cardio", "targetValue": 4 },
+          { "nodeId": "body_endurance_3", "level": 3, "name": "Enduring", "description": "Maintain cardio habit for 60 days", "requirementType": "habit_streak", "requirementEngine": "body", "targetValue": 60 },
+          { "nodeId": "body_endurance_4", "level": 4, "name": "Unstoppable", "description": "Cardio habit 90%+ completion for 90 days", "requirementType": "habit_completion_rate", "requirementEngine": "body", "targetValue": 90, "threshold": 90 }
+        ]
+      },
+      {
+        "id": "recovery",
+        "name": "Recovery",
+        "levels": [
+          { "nodeId": "body_recovery_1", "level": 1, "name": "Aware", "description": "Complete 2 body tasks", "requirementType": "task_count", "requirementEngine": "body", "targetValue": 2 },
+          { "nodeId": "body_recovery_2", "level": 2, "name": "Rested", "description": "Average 7+ hours sleep for 2 weeks", "requirementType": "sleep_avg_weeks", "requirementEngine": "body", "targetValue": 2, "threshold": 7 },
+          { "nodeId": "body_recovery_3", "level": 3, "name": "Recovered", "description": "Consistent sleep + rest day logging for 30 days", "requirementType": "streak_days", "requirementEngine": "body", "targetValue": 30 },
+          { "nodeId": "body_recovery_4", "level": 4, "name": "Optimized", "description": "Sleep, recovery, and nutrition all tracked for 60 days", "requirementType": "streak_days", "requirementEngine": "body", "targetValue": 60 }
+        ]
+      },
+      {
+        "id": "nutrition",
+        "name": "Nutrition",
+        "levels": [
+          { "nodeId": "body_nutrition_1", "level": 1, "name": "Tracking", "description": "Complete 2 body tasks", "requirementType": "task_count", "requirementEngine": "body", "targetValue": 2 },
+          { "nodeId": "body_nutrition_2", "level": 2, "name": "Aware", "description": "Log meals 5x/week for 3 weeks", "requirementType": "weekly_consistency", "requirementEngine": "body", "requirementTag": "nutrition", "targetValue": 3 },
+          { "nodeId": "body_nutrition_3", "level": 3, "name": "Disciplined", "description": "Hit macro targets 4x/week for 4 weeks", "requirementType": "weekly_consistency", "requirementEngine": "body", "requirementTag": "macros", "targetValue": 4 },
+          { "nodeId": "body_nutrition_4", "level": 4, "name": "Dialed In", "description": "Consistent nutrition logging + targets for 60 days", "requirementType": "streak_days", "requirementEngine": "body", "targetValue": 60 }
+        ]
+      }
+    ]
+  },
+  "mind": {
+    "branches": [
+      {
+        "id": "bias_awareness",
+        "name": "Bias Awareness",
+        "levels": [
+          { "nodeId": "mind_bias_1", "level": 1, "name": "Aware", "description": "Complete 2 mind tasks", "requirementType": "task_count", "requirementEngine": "mind", "targetValue": 2 },
+          { "nodeId": "mind_bias_2", "level": 2, "name": "Sharp", "description": "80%+ accuracy on 25 Bias Checks", "requirementType": "exercise_accuracy", "requirementEngine": "mind", "requirementTag": "bias_check", "targetValue": 25, "threshold": 80 },
+          { "nodeId": "mind_bias_3", "level": 3, "name": "Detector", "description": "Complete 50 Bias Checks across 8+ bias types", "requirementType": "exercise_count", "requirementEngine": "mind", "requirementTag": "bias_check", "targetValue": 50 },
+          { "nodeId": "mind_bias_4", "level": 4, "name": "Master", "description": "90%+ accuracy across 75 scenarios", "requirementType": "exercise_accuracy", "requirementEngine": "mind", "requirementTag": "bias_check", "targetValue": 75, "threshold": 90 },
+          { "nodeId": "mind_bias_5", "level": 5, "name": "Sage", "description": "Complete a Mind-focused boss challenge", "requirementType": "boss_complete", "requirementEngine": "mind", "targetValue": 1 }
+        ]
+      },
+      {
+        "id": "decision_quality",
+        "name": "Decision Quality",
+        "levels": [
+          { "nodeId": "mind_decision_1", "level": 1, "name": "Learner", "description": "Complete 2 mind tasks", "requirementType": "task_count", "requirementEngine": "mind", "targetValue": 2 },
+          { "nodeId": "mind_decision_2", "level": 2, "name": "Thinker", "description": "Apply 5 different mental models successfully", "requirementType": "exercise_categories", "requirementEngine": "mind", "requirementTag": "decision_drill", "targetValue": 5 },
+          { "nodeId": "mind_decision_3", "level": 3, "name": "Strategist", "description": "80%+ accuracy on 30 Decision Drills", "requirementType": "exercise_accuracy", "requirementEngine": "mind", "requirementTag": "decision_drill", "targetValue": 30, "threshold": 80 },
+          { "nodeId": "mind_decision_4", "level": 4, "name": "Architect", "description": "Complete all available mental model types", "requirementType": "exercise_all_categories", "requirementEngine": "mind", "requirementTag": "decision_drill", "targetValue": 1 }
+        ]
+      },
+      {
+        "id": "focus",
+        "name": "Focus",
+        "levels": [
+          { "nodeId": "mind_focus_1", "level": 1, "name": "Present", "description": "Complete 2 mind tasks", "requirementType": "task_count", "requirementEngine": "mind", "targetValue": 2 },
+          { "nodeId": "mind_focus_2", "level": 2, "name": "Focused", "description": "Average 2+ focus sessions per day for 2 weeks", "requirementType": "focus_daily_avg", "requirementEngine": "mind", "targetValue": 14, "threshold": 2 },
+          { "nodeId": "mind_focus_3", "level": 3, "name": "Deep", "description": "Complete 100 total focus sessions", "requirementType": "focus_sessions", "requirementEngine": "mind", "targetValue": 100 },
+          { "nodeId": "mind_focus_4", "level": 4, "name": "Flow State", "description": "4+ hours of focus time in a single day, 5 times", "requirementType": "focus_marathon", "requirementEngine": "mind", "targetValue": 5, "threshold": 240 }
+        ]
+      },
+      {
+        "id": "knowledge",
+        "name": "Knowledge",
+        "levels": [
+          { "nodeId": "mind_knowledge_1", "level": 1, "name": "Curious", "description": "Complete 2 mind tasks", "requirementType": "task_count", "requirementEngine": "mind", "targetValue": 2 },
+          { "nodeId": "mind_knowledge_2", "level": 2, "name": "Student", "description": "25 concepts in knowledge vault", "requirementType": "exercise_count", "requirementEngine": "mind", "requirementTag": "knowledge_drop", "targetValue": 25 },
+          { "nodeId": "mind_knowledge_3", "level": 3, "name": "Learned", "description": "50 concepts with 80%+ recall rate", "requirementType": "exercise_accuracy", "requirementEngine": "mind", "requirementTag": "knowledge_drop", "targetValue": 50, "threshold": 80 },
+          { "nodeId": "mind_knowledge_4", "level": 4, "name": "Polymath", "description": "Recall concepts from 60+ days ago at 85%+ accuracy", "requirementType": "srs_recall_accuracy", "requirementEngine": "mind", "targetValue": 60, "threshold": 85 }
+        ]
+      }
+    ]
+  },
+  "money": {
+    "branches": [
+      {
+        "id": "cashflow_awareness",
+        "name": "Cashflow Awareness",
+        "levels": [
+          { "nodeId": "money_cashflow_1", "level": 1, "name": "Tracking", "description": "Complete 2 money tasks", "requirementType": "task_count", "requirementEngine": "money", "targetValue": 2 },
+          { "nodeId": "money_cashflow_2", "level": 2, "name": "Aware", "description": "Log transactions consistently for 2 weeks", "requirementType": "streak_days", "requirementEngine": "money", "targetValue": 14 },
+          { "nodeId": "money_cashflow_3", "level": 3, "name": "Vigilant", "description": "30 days of consistent cashflow logging", "requirementType": "streak_days", "requirementEngine": "money", "targetValue": 30 },
+          { "nodeId": "money_cashflow_4", "level": 4, "name": "Controller", "description": "60 days with zero unlogged days", "requirementType": "streak_days", "requirementEngine": "money", "targetValue": 60 }
+        ]
+      },
+      {
+        "id": "budget_discipline",
+        "name": "Budget Discipline",
+        "levels": [
+          { "nodeId": "money_budget_1", "level": 1, "name": "Budgeted", "description": "Create first budget", "requirementType": "task_count", "requirementEngine": "money", "targetValue": 1 },
+          { "nodeId": "money_budget_2", "level": 2, "name": "Under Control", "description": "Stay within budget for 2 weeks", "requirementType": "streak_days", "requirementEngine": "money", "targetValue": 14 },
+          { "nodeId": "money_budget_3", "level": 3, "name": "Disciplined", "description": "Stay within budget for 30 days", "requirementType": "streak_days", "requirementEngine": "money", "targetValue": 30 },
+          { "nodeId": "money_budget_4", "level": 4, "name": "Master", "description": "Within budget for 60 days with savings rate tracked", "requirementType": "streak_days", "requirementEngine": "money", "targetValue": 60 }
+        ]
+      },
+      {
+        "id": "savings",
+        "name": "Savings",
+        "levels": [
+          { "nodeId": "money_savings_1", "level": 1, "name": "Saver", "description": "Set a savings target", "requirementType": "task_count", "requirementEngine": "money", "targetValue": 1 },
+          { "nodeId": "money_savings_2", "level": 2, "name": "Growing", "description": "Hit savings target for 4 weeks", "requirementType": "weekly_consistency", "requirementEngine": "money", "requirementTag": "savings", "targetValue": 4 },
+          { "nodeId": "money_savings_3", "level": 3, "name": "Building", "description": "Consistent savings for 8 weeks", "requirementType": "weekly_consistency", "requirementEngine": "money", "requirementTag": "savings", "targetValue": 8 },
+          { "nodeId": "money_savings_4", "level": 4, "name": "Wealthy Habits", "description": "Savings tracked and growing for 90 days", "requirementType": "streak_days", "requirementEngine": "money", "targetValue": 90 }
+        ]
+      },
+      {
+        "id": "financial_literacy",
+        "name": "Financial Literacy",
+        "levels": [
+          { "nodeId": "money_literacy_1", "level": 1, "name": "Interested", "description": "Complete 2 money tasks", "requirementType": "task_count", "requirementEngine": "money", "targetValue": 2 },
+          { "nodeId": "money_literacy_2", "level": 2, "name": "Educated", "description": "15 financial concepts learned", "requirementType": "exercise_count", "requirementEngine": "money", "requirementTag": "knowledge_drop", "targetValue": 15 },
+          { "nodeId": "money_literacy_3", "level": 3, "name": "Literate", "description": "30 financial concepts with 80%+ recall", "requirementType": "exercise_accuracy", "requirementEngine": "money", "requirementTag": "knowledge_drop", "targetValue": 30, "threshold": 80 },
+          { "nodeId": "money_literacy_4", "level": 4, "name": "Financially Sharp", "description": "All available money Knowledge Drops completed", "requirementType": "exercise_all_categories", "requirementEngine": "money", "requirementTag": "knowledge_drop", "targetValue": 1 }
+        ]
+      }
+    ]
+  },
+  "charisma": {
+    "branches": [
+      {
+        "id": "consistency",
+        "name": "Consistency",
+        "levels": [
+          { "nodeId": "charisma_consistency_1", "level": 1, "name": "Showing Up", "description": "Complete 1 charisma task", "requirementType": "task_count", "requirementEngine": "charisma", "targetValue": 1 },
+          { "nodeId": "charisma_consistency_2", "level": 2, "name": "Reliable", "description": "14-day charisma streak", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 14 },
+          { "nodeId": "charisma_consistency_3", "level": 3, "name": "Consistent", "description": "30-day charisma streak", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 30 },
+          { "nodeId": "charisma_consistency_4", "level": 4, "name": "Unbreakable", "description": "60-day charisma streak", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 60 },
+          { "nodeId": "charisma_consistency_5", "level": 5, "name": "Legendary", "description": "100-day charisma streak", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 100 }
+        ]
+      },
+      {
+        "id": "public_speaking",
+        "name": "Public Speaking",
+        "levels": [
+          { "nodeId": "charisma_speaking_1", "level": 1, "name": "Voice Found", "description": "Complete 1 charisma task", "requirementType": "task_count", "requirementEngine": "charisma", "targetValue": 1 },
+          { "nodeId": "charisma_speaking_2", "level": 2, "name": "Articulate", "description": "Weekly speaking practice for 3 weeks", "requirementType": "weekly_consistency", "requirementEngine": "charisma", "requirementTag": "speaking", "targetValue": 3 },
+          { "nodeId": "charisma_speaking_3", "level": 3, "name": "Compelling", "description": "Daily speaking practice for 30 days", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 30 },
+          { "nodeId": "charisma_speaking_4", "level": 4, "name": "Orator", "description": "Speaking habits at 90%+ for 60 days", "requirementType": "habit_completion_rate", "requirementEngine": "charisma", "targetValue": 60, "threshold": 90 }
+        ]
+      },
+      {
+        "id": "networking",
+        "name": "Networking",
+        "levels": [
+          { "nodeId": "charisma_networking_1", "level": 1, "name": "Connected", "description": "Complete 2 charisma tasks", "requirementType": "task_count", "requirementEngine": "charisma", "targetValue": 2 },
+          { "nodeId": "charisma_networking_2", "level": 2, "name": "Present", "description": "Consistent networking tasks for 3 weeks", "requirementType": "weekly_consistency", "requirementEngine": "charisma", "requirementTag": "networking", "targetValue": 3 },
+          { "nodeId": "charisma_networking_3", "level": 3, "name": "Invested", "description": "30 days of networking activity", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 30 },
+          { "nodeId": "charisma_networking_4", "level": 4, "name": "Connector", "description": "60 days of consistent networking", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 60 }
+        ]
+      },
+      {
+        "id": "confidence",
+        "name": "Confidence",
+        "levels": [
+          { "nodeId": "charisma_confidence_1", "level": 1, "name": "Stepping Up", "description": "Complete 2 charisma tasks", "requirementType": "task_count", "requirementEngine": "charisma", "targetValue": 2 },
+          { "nodeId": "charisma_confidence_2", "level": 2, "name": "Bold", "description": "Confidence-building tasks 3x/week for 4 weeks", "requirementType": "weekly_consistency", "requirementEngine": "charisma", "requirementTag": "confidence", "targetValue": 4 },
+          { "nodeId": "charisma_confidence_3", "level": 3, "name": "Fearless", "description": "Consistent confidence activities for 60 days", "requirementType": "streak_days", "requirementEngine": "charisma", "targetValue": 60 },
+          { "nodeId": "charisma_confidence_4", "level": 4, "name": "Magnetic", "description": "All 4 Charisma branches at Lv3+", "requirementType": "branch_level_check", "requirementEngine": "charisma", "targetValue": 3 }
+        ]
+      }
+    ]
+  }
+}

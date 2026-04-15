@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Titan Protocol",
+    "slug": "titan-protocol",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.titan.protocol"
+    },
+    "android": {
+      "package": "com.titan.protocol",
+      "adaptiveIcon": {
+        "backgroundColor": "#000000",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "titan-protocol",
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-sharing",
+      "@sentry/react-native",
+      "expo-web-browser"
+    ]
+  }
+}

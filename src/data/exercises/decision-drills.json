@@ -1,0 +1,342 @@
+[
+  {
+    "id": "dd_001",
+    "type": "decision_drill",
+    "difficulty": 1,
+    "category": "inversion",
+    "scenario": "You're deciding whether to continue a project that's over budget and behind schedule. Everyone is focused on reasons to keep going.",
+    "question": "Apply inversion: what question should you ask instead?",
+    "options": [
+      { "id": "a", "text": "How can we cut costs to finish?", "description": "Optimization within the current path" },
+      { "id": "b", "text": "If we weren't already invested, would we start this project today?", "description": "Removing sunk costs from the decision" },
+      { "id": "c", "text": "What's the minimum viable version we can ship?", "description": "Scoping down to save the investment" },
+      { "id": "d", "text": "Who can we blame for the overruns?", "description": "Accountability focus" }
+    ],
+    "correct": "b",
+    "explanation": "Inversion flips the question. Instead of 'should we continue?' ask 'would we start this today?' This removes sunk cost bias and forces evaluation based solely on future potential.",
+    "insight": "Use inversion daily: instead of asking 'how do I succeed?' ask 'what would guarantee failure?' and avoid those things."
+  },
+  {
+    "id": "dd_002",
+    "type": "decision_drill",
+    "difficulty": 2,
+    "category": "second_order_thinking",
+    "scenario": "Your city proposes rent control to make housing affordable. Rents are immediately capped at current levels.",
+    "question": "What second-order consequence is most likely?",
+    "options": [
+      { "id": "a", "text": "Housing becomes universally affordable", "description": "The intended first-order effect" },
+      { "id": "b", "text": "Developers stop building new housing, worsening the shortage long-term", "description": "Reduced supply due to lower returns" },
+      { "id": "c", "text": "Landlords improve properties to attract tenants", "description": "Competition for quality" },
+      { "id": "d", "text": "People move to the city in large numbers", "description": "Demand increases" }
+    ],
+    "correct": "b",
+    "explanation": "Second-order thinking asks 'and then what?' Rent control (first order: lower rents) reduces developer incentive to build (second order: less supply), which worsens housing shortages over time.",
+    "insight": "For every decision, ask 'and then what?' at least three times to uncover hidden consequences."
+  },
+  {
+    "id": "dd_003",
+    "type": "decision_drill",
+    "difficulty": 2,
+    "category": "first_principles",
+    "scenario": "You want to start a meal prep business but commercial kitchen rental costs $3,000/month, making the business unprofitable.",
+    "question": "How would first principles thinking approach this?",
+    "options": [
+      { "id": "a", "text": "Find a cheaper kitchen rental", "description": "Negotiating within the existing model" },
+      { "id": "b", "text": "Break down what you actually need: a food-safe space, equipment, and permits — then find the cheapest way to get each", "description": "Decomposing the problem to fundamentals" },
+      { "id": "c", "text": "Partner with someone who has a kitchen", "description": "Sharing costs" },
+      { "id": "d", "text": "Start smaller with home cooking", "description": "Reducing scope" }
+    ],
+    "correct": "b",
+    "explanation": "First principles thinking breaks assumptions into fundamental components. You don't need 'a commercial kitchen' — you need food safety, equipment, and permits. A church kitchen at night, a restaurant's off-hours, or shared commissary space could each satisfy the fundamentals at a fraction of the cost.",
+    "insight": "When a cost seems fixed, decompose it into its components. At least one component is cheaper than you think."
+  },
+  {
+    "id": "dd_004",
+    "type": "decision_drill",
+    "difficulty": 3,
+    "category": "opportunity_cost",
+    "scenario": "You're offered a free 3-day conference in another city. Flight and hotel are covered. You're excited because 'it's free.'",
+    "question": "What are you actually paying?",
+    "options": [
+      { "id": "a", "text": "Nothing — it's literally free", "description": "The monetary cost is zero" },
+      { "id": "b", "text": "3 days of productive work, family time, or rest that you can't get back", "description": "The time cost and what you would have done instead" },
+      { "id": "c", "text": "Just the cost of meals and transportation in the city", "description": "Out-of-pocket incidentals" },
+      { "id": "d", "text": "The carbon footprint of the flight", "description": "Environmental cost" }
+    ],
+    "correct": "b",
+    "explanation": "Opportunity cost is what you give up by choosing one option. Three days aren't free — they could be spent on your highest-value work, relationships, or recovery. The real question is whether the conference returns more than those 3 days would elsewhere.",
+    "insight": "Nothing is truly free if it takes your time. Always compare against your best alternative use of that time."
+  },
+  {
+    "id": "dd_005",
+    "type": "decision_drill",
+    "difficulty": 1,
+    "category": "pareto_principle",
+    "scenario": "You have 20 tasks on your to-do list. You feel overwhelmed and work on them in order from top to bottom.",
+    "question": "How would the Pareto Principle restructure your approach?",
+    "options": [
+      { "id": "a", "text": "Do the fastest tasks first to build momentum", "description": "Quick wins strategy" },
+      { "id": "b", "text": "Identify the 4 tasks (20%) that will produce 80% of the results and do those first", "description": "Focus on highest-impact items" },
+      { "id": "c", "text": "Delegate half the tasks to others", "description": "Reduce your workload" },
+      { "id": "d", "text": "Break all 20 tasks into smaller sub-tasks", "description": "Make each task less intimidating" }
+    ],
+    "correct": "b",
+    "explanation": "The Pareto Principle (80/20 rule) says roughly 80% of results come from 20% of efforts. Identify which 4 tasks have the highest impact and prioritize those. Many of the remaining 16 may not matter at all.",
+    "insight": "Every morning, ask: 'If I could only complete one thing today, which task would make everything else easier or unnecessary?'"
+  },
+  {
+    "id": "dd_006",
+    "type": "decision_drill",
+    "difficulty": 3,
+    "category": "inversion",
+    "scenario": "You're designing a customer retention strategy for your app. The team is brainstorming features to add.",
+    "question": "How would inversion improve this brainstorm?",
+    "options": [
+      { "id": "a", "text": "Study competitors' features and copy the best ones", "description": "Feature parity approach" },
+      { "id": "b", "text": "Ask 'What would make users DELETE our app?' then eliminate those things", "description": "Inverting the problem to find friction points" },
+      { "id": "c", "text": "Survey users about what features they want", "description": "Direct user feedback" },
+      { "id": "d", "text": "Offer discounts for long-term commitments", "description": "Financial incentive approach" }
+    ],
+    "correct": "b",
+    "explanation": "Inversion asks: instead of 'how do we keep users?' ask 'what drives users away?' Eliminating frustrations often has a bigger retention impact than adding features.",
+    "insight": "Before adding new features, fix the top 3 reasons people leave. Removing negatives beats adding positives."
+  },
+  {
+    "id": "dd_007",
+    "type": "decision_drill",
+    "difficulty": 2,
+    "category": "circle_of_competence",
+    "scenario": "A successful restaurant owner is offered an investment opportunity in a tech startup. The pitch sounds exciting and the returns look amazing.",
+    "question": "What should the Circle of Competence framework suggest?",
+    "options": [
+      { "id": "a", "text": "Invest — success in one business transfers to another", "description": "Confidence from past success" },
+      { "id": "b", "text": "Decline or get expert help — tech startups are outside their area of expertise", "description": "Staying within the circle or expanding it carefully" },
+      { "id": "c", "text": "Invest a small amount to learn", "description": "Dipping a toe in" },
+      { "id": "d", "text": "Ask other restaurant owners if they'd invest", "description": "Consulting peers" }
+    ],
+    "correct": "b",
+    "explanation": "The Circle of Competence says know what you know and what you don't. Restaurant expertise doesn't transfer to evaluating tech startups. Either decline, or bring in someone who IS competent in tech investing.",
+    "insight": "The most expensive mistakes happen when you act confidently outside your area of expertise."
+  },
+  {
+    "id": "dd_008",
+    "type": "decision_drill",
+    "difficulty": 3,
+    "category": "second_order_thinking",
+    "scenario": "A company decides to cut all employee perks (free lunch, gym, flexible hours) to reduce costs by 15%.",
+    "question": "What second and third-order effects should they anticipate?",
+    "options": [
+      { "id": "a", "text": "Employees will understand the financial necessity", "description": "First-order assumption" },
+      { "id": "b", "text": "Top performers leave (2nd order), replacement costs exceed savings (3rd order), and remaining team morale drops further (4th order)", "description": "Cascading consequences" },
+      { "id": "c", "text": "Employees will be more productive without distractions", "description": "Positive reframe" },
+      { "id": "d", "text": "The company saves 15% and becomes more competitive", "description": "Intended outcome" }
+    ],
+    "correct": "b",
+    "explanation": "Second-order: top performers (who have options) leave first. Third-order: replacing them costs 1.5-2x their salary. Fourth-order: remaining employees see exits and update their resumes. The 15% savings could cost 50%+ in talent replacement.",
+    "insight": "Cost-cutting that affects people has compounding second-order effects. Model at least 3 levels of 'and then what?'"
+  },
+  {
+    "id": "dd_009",
+    "type": "decision_drill",
+    "difficulty": 1,
+    "category": "occams_razor",
+    "scenario": "Your website traffic dropped 50% overnight. The marketing team suspects a competitor launched a negative SEO attack. The dev team says maybe it's a Google algorithm change.",
+    "question": "What does Occam's Razor suggest you check first?",
+    "options": [
+      { "id": "a", "text": "Investigate the competitor theory — it's the most concerning", "description": "Address the scariest possibility" },
+      { "id": "b", "text": "Check if something simple broke — like a robots.txt change, site outage, or tracking code removal", "description": "The simplest explanation first" },
+      { "id": "c", "text": "Contact Google directly about the algorithm change", "description": "Go to the source" },
+      { "id": "d", "text": "Run a full SEO audit", "description": "Comprehensive analysis" }
+    ],
+    "correct": "b",
+    "explanation": "Occam's Razor says the simplest explanation is usually correct. Before investigating complex theories, check the basics: is the site actually up? Did someone accidentally block crawlers? Is the analytics tag still there?",
+    "insight": "When diagnosing problems, check the simplest possible causes first. 90% of the time, it's something mundane."
+  },
+  {
+    "id": "dd_010",
+    "type": "decision_drill",
+    "difficulty": 4,
+    "category": "first_principles",
+    "scenario": "Electric cars cost too much because batteries are expensive. Everyone says 'we need to wait for battery prices to drop.'",
+    "question": "How did Elon Musk apply first principles to this problem?",
+    "options": [
+      { "id": "a", "text": "Negotiated bulk discounts with existing battery makers", "description": "Working within existing supply chains" },
+      { "id": "b", "text": "Broke batteries into raw materials (cobalt, nickel, lithium), found that material cost was 1/10 of battery cost, and built factories to assemble them directly", "description": "Decomposed to atoms and rebuilt" },
+      { "id": "c", "text": "Designed cars that use fewer batteries", "description": "Engineering around the constraint" },
+      { "id": "d", "text": "Subsidized battery costs with software revenue", "description": "Cross-subsidization" }
+    ],
+    "correct": "b",
+    "explanation": "First principles: battery packs cost $600/kWh. But the raw materials (cobalt, nickel, aluminum, carbon, polymers) cost only $80/kWh on the London Metal Exchange. The 7x markup was manufacturing inefficiency, not material cost.",
+    "insight": "When told 'that's just how much it costs,' break the cost into raw inputs. The gap between materials and finished product is where innovation hides."
+  },
+  {
+    "id": "dd_011",
+    "type": "decision_drill",
+    "difficulty": 2,
+    "category": "opportunity_cost",
+    "scenario": "You spend 2 hours per day commuting. Someone suggests moving closer to work, but your current apartment is $500/month cheaper.",
+    "question": "How should you calculate the true cost of your commute?",
+    "options": [
+      { "id": "a", "text": "Compare the $500 savings against gas/transit costs only", "description": "Direct monetary comparison" },
+      { "id": "b", "text": "Value the 40+ hours per month at your effective hourly rate, add stress/health costs, then compare against the $500", "description": "Full opportunity cost accounting" },
+      { "id": "c", "text": "The commute is free time for podcasts and audiobooks", "description": "Reframing the time as productive" },
+      { "id": "d", "text": "Calculate only based on happiness — shorter commutes make people happier", "description": "Wellbeing-only approach" }
+    ],
+    "correct": "b",
+    "explanation": "If your effective hourly rate is $30, the 40 monthly commute hours cost $1,200 in opportunity cost — far exceeding the $500 rent savings. Add health effects of sitting, stress, and reduced sleep for the full picture.",
+    "insight": "Convert all time costs to their monetary equivalent. A 'cheap' option that wastes time is often the most expensive."
+  },
+  {
+    "id": "dd_012",
+    "type": "decision_drill",
+    "difficulty": 3,
+    "category": "margin_of_safety",
+    "scenario": "Your financial model shows your startup will be profitable in 18 months with $200,000 in funding. An investor offers exactly $200,000.",
+    "question": "What does the Margin of Safety principle say about this?",
+    "options": [
+      { "id": "a", "text": "Take it — the model says $200K is enough", "description": "Trust the projections" },
+      { "id": "b", "text": "Request $300-350K to build a buffer for delays, unexpected costs, and model errors", "description": "Adding 50-75% margin for the unknown" },
+      { "id": "c", "text": "Take $200K and cut costs aggressively to build your own buffer", "description": "Internal margin creation" },
+      { "id": "d", "text": "Wait for a better offer from another investor", "description": "Holding out for more" }
+    ],
+    "correct": "b",
+    "explanation": "Margin of safety means building a buffer between your estimates and reality. Models are always optimistic — costs overrun, revenue arrives late, surprises happen. A 50-75% buffer protects against the inevitable deviations from plan.",
+    "insight": "Whatever budget or timeline your model predicts, add 50%. You'll almost always need it."
+  },
+  {
+    "id": "dd_013",
+    "type": "decision_drill",
+    "difficulty": 2,
+    "category": "pareto_principle",
+    "scenario": "Your customer support team handles 1,000 tickets per week. They treat each ticket with equal priority and average response time is 4 hours.",
+    "question": "How would the Pareto Principle improve this?",
+    "options": [
+      { "id": "a", "text": "Hire more support staff to reduce response time", "description": "Scaling the current approach" },
+      { "id": "b", "text": "Find the top 3-4 issues causing 80% of tickets and fix those root causes, eliminating most tickets entirely", "description": "Fix the vital few to eliminate the trivial many" },
+      { "id": "c", "text": "Create an FAQ page for common questions", "description": "Self-service deflection" },
+      { "id": "d", "text": "Prioritize tickets from paying customers", "description": "Revenue-based triage" }
+    ],
+    "correct": "b",
+    "explanation": "The Pareto Principle predicts ~80% of tickets come from ~20% of issue types. Fixing those 3-4 root causes could eliminate 800 tickets per week, far outperforming any staff increase.",
+    "insight": "Don't manage symptoms — find the vital few causes behind the majority of your problems."
+  },
+  {
+    "id": "dd_014",
+    "type": "decision_drill",
+    "difficulty": 4,
+    "category": "inversion",
+    "scenario": "You're a new manager trying to build a high-performing team. Everyone advises you on what great managers do.",
+    "question": "How would inversion provide a different perspective?",
+    "options": [
+      { "id": "a", "text": "Study the best managers in history and copy their practices", "description": "Emulation approach" },
+      { "id": "b", "text": "List everything that destroys teams (micromanagement, unclear goals, favoritism, no recognition) and systematically eliminate each one", "description": "Remove what breaks teams instead of adding what might help" },
+      { "id": "c", "text": "Ask your team what they want from a manager", "description": "Direct feedback" },
+      { "id": "d", "text": "Set ambitious goals and let the team figure out how to reach them", "description": "Outcome-based management" }
+    ],
+    "correct": "b",
+    "explanation": "Inversion says: instead of trying to be a great manager (complex, subjective), identify everything that makes a terrible manager and avoid it. Avoiding dysfunction is more reliable than pursuing perfection.",
+    "insight": "You don't need to know the recipe for success — just avoid the ingredients of failure."
+  },
+  {
+    "id": "dd_015",
+    "type": "decision_drill",
+    "difficulty": 3,
+    "category": "second_order_thinking",
+    "scenario": "A social media platform removes the dislike button to reduce negativity.",
+    "question": "What second-order consequence is likely?",
+    "options": [
+      { "id": "a", "text": "Users become more positive overall", "description": "The intended first-order effect" },
+      { "id": "b", "text": "Low-quality content rises because there's no downward signal, driving away quality creators", "description": "Quality signal removal degrades the ecosystem" },
+      { "id": "c", "text": "Users express negativity in comments instead, which is worse", "description": "Displacement to a different channel" },
+      { "id": "d", "text": "Engagement drops because there's less interactivity", "description": "Reduced participation" }
+    ],
+    "correct": "b",
+    "explanation": "The dislike button wasn't just negative feedback — it was a quality signal. Without it (second order), low-quality content rises in rankings. Third order: quality creators leave because their work is buried alongside junk.",
+    "insight": "Before removing a 'negative' feature, understand what useful function it secretly serves."
+  },
+  {
+    "id": "dd_016",
+    "type": "decision_drill",
+    "difficulty": 2,
+    "category": "circle_of_competence",
+    "scenario": "A celebrity chef is asked to invest in a restaurant chain, a food delivery app, and a crypto mining operation. Each promises 25% returns.",
+    "question": "How should the chef evaluate these using Circle of Competence?",
+    "options": [
+      { "id": "a", "text": "Invest equally in all three to diversify", "description": "Spreading risk across opportunities" },
+      { "id": "b", "text": "Restaurant chain (inside circle), food app (edge — can evaluate the food side), crypto (completely outside — decline or get expert help)", "description": "Evaluate each against their expertise" },
+      { "id": "c", "text": "Go with whichever has the best projected returns", "description": "Pure financial analysis" },
+      { "id": "d", "text": "Avoid all three — investing isn't their competence", "description": "Ultra-conservative approach" }
+    ],
+    "correct": "b",
+    "explanation": "The chef deeply understands restaurants (inside circle). They can evaluate the food side of the delivery app (edge of circle). Crypto mining is completely outside their expertise — the 25% promise means nothing if they can't evaluate the risk.",
+    "insight": "Know where your circle ends. It's not about intelligence — a surgeon shouldn't evaluate oil wells."
+  },
+  {
+    "id": "dd_017",
+    "type": "decision_drill",
+    "difficulty": 4,
+    "category": "opportunity_cost",
+    "scenario": "You've been offered a promotion that requires relocating to headquarters. It comes with a 40% raise but means leaving a city you love, your partner's network, and a side project that could become a business.",
+    "question": "What's the correct framework for this decision?",
+    "options": [
+      { "id": "a", "text": "Take the 40% raise — more money is always better", "description": "Maximize income" },
+      { "id": "b", "text": "List everything you'd give up (opportunity cost) and ask if the 40% raise compensates for ALL of it — not just the financial part", "description": "Full opportunity cost analysis including non-monetary costs" },
+      { "id": "c", "text": "Stay because money isn't everything", "description": "Values-based but incomplete analysis" },
+      { "id": "d", "text": "Negotiate to work remotely instead of relocating", "description": "Creative alternative" }
+    ],
+    "correct": "b",
+    "explanation": "Opportunity cost isn't just financial. The side project could be worth more than the raise long-term. Your partner's career disruption is a real cost. The city you love contributes to wellbeing that affects performance. Account for everything.",
+    "insight": "For life decisions, list ALL opportunity costs — financial, relational, health, creative, emotional. Then decide."
+  },
+  {
+    "id": "dd_018",
+    "type": "decision_drill",
+    "difficulty": 2,
+    "category": "occams_razor",
+    "scenario": "Your team's productivity has dropped 20% this month. The CEO suggests it might be low morale, competitive pressure, or that the new open office layout is distracting. HR suggests running employee engagement surveys and hiring a culture consultant.",
+    "question": "What does Occam's Razor suggest?",
+    "options": [
+      { "id": "a", "text": "Run the engagement surveys — data will reveal the answer", "description": "Comprehensive approach" },
+      { "id": "b", "text": "Check the simplest explanation first: did anything change this month? New office layout was the change — test reverting it before complex investigations", "description": "Test the most obvious variable first" },
+      { "id": "c", "text": "Talk to the team about competitive pressure", "description": "Address the most strategic concern" },
+      { "id": "d", "text": "Hire the culture consultant for an objective view", "description": "External expertise" }
+    ],
+    "correct": "b",
+    "explanation": "Occam's Razor says the simplest explanation is usually right. One thing changed this month (the office layout), and one thing changed (productivity). Test the obvious variable before launching complex investigations.",
+    "insight": "When troubleshooting, start by asking 'what changed recently?' The answer is usually right there."
+  },
+  {
+    "id": "dd_019",
+    "type": "decision_drill",
+    "difficulty": 3,
+    "category": "first_principles",
+    "scenario": "Shipping costs are destroying your e-commerce profit margins. Industry standard is to use FedEx/UPS. Everyone in your space has the same problem.",
+    "question": "How would first principles thinking approach shipping differently?",
+    "options": [
+      { "id": "a", "text": "Negotiate volume discounts with carriers", "description": "Working within the system" },
+      { "id": "b", "text": "Raise prices to cover shipping", "description": "Pass cost to customers" },
+      { "id": "c", "text": "Ask: what is shipping fundamentally? Moving weight across distance. What's the cheapest way to do that? Pool shipments, use slower methods, position inventory closer to customers", "description": "Decompose to physics and rebuild" },
+      { "id": "d", "text": "Offer free shipping over a minimum order to increase order size", "description": "Behavioral nudge" }
+    ],
+    "correct": "c",
+    "explanation": "First principles: shipping = moving mass across distance. You can reduce mass (lighter packaging), reduce distance (distributed warehousing), batch shipments (pooling), or use slower but cheaper transport. The carrier's price list is not a fundamental constraint.",
+    "insight": "When an industry accepts a cost as fixed, break it into physics: what is actually happening, and what's the cheapest way to achieve that?"
+  },
+  {
+    "id": "dd_020",
+    "type": "decision_drill",
+    "difficulty": 4,
+    "category": "margin_of_safety",
+    "scenario": "You're planning a product launch for Q2. Engineering says they'll be done by March 15. Marketing has already booked a launch event for March 20. PR has scheduled media interviews for March 21.",
+    "question": "Where is the margin of safety problem?",
+    "options": [
+      { "id": "a", "text": "There's no problem — 5 days of buffer is fine", "description": "The timeline looks reasonable" },
+      { "id": "b", "text": "The entire chain has zero slack. One slip in engineering cascades into marketing, PR, and customer disappointment. Book the event for April to build a real buffer.", "description": "Compounding fragility from tight coupling" },
+      { "id": "c", "text": "Engineering should work overtime to ensure the March 15 date", "description": "Solve it with effort" },
+      { "id": "d", "text": "Have a backup plan if engineering is late", "description": "Contingency thinking" }
+    ],
+    "correct": "b",
+    "explanation": "Five days isn't margin — it's the minimum gap. In software, estimates are almost always optimistic. By tightly coupling engineering, marketing, and PR timelines, a single 1-week delay creates a cascading failure across all three functions.",
+    "insight": "Build buffers between every dependent step. The tighter the coupling, the more catastrophic the failure when one link breaks."
+  }
+]

@@ -1,0 +1,23 @@
+// Mobile-first spacing — generous touch targets, no cramped layouts
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  "2xl": 24,
+  "3xl": 32,
+  "4xl": 40,
+  "5xl": 48,
+} as const;
+
+export const radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 22, // Desktop TitanPanel radius
+  full: 999,
+} as const;
+
+// Minimum touch target per Apple/Google guidelines
+export const TOUCH_MIN = 48;
