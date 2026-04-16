@@ -139,10 +139,9 @@ import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider"
 import { RootErrorBoundary } from "../src/components/ui/RootErrorBoundary";
 import { OfflineBanner } from "../src/components/ui/OfflineBanner";
 import { OnboardingGate } from "../src/components/OnboardingGate";
-import { MigrationGate } from "../src/components/MigrationGate";
 import { AppResumeSyncMount } from "../src/components/AppResumeSyncMount";
+import { ProfileHydrator } from "../src/components/ProfileHydrator";
 import { RankUpOverlayMount } from "../src/components/RankUpOverlayMount";
-import { startCloudSync } from "../src/lib/cloud-sync";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
 // Loaded once at the root layout; src/theme/typography.ts references the
 // font family by name. Falls back to Menlo/monospace until loaded.
@@ -210,17 +209,6 @@ export default function RootLayout() {
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
-
-  // Phase 6: Start the cloud sync engine once we have an authenticated
-  // user. The engine subscribes to the legacy MMKV stores and mirrors
-  // writes to Supabase via the new Phase 4 service layer. The cleanup
-  // unsubscribes on sign-out so we don't double-subscribe on the next
-  // sign-in.
-  useEffect(() => {
-    if (!authUser) return;
-    const stop = startCloudSync();
-    return () => stop();
-  }, [authUser]);
 
   // Phase 7.2: PostHog identify on auth + reset on sign-out. Also wire
   // a Sentry user context with the same id so crashes get attributed.
@@ -633,9 +621,9 @@ export default function RootLayout() {
       <RootErrorBoundary>
       <SystemWindowProvider>
       <SystemNotificationProvider>
-      <MigrationGate>
       <OnboardingGate>
       <AppResumeSyncMount />
+      <ProfileHydrator />
       <StatusBar style="light" backgroundColor={colors.bg} />
       <Stack
         screenOptions={{
@@ -760,7 +748,6 @@ export default function RootLayout() {
       )}
       {showWarning && <IntegrityWarningOverlay onDismiss={handleWarningDismiss} />}
       </OnboardingGate>
-      </MigrationGate>
       </SystemNotificationProvider>
       </SystemWindowProvider>
       </RootErrorBoundary>
