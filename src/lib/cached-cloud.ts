@@ -53,3 +53,20 @@ export function cachedActiveBossChallenge(): BossChallenge | null {
 export function cachedMindTrainingResults(): MindTrainingRow[] {
   return queryClient.getQueryData<MindTrainingRow[]>(mindTrainingKeys.results) ?? [];
 }
+
+export function cachedTitanModeUnlocked(): boolean {
+  const row = queryClient.getQueryData<Tables<"titan_mode_state"> | null>([
+    "titan_mode_state",
+  ]);
+  return Boolean(row?.unlocked);
+}
+
+export function cachedCurrentPhase(): string {
+  const row = queryClient.getQueryData<Tables<"progression"> | null>(["progression"]);
+  return row?.current_phase ?? "foundation";
+}
+
+export function cachedCurrentWeek(): number {
+  const row = queryClient.getQueryData<Tables<"progression"> | null>(["progression"]);
+  return row?.current_week ?? 1;
+}

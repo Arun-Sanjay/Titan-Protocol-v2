@@ -12,7 +12,7 @@ import Animated, {
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../theme";
 import { getAllTitleDefs, getTitleDef, RARITY_COLORS } from "../../lib/titles";
-import { useTitleStore } from "../../stores/useTitleStore";
+import { useUserTitles } from "../../hooks/queries/useTitles";
 
 type TitleWallProps = {
   onEquip: (titleId: string) => void;
@@ -185,7 +185,8 @@ function TitleCard({
 
 export function TitleWall({ onEquip, onUnequip, equippedId }: TitleWallProps) {
   const [activeCategory, setActiveCategory] = useState<Category>("ALL");
-  const { unlockedIds } = useTitleStore();
+  const { data: cloudTitles = [] } = useUserTitles();
+  const unlockedIds = useMemo(() => cloudTitles.map((t) => t.title_id), [cloudTitles]);
   const { width: screenWidth } = useWindowDimensions();
 
   const cardWidth = (screenWidth - spacing.md * 2 - spacing.sm) / 2;

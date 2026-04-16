@@ -6,13 +6,19 @@
  */
 
 import { getJSON, setJSON } from "../db/storage";
-import { useProgressionStore } from "../stores/useProgressionStore";
 import { useIdentityStore } from "../stores/useIdentityStore";
-import { cachedActiveQuests } from "./cached-cloud";
+import {
+  cachedActiveQuests,
+  cachedCurrentPhase,
+  cachedCurrentWeek,
+} from "./cached-cloud";
 import { generateWeeklyQuests } from "./quest-generator";
 import { insertWeeklyQuests } from "../services/quests";
+import { upsertProgression } from "../services/progression";
+import { phaseFromWeek } from "../types/progression-ui";
 import { queryClient } from "./query-client";
 import { questsKeys } from "../hooks/queries/useQuests";
+import { progressionKeys } from "../hooks/queries/useProgression";
 import { logError } from "./error-log";
 
 // ─── MMKV Safe Read ─────────────────────────────────────────────────────────
@@ -53,7 +59,7 @@ export function handleAppOpenAfterGap(): void {
   if (dayOfWeek === 1) {
     const active = cachedActiveQuests();
     if (active.length === 0) {
-      const phase = useProgressionStore.getState().currentPhase;
+      const phase = cachedCurrentPhase();
       const identity = useIdentityStore.getState().archetype ?? "operator";
       const quests = generateWeeklyQuests(phase, identity);
       insertWeeklyQuests(quests)
@@ -64,8 +70,16 @@ export function handleAppOpenAfterGap(): void {
     }
   }
 
-  // Check phase advancement
-  useProgressionStore.getState().checkWeekAdvancement();
+  // Phase advancement from cached week number.
+  const week = cachedCurrentWeek();
+  const derivedPhase = phaseFromWeek(week);
+  if (derivedPhase !== cachedCurrentPhase()) {
+    upsertProgression({ current_phase: derivedPhase })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: progressionKeys.all });
+      })
+      .catch((e) => logError("safety.upsertProgression", e));
+  }
 }
 
 // ─── Protocol Interruption ──────────────────────────────────────────────────

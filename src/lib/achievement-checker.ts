@@ -10,8 +10,8 @@ import { useIdentityStore } from "../stores/useIdentityStore";
 import { skillTreeKeys } from "../hooks/queries/useSkillTree";
 import type { SkillProgress } from "../services/skill-tree";
 import skillTreeData from "../data/skill-trees.json";
-import { useTitanModeStore } from "../stores/useTitanModeStore";
-import { useProgressionStore } from "../stores/useProgressionStore";
+import { cachedTitanModeUnlocked } from "./cached-cloud";
+import { cachedCurrentPhase } from "./cached-cloud";
 import { useAchievementStore, type AchievementDef } from "../stores/useAchievementStore";
 import { queryClient } from "./query-client";
 import { achievementsKeys } from "../hooks/queries/useAchievements";
@@ -148,8 +148,7 @@ function evaluateCondition(
       return useIdentityStore.getState().totalVotes >= val;
 
     case "phase_completed": {
-      const phase = useProgressionStore.getState().currentPhase;
-      // "building" means Foundation is complete
+      const phase = cachedCurrentPhase();
       const phaseOrder = ["foundation", "building", "intensify", "sustain"];
       const currentIdx = phaseOrder.indexOf(phase);
       const requiredIdx = phaseOrder.indexOf(strVal);
@@ -220,7 +219,7 @@ function evaluateCondition(
       return checkSkillBranchComplete();
 
     case "titan_mode_unlocked":
-      return useTitanModeStore.getState().unlocked;
+      return cachedTitanModeUnlocked();
 
     case "boss_completed":
       return checkBossCompleted(strVal);

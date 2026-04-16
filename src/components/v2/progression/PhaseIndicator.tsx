@@ -1,18 +1,21 @@
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors, spacing, fonts } from "../../../theme";
-import { useProgressionStore, selectPhaseLabel, selectPhaseProgress } from "../../../stores/useProgressionStore";
+import { useProgression } from "../../../hooks/queries/useProgression";
+import {
+  type Phase,
+  getPhaseInfo,
+  selectPhaseLabel,
+  selectPhaseProgress,
+} from "../../../types/progression-ui";
 import { useModeStore, checkFeatureVisible } from "../../../stores/useModeStore";
 
 export function PhaseIndicator() {
   const piMode = useModeStore((s) => s.mode);
   const visible = checkFeatureVisible(piMode, "phases");
-  const currentPhase = useProgressionStore((s) => s.currentPhase);
-  const weekNumber = useProgressionStore((s) => s.weekNumber);
-  const phaseInfo = useMemo(
-    () => useProgressionStore.getState().getPhaseInfo(),
-    [currentPhase, weekNumber],
-  );
+  const { data: progression } = useProgression();
+  const currentPhase = (progression?.current_phase as Phase) ?? "foundation";
+  const phaseInfo = useMemo(() => getPhaseInfo(currentPhase), [currentPhase]);
   const progress = selectPhaseProgress(phaseInfo);
   const label = selectPhaseLabel(phaseInfo);
 

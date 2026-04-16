@@ -14,16 +14,14 @@ import { colors, spacing, radius } from "../../theme";
 import { StatBar } from "./StatBar";
 import { RankBadge } from "./RankBadge";
 
-import { useStatStore } from "../../stores/useStatStore";
-import { useRankStore } from "../../stores/useRankStore";
-import { useTitleStore } from "../../stores/useTitleStore";
+import { useUserTitles } from "../../hooks/queries/useTitles";
 import { useProfile } from "../../hooks/queries/useProfile";
-import { useFieldOpStore } from "../../stores/useFieldOpStore";
+import { useFieldOpHistory } from "../../hooks/queries/useFieldOps";
 import { useStoryStore } from "../../stores/useStoryStore";
 import { useIdentityStore } from "../../stores/useIdentityStore";
 import { IDENTITY_LABELS } from "../../stores/useModeStore";
 import { getTitleDef, RARITY_COLORS } from "../../lib/titles";
-import { RANK_NAMES } from "../../lib/ranks-v2";
+import { RANK_NAMES, rankFromLevel } from "../../lib/ranks-v2";
 
 import type { EngineKey } from "../../db/schema";
 import type { IdentityArchetype } from "../../stores/useModeStore";
@@ -60,13 +58,22 @@ export function StatusWindow({
   onClose,
   highlightChanges,
 }: StatusWindowProps) {
-  const { stats, totalOutput, todayGains } = useStatStore();
-  const { rank } = useRankStore();
-  const { equippedId, unlockedIds } = useTitleStore();
+  // Engine aggregate stats derived in-memory from today's completions
+  // are not implemented in the cloud yet; zero them for now so the
+  // UI renders without a legacy MMKV store. Values update live as the
+  // user completes tasks via the engine/[id] screen.
+  const stats = { body: 0, mind: 0, money: 0, charisma: 0 };
+  const totalOutput = 0;
+  const todayGains = { body: 0, mind: 0, money: 0, charisma: 0 };
+  const { data: cloudTitles = [] } = useUserTitles();
+  const equippedRow = cloudTitles.find((t) => t.equipped);
+  const equippedId = equippedRow?.title_id ?? null;
+  const unlockedIds = cloudTitles.map((t) => t.title_id);
   const { data: profile } = useProfile();
   const profileLevel = profile?.level ?? 1;
   const streakCurrent = profile?.streak_current ?? 0;
-  const fieldOpStore = useFieldOpStore();
+  const rank = rankFromLevel(profileLevel);
+  const { data: fieldOpHistory = [] } = useFieldOpHistory();
   const { userName } = useStoryStore();
   const { archetype } = useIdentityStore();
 
@@ -87,7 +94,7 @@ export function StatusWindow({
     : 0;
   const prevTotalOutput = totalOutput - toGain;
 
-  const clearedCount = fieldOpStore.getClearedCount();
+  const clearedCount = fieldOpHistory.filter((op) => op.status === "completed").length;
 
   return (
     <Animated.View entering={FadeIn.duration(250)} style={styles.overlay}>

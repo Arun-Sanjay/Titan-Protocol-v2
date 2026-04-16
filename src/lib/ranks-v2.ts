@@ -111,6 +111,16 @@ const LEGACY_RANK_MAP: Record<LegacyRank, Rank> = {
  * Migrate a rank value from the old E/D/C/B/A/S system to the new IDs.
  * Returns the input unchanged if it is already a valid new-system rank.
  */
+/**
+ * Derive a display rank from the user's cloud profile level. Lets
+ * surfaces like StatusWindow show a consistent rank without a local
+ * MMKV cache. 1-based levels map into RANK_ORDER linearly.
+ */
+export function rankFromLevel(level: number): Rank {
+  const idx = Math.min(RANK_ORDER.length - 1, Math.max(0, level - 1));
+  return RANK_ORDER[idx];
+}
+
 export function migrateRank(raw: string): Rank {
   // Already a valid new rank
   if ((RANK_ORDER as string[]).includes(raw)) {
