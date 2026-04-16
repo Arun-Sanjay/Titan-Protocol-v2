@@ -1237,6 +1237,47 @@ export type Database = {
           },
         ]
       }
+      quick_meals: {
+        Row: {
+          calories: number
+          carbs_g: number
+          created_at: string
+          fat_g: number
+          id: string
+          name: string
+          protein_g: number
+          user_id: string
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          name: string
+          protein_g?: number
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          name?: string
+          protein_g?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_meals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rank_up_events: {
         Row: {
           created_at: string
@@ -1571,6 +1612,38 @@ export type Database = {
           },
         ]
       }
+      water_logs: {
+        Row: {
+          date_key: string
+          glasses: number
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          date_key: string
+          glasses?: number
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          date_key?: string
+          glasses?: number
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "water_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weight_logs: {
         Row: {
           created_at: string
@@ -1807,3 +1880,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -1,21 +1,100 @@
 /**
- * Phase 4.1: Re-export pure gym types/constants and the store itself so
- * screens import from this barrel instead of directly from the store file.
- * This lets the grep for store filenames return zero matches in app/.
+ * Pure gym types and constants. Cloud state comes from the
+ * useGymSessions / useGymSets / useGymExercises / useGymTemplates /
+ * useGymPersonalRecords hooks — no Zustand store involved.
  */
 
-export { useGymStore as useGymData } from "../stores/useGymStore";
+export type MuscleGroup =
+  | "chest"
+  | "back"
+  | "shoulders"
+  | "biceps"
+  | "triceps"
+  | "legs"
+  | "core"
+  | "glutes"
+  | "calves"
+  | "forearms"
+  | "full_body"
+  | "cardio";
 
-export {
-  type Exercise,
-  type Template,
-  type TemplateExercise,
-  type GymSession,
-  type GymSet,
-  type SetType,
-  type MuscleGroup,
-  type PersonalRecord,
-  type RestTimerState,
-  MUSCLE_GROUPS,
-  EQUIPMENT_LIST,
-} from "../stores/useGymStore";
+export type SetType = "normal" | "warmup" | "dropset" | "failure";
+
+export type GymSet = {
+  id: string;
+  sessionId: string;
+  exerciseId: string;
+  setIndex: number;
+  weight: number;
+  reps: number;
+  setType: SetType;
+  completed: boolean;
+  notes?: string;
+};
+
+export type Exercise = {
+  id: string;
+  name: string;
+  muscleGroup: MuscleGroup;
+  equipment: string;
+};
+
+export type Template = {
+  id: string;
+  name: string;
+};
+
+export type TemplateExercise = {
+  templateId: string;
+  exerciseId: string;
+  order: number;
+};
+
+export type GymSession = {
+  id: string;
+  templateId: string | null;
+  templateName: string;
+  dateKey: string;
+  startedAt: number;
+  endedAt: number | null;
+  prCount?: number;
+};
+
+export type PersonalRecord = {
+  exerciseName: string;
+  weight: number;
+  reps: number;
+  date: string;
+};
+
+export type RestTimerState = {
+  active: boolean;
+  remaining: number;
+  duration: number;
+};
+
+export const MUSCLE_GROUPS: MuscleGroup[] = [
+  "chest",
+  "back",
+  "shoulders",
+  "biceps",
+  "triceps",
+  "legs",
+  "core",
+  "glutes",
+  "calves",
+  "forearms",
+  "full_body",
+  "cardio",
+];
+
+export const EQUIPMENT_LIST = [
+  "barbell",
+  "dumbbell",
+  "machine",
+  "cable",
+  "bodyweight",
+  "band",
+  "kettlebell",
+  "smith_machine",
+] as const;

@@ -1,8 +1,11 @@
 /**
- * Phase 4.1: Re-export pure focus types so screens can import
- * them without pulling in the Zustand store file.
+ * Pure focus types. Cloud state comes from useFocus hook.
  */
 
-export {
-  type FocusSettings,
-} from "../stores/useFocusStore";
+export type FocusSettings = {
+  focusMinutes: number;
+  breakMinutes: number;
+  longBreakMinutes: number;
+  longBreakAfter: number;
+  dailyTarget: number;
+};
