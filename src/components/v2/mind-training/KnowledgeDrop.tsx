@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { colors, spacing, fonts } from "../../../theme";
 import { Panel } from "../../ui/Panel";
-import type { Exercise, ExerciseOption } from "../../../stores/useMindTrainingStore";
+import type { Exercise, ExerciseOption } from "../../../types/mind-training-ui";
 
 const LETTERS = ["A", "B", "C", "D"];
 

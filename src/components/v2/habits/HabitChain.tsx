@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 import { View, StyleSheet } from "react-native";
 import Animated, {
   useSharedValue,
@@ -10,24 +10,18 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { colors, spacing } from "../../../theme";
-import { useHabitStore } from "../../../stores/useHabitStore";
+import { useHabitLogsForRange } from "../../../hooks/queries/useHabits";
 
 const CHAIN_DAYS = 14;
 const DOT_SIZE = 10;
 
 type Props = {
-  habitId: number;
+  habitId: string;
   engineColor?: string;
 };
 
 export function HabitChain({ habitId, engineColor = colors.success }: Props) {
-  // Phase 2.3F: read from store cache (warmed below) instead of doing
-  // 14 MMKV reads per habit on every render. With N habits on the track
-  // screen this dropped 14N disk operations to 14 (one shared warmup).
-  const completedIds = useHabitStore((s) => s.completedIds);
-  const loadDateRange = useHabitStore((s) => s.loadDateRange);
-
-  // Compute date range once per render (depends only on Date.now()/14d window).
+  // Compute date range once per mount (14-day rolling window).
   const { startKey, endKey, dateKeys } = useMemo(() => {
     const today = new Date();
     const dks: string[] = [];
@@ -40,22 +34,20 @@ export function HabitChain({ habitId, engineColor = colors.success }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Warm the store cache for the visible window once on mount.
-  useEffect(() => {
-    loadDateRange(startKey, endKey);
-  }, [startKey, endKey, loadDateRange]);
+  const { data: logs = [] } = useHabitLogsForRange(startKey, endKey);
 
-  // Build the 14-day chain from the cache (zero MMKV reads in render).
   const chain = useMemo(() => {
-    return dateKeys.map((dk, i) => {
-      const ids = completedIds[dk] ?? [];
-      return {
-        dateKey: dk,
-        completed: ids.includes(habitId),
-        isToday: i === dateKeys.length - 1,
-      };
-    });
-  }, [habitId, completedIds, dateKeys]);
+    const completedByDate = new Map<string, Set<string>>();
+    for (const log of logs) {
+      if (!completedByDate.has(log.date_key)) completedByDate.set(log.date_key, new Set());
+      completedByDate.get(log.date_key)!.add(log.habit_id);
+    }
+    return dateKeys.map((dk, i) => ({
+      dateKey: dk,
+      completed: completedByDate.get(dk)?.has(habitId) ?? false,
+      isToday: i === dateKeys.length - 1,
+    }));
+  }, [habitId, logs, dateKeys]);
 
   return (
     <View style={styles.container}>

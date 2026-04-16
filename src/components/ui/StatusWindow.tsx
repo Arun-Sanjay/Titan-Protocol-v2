@@ -18,7 +18,6 @@ import { useStatStore } from "../../stores/useStatStore";
 import { useRankStore } from "../../stores/useRankStore";
 import { useTitleStore } from "../../stores/useTitleStore";
 import { useProfile } from "../../hooks/queries/useProfile";
-import { useProtocolStore } from "../../stores/useProtocolStore";
 import { useFieldOpStore } from "../../stores/useFieldOpStore";
 import { useStoryStore } from "../../stores/useStoryStore";
 import { useIdentityStore } from "../../stores/useIdentityStore";
@@ -66,7 +65,7 @@ export function StatusWindow({
   const { equippedId, unlockedIds } = useTitleStore();
   const { data: profile } = useProfile();
   const profileLevel = profile?.level ?? 1;
-  const { streakCurrent } = useProtocolStore();
+  const streakCurrent = profile?.streak_current ?? 0;
   const fieldOpStore = useFieldOpStore();
   const { userName } = useStoryStore();
   const { archetype } = useIdentityStore();

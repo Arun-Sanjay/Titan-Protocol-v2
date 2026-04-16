@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { getJSON, setJSON } from "../db/storage";
 
 export type AchievementRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
@@ -12,46 +11,32 @@ export type AchievementDef = {
   iconName: string;
 };
 
-type AchievementState = {
-  unlockedIds: string[];
-  definitions: Record<string, AchievementDef>;
-  /** Currently displayed achievement celebration (head of queue). */
+/**
+ * UI-only celebration queue for newly unlocked achievements. The
+ * source of truth for which achievements are unlocked lives in the
+ * `achievements_unlocked` Supabase table (read via useUnlockedAchievements).
+ * This store only holds transient toast state so multiple unlocks
+ * from the same check pass can animate in sequence.
+ */
+type AchievementUIState = {
   pendingCelebration: AchievementDef | null;
-  /** Queue of achievements waiting to be celebrated. */
   celebrationQueue: AchievementDef[];
-
-  unlockAchievement: (id: string, def: AchievementDef) => void;
-  isUnlocked: (id: string) => boolean;
-  /** Advance the celebration queue: sets next pendingCelebration or null. */
+  pushCelebration: (def: AchievementDef) => void;
   dismissCelebration: () => void;
 };
 
-export const useAchievementStore = create<AchievementState>((set, get) => ({
-  unlockedIds: getJSON<string[]>("achievement_unlocked_ids", []),
-  definitions: getJSON<Record<string, AchievementDef>>("achievement_definitions", {}),
+export const useAchievementStore = create<AchievementUIState>((set) => ({
   pendingCelebration: null,
   celebrationQueue: [],
 
-  unlockAchievement: (id, def) => {
+  pushCelebration: (def) => {
     set((s) => {
-      if (s.unlockedIds.includes(id)) return s;
-      const ids = [...s.unlockedIds, id];
-      const defs = { ...s.definitions, [id]: def };
-      setJSON("achievement_unlocked_ids", ids);
-      setJSON("achievement_definitions", defs);
-      // If nothing is currently celebrating, show immediately; otherwise queue.
       if (!s.pendingCelebration) {
-        return { unlockedIds: ids, definitions: defs, pendingCelebration: def };
+        return { pendingCelebration: def };
       }
-      return {
-        unlockedIds: ids,
-        definitions: defs,
-        celebrationQueue: [...s.celebrationQueue, def],
-      };
+      return { celebrationQueue: [...s.celebrationQueue, def] };
     });
   },
-
-  isUnlocked: (id) => get().unlockedIds.includes(id),
 
   dismissCelebration: () => {
     set((s) => {

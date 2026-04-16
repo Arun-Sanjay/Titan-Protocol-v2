@@ -3,7 +3,7 @@
  */
 
 import templates from "../data/quest-templates.json";
-import type { Quest, QuestType } from "../stores/useQuestStore";
+import type { Quest, QuestType } from "../types/quest-ui";
 import { getTodayKey } from "./date";
 
 type QuestTemplate = {

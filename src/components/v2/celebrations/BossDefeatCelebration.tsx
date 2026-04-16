@@ -14,7 +14,7 @@ import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, fonts } from "../../../theme";
 import { ShareButton } from "./ShareButton";
-import type { BossChallenge } from "../../../stores/useQuestStore";
+import type { BossChallenge } from "../../../types/boss-ui";
 
 type Props = {
   challenge: BossChallenge;

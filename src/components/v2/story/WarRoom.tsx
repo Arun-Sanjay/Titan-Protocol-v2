@@ -28,7 +28,10 @@ import { getJSON } from "../../../db/storage";
 // Skill tree evaluation runs at protocol completion instead.
 import { HUDBackground } from "../../ui/AnimatedBackground";
 import { MissionBoard } from "../../ui/MissionBoard";
-import { useQuestStore } from "../../../stores/useQuestStore";
+import { useActiveQuests } from "../../../hooks/queries/useQuests";
+import { useActiveBossChallenges } from "../../../hooks/queries/useBossChallenges";
+import { mapCloudQuest } from "../../../types/quest-ui";
+import { mapCloudBossChallenge } from "../../../types/boss-ui";
 import { playRandomTaskAck, stopCurrentAudio } from "../../../lib/protocol-audio";
 import { trackOperationCompletion } from "../../../lib/operation-engine";
 
@@ -83,6 +86,8 @@ export function WarRoom() {
   const completions = useEngineStore((s) => s.completions);
   const toggleTask = useEngineStore((s) => s.toggleTask);
   const awardXPMutation = useAwardXP();
+  const { data: cloudQuests = [] } = useActiveQuests();
+  const { data: cloudBosses = [] } = useActiveBossChallenges();
 
   const [justCompleted, setJustCompleted] = useState<Set<number>>(new Set());
 
@@ -449,8 +454,8 @@ export function WarRoom() {
 
           {/* ══════════════ WEEKLY MISSION BOARD ══════════════ */}
           {(() => {
-            const weeklyQuests = useQuestStore.getState().weeklyQuests;
-            const boss = useQuestStore.getState().bossChallenge;
+            const weeklyQuests = cloudQuests.map(mapCloudQuest);
+            const boss = cloudBosses.length > 0 ? mapCloudBossChallenge(cloudBosses[0]) : null;
             const quests = weeklyQuests.map((q) => ({
               id: q.id,
               title: q.title,

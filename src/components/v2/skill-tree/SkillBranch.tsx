@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors, spacing, fonts } from "../../../theme";
 import { SkillNode } from "./SkillNode";
-import type { SkillNodeProgress } from "../../../stores/useSkillTreeStore";
+import type { SkillNodeProgress } from "../../../types/skill-tree-ui";
 
 type Props = {
   name: string;

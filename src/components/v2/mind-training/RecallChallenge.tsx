@@ -4,7 +4,7 @@ import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, fonts } from "../../../theme";
 import { Panel } from "../../ui/Panel";
-import type { Exercise, ExerciseOption } from "../../../stores/useMindTrainingStore";
+import type { Exercise, ExerciseOption } from "../../../types/mind-training-ui";
 import type { SRSCard } from "../../../lib/srs";
 import { calculateNextReview, qualityFromResult } from "../../../lib/srs";
 

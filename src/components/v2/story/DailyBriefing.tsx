@@ -22,7 +22,6 @@ import { getLatestNarrative, getStoryForDay } from "../../../lib/narrative-engin
 import { generateDailyOperation } from "../../../lib/operation-engine";
 import { useAllTasks, useRecentCompletionMap } from "../../../hooks/queries/useTasks";
 import { useStoryStore } from "../../../stores/useStoryStore";
-import { useProtocolStore } from "../../../stores/useProtocolStore";
 import { checkIntegrityStatus, getIntegrityColor } from "../../../lib/protocol-integrity";
 import {
   playSequence,
@@ -123,7 +122,8 @@ export function DailyBriefing({ onEnter }: Props) {
   // instead of profile.streak (requires async loadProfile, defaults to 0 on first render)
   const userName = useStoryStore((s) => s.userName) || "Recruit";
   const storyAct = useStoryStore((s) => s.currentAct);
-  const protocolStreak = useProtocolStore((s) => s.streakCurrent);
+  const { data: cloudProfile } = useProfile();
+  const protocolStreak = cloudProfile?.streak_current ?? 0;
   // Phase 3.6: cloud task data for operation engine
   const { data: cloudTasks = [] } = useAllTasks();
   const { data: completionMap = {} } = useRecentCompletionMap();

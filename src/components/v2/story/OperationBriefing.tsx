@@ -11,7 +11,7 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
-import { useProtocolStore } from "../../../stores/useProtocolStore";
+import { useProfile } from "../../../hooks/queries/useProfile";
 import { generateDailyOperation } from "../../../lib/operation-engine";
 import { useAllTasks, useRecentCompletionMap } from "../../../hooks/queries/useTasks";
 import {
@@ -53,8 +53,7 @@ export function OperationBriefing({
 }: Props) {
   const userName = useStoryStore((s) => s.userName) || "Recruit";
   const storyAct = useStoryStore((s) => s.currentAct);
-  // Use protocol store streak (loaded from MMKV on init) — profile.streak defaults to 0 before async load
-  const streak = useProtocolStore((s) => s.streakCurrent);
+  const streak = useProfile().data?.streak_current ?? 0;
 
   // Phase 3.6: cloud task data for the operation engine
   const { data: cloudTasks = [] } = useAllTasks();

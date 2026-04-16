@@ -4,7 +4,7 @@ import Animated, { FadeInUp } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, fonts } from "../../../theme";
 import { Panel } from "../../ui/Panel";
-import type { Quest } from "../../../stores/useQuestStore";
+import type { Quest } from "../../../types/quest-ui";
 
 const TYPE_ICONS: Record<string, { icon: string; color: string }> = {
   engine: { icon: "speedometer-outline", color: colors.body },

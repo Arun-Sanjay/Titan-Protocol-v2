@@ -5,7 +5,6 @@ import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
 import { useProfile } from "../../../hooks/queries/useProfile";
-import { useProtocolStore } from "../../../stores/useProtocolStore";
 import { useEngineStore, selectTotalScore, ENGINES } from "../../../stores/useEngineStore";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
@@ -32,8 +31,8 @@ export function Day30Cinematic({ onComplete }: Props) {
   const enginesOnline = useStoryStore((s) => s.enginesOnline);
   const scores = useEngineStore((s) => s.scores);
   const loadDateRange = useEngineStore((s) => s.loadDateRange);
-  const streakCurrent = useProtocolStore((s) => s.streakCurrent);
   const { data: profile } = useProfile();
+  const streakCurrent = profile?.streak_current ?? 0;
   const xp = profile?.xp ?? 0;
   const level = profile?.level ?? 1;
   const identity = useOnboardingStore((s) => s.identity) ?? "titan";

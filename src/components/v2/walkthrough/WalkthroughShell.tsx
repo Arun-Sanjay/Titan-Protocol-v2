@@ -20,8 +20,8 @@ import { WalkthroughSkillTrees } from "./WalkthroughSkillTrees";
 import { WalkthroughAchievements } from "./WalkthroughAchievements";
 import { WalkthroughSummary } from "./WalkthroughSummary";
 import { useEngineStore } from "../../../stores/useEngineStore";
-import { useHabitStore } from "../../../stores/useHabitStore";
-import { useGoalStore } from "../../../stores/useGoalStore";
+import { useCreateHabit } from "../../../hooks/queries/useHabits";
+import { useCreateGoal } from "../../../hooks/queries/useGoals";
 import { useIdentityStore } from "../../../stores/useIdentityStore";
 import type { EngineKey } from "../../../db/schema";
 
@@ -56,8 +56,8 @@ export function WalkthroughShell() {
   const pinnedTools = useWalkthroughStore((s) => s.pinnedTools);
   const identity = useOnboardingStore((s) => s.identity);
   const addTaskToEngine = useEngineStore((s) => s.addTask);
-  const addHabit = useHabitStore((s) => s.addHabit);
-  const addGoal = useGoalStore((s) => s.addGoal);
+  const createHabitMutation = useCreateHabit();
+  const createGoalMutation = useCreateGoal();
   const castVote = useIdentityStore((s) => s.castVote);
 
   const progressColor = getProgressColor(identity);
@@ -93,19 +93,19 @@ export function WalkthroughShell() {
         addTaskToEngine(engine, task.title, task.kind);
       }
     }
-    // 2. Create habits
+    // 2. Create habits (cloud — fire-and-forget)
     for (const h of habits) {
-      addHabit(h.title, h.icon || "\u2713", h.engine, h.trigger);
+      createHabitMutation.mutate({
+        title: h.title,
+        icon: h.icon || "\u2713",
+        engine: h.engine,
+        triggerText: h.trigger,
+      });
     }
-    // 3. Create goals
+    // 3. Create goals (cloud — fire-and-forget)
     for (const g of goals) {
-      addGoal({
+      createGoalMutation.mutate({
         title: g.title,
-        engine: g.engine,
-        type: "consistency",
-        target: 1,
-        unit: "days",
-        deadline: "",
       });
     }
     // 4. Save pinned tools + mark complete
