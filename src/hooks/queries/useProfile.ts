@@ -34,35 +34,33 @@ export function useProfile() {
   return useQuery({
     queryKey: profileQueryKey,
     queryFn: async (): Promise<Profile> => {
+      // maybeSingle: returns null rather than erroring when the row
+      // hasn't been created yet (new signup, trigger race, etc.).
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        // Profile doesn't exist yet — return defaults
-        if (error.code === "PGRST116") {
-          return {
-            id: userId ?? "",
-            xp: 0,
-            level: 1,
-            streak_current: 0,
-            streak_best: 0,
-            streak_last_date: null,
-            first_use_date: null,
-            onboarding_completed: false,
-            tutorial_completed: false,
-            display_name: null,
-            archetype: null,
-            mode: "full_protocol",
-            focus_engines: [],
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-        }
-        throw error;
-      }
-      return data as Profile;
+      if (error) throw error;
+      if (data) return data as Profile;
+
+      return {
+        id: userId ?? "",
+        xp: 0,
+        level: 1,
+        streak_current: 0,
+        streak_best: 0,
+        streak_last_date: null,
+        first_use_date: null,
+        onboarding_completed: false,
+        tutorial_completed: false,
+        display_name: null,
+        archetype: null,
+        mode: "full_protocol",
+        focus_engines: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
     },
     enabled: Boolean(userId),
   });

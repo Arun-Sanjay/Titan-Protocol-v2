@@ -34,11 +34,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     // Read the persisted session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      set({
-        session,
-        user: session?.user ?? null,
+      set((prev) => ({
+        session: session ?? prev.session,
+        user: session?.user ?? prev.user,
         isLoading: false,
-      });
+      }));
       if (session?.user) {
         ensureProfileRow(session.user.id, session.user.email ?? null).catch(
           (e) => logError("useAuthStore.ensureProfileRow.initial", e),
@@ -46,20 +46,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     });
 
-    // Subscribe to auth state changes (sign-in, sign-out, token refresh)
+    // Subscribe to auth state changes (sign-in, sign-out, token refresh).
+    //
+    // Supabase emits INITIAL_SESSION on subscribe (possibly with a null
+    // session while AsyncStorage is still hydrating). Treat that as
+    // informational — never use it to CLEAR an already-signed-in user
+    // that was set by login.tsx's direct setState. Only explicit
+    // SIGNED_OUT should clear the store.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      set({
-        session,
-        user: session?.user ?? null,
-        isLoading: false,
+      logError("useAuthStore.event", new Error(`auth: ${event}`), {
+        hasSession: Boolean(session),
+        userId: session?.user?.id ?? null,
       });
-      if (session?.user && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
-        ensureProfileRow(session.user.id, session.user.email ?? null).catch(
-          (e) => logError("useAuthStore.ensureProfileRow.change", e, { event }),
-        );
+
+      if (event === "INITIAL_SESSION" && !session) {
+        // Don't clobber a user that was set synchronously by login.tsx.
+        set({ isLoading: false });
+        return;
       }
+      if (event === "SIGNED_OUT") {
+        set({ session: null, user: null, isLoading: false });
+        return;
+      }
+      // SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED / INITIAL_SESSION with session.
+      if (session?.user) {
+        set({ session, user: session.user, isLoading: false });
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          ensureProfileRow(session.user.id, session.user.email ?? null).catch(
+            (e) => logError("useAuthStore.ensureProfileRow.change", e, { event }),
+          );
+        }
+        return;
+      }
+      // Any other event with no session — fall through without clearing.
+      set({ isLoading: false });
     });
 
     // Store cleanup reference for potential future use
