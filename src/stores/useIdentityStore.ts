@@ -1,8 +1,8 @@
 import { create } from "zustand";
-import { getJSON, setJSON } from "../db/storage";
-import { getTodayKey } from "../lib/date";
-
-// ─── Types ─────────────────────────────────────────────────────────────────
+import { upsertProfile } from "../services/profile";
+import { queryClient } from "../lib/query-client";
+import { profileQueryKey } from "../hooks/queries/useProfile";
+import { logError } from "../lib/error-log";
 
 export type Archetype =
   | "titan"
@@ -23,8 +23,6 @@ export type IdentityMeta = {
   primaryEngine: string;
   iconName: string;
 };
-
-// ─── Constants ──────────────────────────────────────────────────────────────
 
 export const IDENTITIES: { key: Archetype; id: Archetype; meta: IdentityMeta; name: string; primaryEngine: string }[] = [
   { key: "titan", id: "titan", name: "The Titan", primaryEngine: "all", meta: { name: "The Titan", description: "Master of all domains", tagline: "All engines online. No exceptions.", color: "#FFD700", icon: "⚡", primaryEngine: "all", iconName: "flash-outline" } },
@@ -53,8 +51,15 @@ export function selectDaysSinceSelection(selectedDate: string | null): number {
   return Math.max(0, Math.floor((now.getTime() - selected.getTime()) / 86_400_000));
 }
 
-// ─── Store ──────────────────────────────────────────────────────────────────
-
+/**
+ * In-memory mirror of profile.archetype. ProfileHydrator keeps this
+ * in sync whenever the cloud profile changes. Writes go to Supabase
+ * first; the local state updates after the network settles.
+ *
+ * Vote counts and selection date are local-only and reset on app
+ * restart — they drive the "days since identity change" micro-UI
+ * element and don't need to sync across devices.
+ */
 type IdentityState = {
   archetype: Archetype;
   totalVotes: number;
@@ -64,23 +69,28 @@ type IdentityState = {
   changeIdentity: (archetype: Archetype) => void;
 };
 
+function persistArchetype(archetype: Archetype): void {
+  upsertProfile({ archetype })
+    .then(() => {
+      queryClient.invalidateQueries({ queryKey: profileQueryKey });
+    })
+    .catch((e) => logError("useIdentityStore.persistArchetype", e, { archetype }));
+}
+
 export const useIdentityStore = create<IdentityState>((set, get) => ({
-  archetype: getJSON<Archetype>("identity_archetype_v2", "titan"),
-  totalVotes: getJSON<number>("identity_total_votes", 0),
-  selectedDate: getJSON<string | null>("identity_selected_date", null),
+  archetype: "titan",
+  totalVotes: 0,
+  selectedDate: null,
 
   castVote: (archetype) => {
     const votes = get().totalVotes + 1;
-    setJSON("identity_archetype_v2", archetype);
-    setJSON("identity_total_votes", votes);
     set({ archetype, totalVotes: votes });
+    persistArchetype(archetype);
   },
 
   changeIdentity: (archetype) => {
-    const today = getTodayKey();
-    setJSON("identity_archetype_v2", archetype);
-    setJSON("identity_selected_date", today);
-    setJSON("identity_total_votes", 0);
+    const today = new Date().toISOString().slice(0, 10);
     set({ archetype, selectedDate: today, totalVotes: 0 });
+    persistArchetype(archetype);
   },
 }));
