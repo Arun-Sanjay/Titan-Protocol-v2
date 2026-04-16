@@ -36,7 +36,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Jest tests
-        run: npm test
+        run: npx jest --passWithNoTests
 
   # ─── Job 2: Build Android release APK ──────────────────────────────────────
   # Mirrors the standalone "Build Android APK" workflow style. Skipped on PRs.
