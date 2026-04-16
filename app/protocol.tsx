@@ -599,10 +599,10 @@ export default function ProtocolScreen() {
 
   const handleVoteYes = useCallback(() => {
     setIdentityVoted(true);
-    castVote();
+    castVote(identity);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     goNext();
-  }, [castVote, goNext]);
+  }, [castVote, identity, goNext]);
 
   const handleVoteNo = useCallback(() => {
     setIdentityVoted(false);

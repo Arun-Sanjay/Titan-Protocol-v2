@@ -81,6 +81,8 @@ export function generateWeeklyQuests(
       currentValue: 0,
       xpReward: t.xp_reward,
       status: "active",
+      completed: false,
+      active: true,
       createdAt: today,
     };
   }

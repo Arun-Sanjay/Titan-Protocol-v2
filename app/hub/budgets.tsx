@@ -194,13 +194,14 @@ const BudgetCard = React.memo(function BudgetCard({
   const { category, monthly_limit } = budget;
   const pct = monthly_limit > 0 ? spent / monthly_limit : 0;
   const pctClamped = Math.min(pct, 1);
-  const status = getBudgetStatus(monthly_limit, spent);
+  const status = getBudgetStatus(spent, monthly_limit);
   const statusColor = getBudgetStatusColor(status);
   const remaining = monthly_limit - spent;
-  const dailyBudget = getDailyRemaining(monthly_limit, spent, monthKey);
+  const now = new Date();
+  const dailyBudget = getDailyRemaining(monthly_limit, spent, now.getDate(), new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
   const icon = CATEGORY_ICONS[category] ?? "ellipsis-horizontal-circle-outline";
   const catColor = CATEGORY_COLORS[category] ?? colors.textMuted;
-  const isOver = status === "over";
+  const isOver = status === "over_budget";
 
   return (
     <Animated.View entering={FadeInDown.delay(index * 60).duration(400).easing(Easing.out(Easing.cubic))}>
@@ -307,7 +308,7 @@ const AddBudgetForm = React.memo(function AddBudgetForm({
     if (parsed > 999999.99) { Alert.alert("Invalid", "Max budget is $999,999.99"); return; }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    createBudgetMut.mutate({ category, monthlyLimit: Math.round(parsed * 100) / 100 });
+    createBudgetMut.mutate({ category, monthly_limit: Math.round(parsed * 100) / 100 });
     onClose();
   }, [category, limitStr, createBudgetMut, onClose]);
 

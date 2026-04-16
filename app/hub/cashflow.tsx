@@ -422,7 +422,7 @@ const AddTransactionForm = React.memo(function AddTransactionForm({
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     createTxMut.mutate({
-      dateKey: txDate,
+      date_key: txDate,
       type,
       amount: roundedAmount,
       category,

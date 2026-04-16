@@ -4,7 +4,7 @@ import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, fonts } from "../../../theme";
 import { Panel } from "../../ui/Panel";
-import type { Exercise } from "../../../stores/useMindTrainingStore";
+import type { Exercise, ExerciseOption } from "../../../stores/useMindTrainingStore";
 import type { SRSCard } from "../../../lib/srs";
 import { calculateNextReview, qualityFromResult } from "../../../lib/srs";
 
@@ -68,7 +68,7 @@ export function RecallChallenge({ exercise, card, onComplete }: Props) {
       </Animated.Text>
 
       {/* Options */}
-      {exercise.options.map((opt, idx) => {
+      {exercise.options.map((opt: ExerciseOption, idx: number) => {
         const isSelected = selectedId === opt.id;
         const isCorrectOpt = opt.id === exercise.correct;
         const showCorrect = revealed && isCorrectOpt;

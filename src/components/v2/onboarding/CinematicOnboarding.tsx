@@ -311,7 +311,7 @@ export function CinematicOnboarding({ onComplete }: Props) {
               advanceBeat(9, () => {
                 enginePriorityRef.current = engines;
                 setEnginePriority(engines as EngineKey[]);
-                setFocusEngines(engines);
+                setFocusEngines(engines as EngineKey[]);
               });
             }}
           />
@@ -342,7 +342,7 @@ export function CinematicOnboarding({ onComplete }: Props) {
                 // Persist mode
                 setMode(mode as any);
                 if (focusEngs) {
-                  setFocusEngines(focusEngs);
+                  setFocusEngines(focusEngs as EngineKey[]);
                 }
               });
             }}

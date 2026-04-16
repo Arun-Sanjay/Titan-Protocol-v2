@@ -1,8 +1,9 @@
 {
   "hooks": {
-    "PreCommit": [
+    "PreToolUse": [
       {
-        "command": "npx tsc --noEmit",
+        "matcher": "Bash",
+        "command": "if echo \"$TOOL_INPUT\" | grep -q 'git commit'; then npx tsc --noEmit; fi",
         "description": "TypeScript check before commit"
       }
     ]

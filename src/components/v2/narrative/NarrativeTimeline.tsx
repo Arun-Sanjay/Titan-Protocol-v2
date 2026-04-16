@@ -1,8 +1,8 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { colors, spacing, fonts } from "../../../theme";
-import { useNarrativeStore } from "../../../stores/useNarrativeStore";
+import { useNarrativeLog } from "../../../hooks/queries/useNarrative";
 import { NarrativeEntryCard } from "./NarrativeEntry";
 
 type Props = {
@@ -10,11 +10,17 @@ type Props = {
 };
 
 export function NarrativeTimeline({ limit }: Props) {
-  const entries = useNarrativeStore((s) => s.entries);
+  const { data: entries, isLoading } = useNarrativeLog(limit);
 
-  // Sort newest first
-  const sorted = [...entries].sort((a, b) => b.dayNumber - a.dayNumber);
-  const display = limit ? sorted.slice(0, limit) : sorted;
+  if (isLoading) {
+    return (
+      <View style={styles.empty}>
+        <ActivityIndicator color={colors.textMuted} />
+      </View>
+    );
+  }
+
+  const display = entries ?? [];
 
   if (display.length === 0) {
     return (

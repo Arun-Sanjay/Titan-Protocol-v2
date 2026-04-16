@@ -157,7 +157,7 @@ const MODE_LABELS: Record<ExperienceMode, string> = {
   titan: "Titan Mode",
 };
 
-const SCHEDULE_LABELS: Record<SchedulePreference, string> = {
+const SCHEDULE_LABELS: Partial<Record<SchedulePreference, string>> = {
   early_morning: "Early Morning (5-7am)",
   morning: "Morning (7-9am)",
   midday: "Midday (11am-1pm)",
@@ -167,8 +167,8 @@ const SCHEDULE_LABELS: Record<SchedulePreference, string> = {
 
 function V2SettingsSection() {
   const router = useRouter();
-  const mode = useModeStore((s) => s.mode);
-  const setMode = useModeStore((s) => s.setMode);
+  const mode = useModeStore((s) => s.experienceMode);
+  const setMode = useModeStore((s) => s.setExperienceMode);
   const setFocusEngines = useModeStore((s) => s.setFocusEngines);
   const focusEngines = useModeStore((s) => s.focusEngines);
   const archetype = useIdentityStore((s) => s.archetype);
@@ -218,8 +218,8 @@ function V2SettingsSection() {
           text: "Change",
           onPress: () => {
             const options = IDENTITIES.map((i) => ({
-              text: i.name,
-              onPress: () => useIdentityStore.getState().changeIdentity(i.id),
+              text: i.meta.name,
+              onPress: () => useIdentityStore.getState().changeIdentity(i.key),
             }));
             Alert.alert("Choose Identity", "", [...options, { text: "Cancel", style: "cancel" as const }]);
           },

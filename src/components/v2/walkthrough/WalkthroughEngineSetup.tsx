@@ -59,7 +59,7 @@ const ENGINE_META: Record<EngineKey, EngineMeta> = {
 export function WalkthroughEngineSetup({ engine, onNext, onBack }: Props) {
   const meta = ENGINE_META[engine];
   const identity = useOnboardingStore((s) => s.identity);
-  const identityMeta = identity
+  const identityEntry = identity
     ? IDENTITIES.find((i) => i.id === identity)
     : null;
 
@@ -110,7 +110,7 @@ export function WalkthroughEngineSetup({ engine, onNext, onBack }: Props) {
     onNext();
   };
 
-  const archetypeName = identityMeta?.name?.replace("The ", "") ?? "YOU";
+  const archetypeName = identityEntry?.meta?.name?.replace("The ", "") ?? "YOU";
 
   return (
     <View style={styles.container}>

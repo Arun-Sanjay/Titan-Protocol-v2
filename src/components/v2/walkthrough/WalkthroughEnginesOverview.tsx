@@ -53,13 +53,15 @@ const ENGINES: EngineInfo[] = [
 
 export function WalkthroughEnginesOverview({ onNext, onBack }: Props) {
   const identity = useOnboardingStore((s) => s.identity);
-  const meta = identity ? IDENTITIES.find((i) => i.id === identity) : null;
-  const weights = meta?.engineWeights ?? {
-    body: 0.25,
-    mind: 0.25,
-    money: 0.25,
-    charisma: 0.25,
-  };
+  const entry = identity ? IDENTITIES.find((i) => i.id === identity) : null;
+  // Derive engine weights from primaryEngine (primary gets 0.40, others split 0.20)
+  const weights = (() => {
+    const pe = entry?.primaryEngine;
+    if (!pe || pe === "all") return { body: 0.25, mind: 0.25, money: 0.25, charisma: 0.25 };
+    const base: Record<string, number> = { body: 0.20, mind: 0.20, money: 0.20, charisma: 0.20 };
+    base[pe] = 0.40;
+    return base;
+  })();
 
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

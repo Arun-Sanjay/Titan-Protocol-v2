@@ -12,7 +12,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-import { colors, spacing, fonts, radius } from "../../../theme";
+import { colors, spacing, fonts, radius, shadows } from "../../../theme";
 import {
   useEngineStore,
   selectAllTasksForDate,
@@ -554,11 +554,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
     backgroundColor: colors.danger,
-    shadowColor: colors.danger,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
-    elevation: 4,
+    ...shadows.glow,
   },
   bossContent: {
     padding: spacing.md,

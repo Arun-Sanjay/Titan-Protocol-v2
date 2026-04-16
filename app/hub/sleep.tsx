@@ -650,7 +650,7 @@ export default function SleepScreen() {
   }, []);
   const todayKey = useMemo(() => getTodayKey(), [appActive]);
 
-  const { data: sleepLogs = [] } = useSleepLogs(90); // fetch up to 90 days
+  const { data: sleepLogs = [] } = useSleepLogs(); // fetch up to 90 days
   const upsertSleepLogMut = useUpsertSleepLog();
   const deleteSleepLogMut = useDeleteSleepLog();
 
@@ -765,10 +765,10 @@ export default function SleepScreen() {
     }
 
     upsertSleepLogMut.mutate({
-      dateKey: todayKey,
-      hoursSlept: durationMinutes / 60,
+      date_key: todayKey,
+      hours_slept: durationMinutes / 60,
       quality,
-      notes: notes.trim() || null,
+      notes: notes.trim() || undefined,
     });
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

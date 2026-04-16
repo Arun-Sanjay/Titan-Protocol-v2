@@ -9,11 +9,13 @@ export { useGymStore as useGymData } from "../stores/useGymStore";
 export {
   type Exercise,
   type Template,
+  type TemplateExercise,
   type GymSession,
   type GymSet,
   type SetType,
   type MuscleGroup,
   type PersonalRecord,
+  type RestTimerState,
   MUSCLE_GROUPS,
   EQUIPMENT_LIST,
 } from "../stores/useGymStore";

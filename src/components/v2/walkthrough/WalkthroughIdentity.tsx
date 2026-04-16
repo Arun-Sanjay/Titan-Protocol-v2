@@ -23,20 +23,20 @@ const ARCHETYPE_ICONS: Record<Archetype, string> = {
 
 function getNameColor(archetype: Archetype | null): string {
   if (!archetype || archetype === "titan") return "#FFD700";
-  const meta = IDENTITIES.find((i) => i.id === archetype);
-  if (!meta || meta.primaryEngine === "all") return "#FFD700";
+  const entry = IDENTITIES.find((i) => i.key === archetype);
+  if (!entry || entry.primaryEngine === "all") return "#FFD700";
   const engineColors: Record<EngineKey, string> = {
     body: colors.body,
     mind: colors.mind,
     money: colors.money,
     charisma: colors.charisma,
   };
-  return engineColors[meta.primaryEngine as EngineKey] ?? "#FFD700";
+  return engineColors[entry.primaryEngine as EngineKey] ?? "#FFD700";
 }
 
 export function WalkthroughIdentity({ onNext }: Props) {
   const identity = useOnboardingStore((s) => s.identity);
-  const meta = identity ? IDENTITIES.find((i) => i.id === identity) : null;
+  const entry = identity ? IDENTITIES.find((i) => i.key === identity) : null;
   const nameColor = getNameColor(identity as Archetype | null);
   const icon = identity ? ARCHETYPE_ICONS[identity as Archetype] ?? "\u26A1" : "\u26A1";
 
@@ -53,12 +53,12 @@ export function WalkthroughIdentity({ onNext }: Props) {
 
         {/* Name */}
         <Text style={[styles.name, { color: nameColor }]}>
-          {meta?.name ?? "The Titan"}
+          {entry?.meta?.name ?? "The Titan"}
         </Text>
 
         {/* Tagline */}
         <Text style={styles.tagline}>
-          {meta?.tagline ?? "No ceiling. No excuses. Every engine at full power."}
+          {entry?.meta?.tagline ?? "No ceiling. No excuses. Every engine at full power."}
         </Text>
 
         {/* Transition text */}

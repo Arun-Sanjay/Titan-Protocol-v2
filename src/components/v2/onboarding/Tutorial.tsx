@@ -123,15 +123,15 @@ export function Tutorial({ onComplete }: Props) {
 
   const archetype = useIdentityStore((s) => s.archetype);
   const meta = selectIdentityMeta(archetype);
-  const mode = useModeStore((s) => s.mode);
+  const experienceMode = useModeStore((s) => s.experienceMode);
 
   const slides = useMemo(() => {
     const all = getAllSlides(
       meta?.name ?? "your identity",
       meta?.primaryEngine ?? "all",
     );
-    return all.filter((s) => s.modes.includes(mode));
-  }, [meta, mode]);
+    return all.filter((s) => s.modes.includes(experienceMode));
+  }, [meta, experienceMode]);
 
   const slide = slides[currentSlide];
   const isLast = currentSlide === slides.length - 1;

@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { colors, spacing, fonts } from "../../../theme";
 import { Panel } from "../../ui/Panel";
-import type { Exercise } from "../../../stores/useMindTrainingStore";
+import type { Exercise, ExerciseOption } from "../../../stores/useMindTrainingStore";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -20,7 +20,7 @@ export function KnowledgeDrop({ exercise, onComplete }: Props) {
   const isCorrect = selectedId === exercise.correct;
 
   // Extract title from scenario (first line or first sentence)
-  const title = exercise.category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const title = exercise.category.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
 
   function handleGotIt() {
     setShowQuestion(true);
@@ -72,7 +72,7 @@ export function KnowledgeDrop({ exercise, onComplete }: Props) {
             {exercise.question}
           </Animated.Text>
 
-          {exercise.options.map((opt, idx) => {
+          {exercise.options.map((opt: ExerciseOption, idx: number) => {
             const isSelected = selectedId === opt.id;
             const isCorrectOpt = opt.id === exercise.correct;
             const showCorrectStyle = revealed && isCorrectOpt;

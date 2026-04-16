@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, Pressable,
+  View, Text, ScrollView, StyleSheet, Pressable, RefreshControl, type RefreshControlProps,
   TextInput, Alert, Platform, KeyboardAvoidingView, AppState,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,6 +18,7 @@ import { getTodayKey, formatDateShort, getDayOfWeek } from "../../src/lib/date";
 // Phase 3.5d: Habits (reads + writes) go through cloud hooks. The
 // journal tab keeps its local store (no cloud service yet) but its
 // XP award path moves to the cloud awardXP mutation.
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useHabits,
   useHabitLogsForDate,
@@ -77,6 +78,17 @@ export default function TrackScreen() {
     setTabState(next);
     setJSON(TRACK_TAB_KEY, next);
   }, []);
+  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries();
+    setRefreshing(false);
+  }, [queryClient]);
+  const refreshControl = useMemo(
+    () => <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.textSecondary} />,
+    [refreshing, handleRefresh],
+  );
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
@@ -112,16 +124,16 @@ export default function TrackScreen() {
         </View>
       </View>
 
-      {tab === "habits" && <HabitsTab dateKey={dateKey} />}
-      {tab === "journal" && <JournalTab dateKey={dateKey} />}
-      {tab === "goals" && <GoalsTab dateKey={dateKey} />}
+      {tab === "habits" && <HabitsTab dateKey={dateKey} refreshControl={refreshControl} />}
+      {tab === "journal" && <JournalTab dateKey={dateKey} refreshControl={refreshControl} />}
+      {tab === "goals" && <GoalsTab dateKey={dateKey} refreshControl={refreshControl} />}
     </SafeAreaView>
   );
 }
 
 // ─── Habits Tab ────────────────────────────────────────────────────────────
 
-function HabitsTab({ dateKey }: { dateKey: string }) {
+function HabitsTab({ dateKey, refreshControl }: { dateKey: string; refreshControl: React.ReactElement<RefreshControlProps> }) {
   // Phase 3.5d: cloud-backed habits. Reads (habits list + today's logs
   // + 84-day log range) and writes (toggle / create / delete) all go
   // through React Query. current_chain on the habit row is the
@@ -270,7 +282,7 @@ function HabitsTab({ dateKey }: { dateKey: string }) {
   );
 
   return (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false} refreshControl={refreshControl}>
       {/* Quick stats */}
       <View style={styles.statsRow}>
         <Panel style={styles.statCard}>
@@ -426,7 +438,7 @@ function JournalEntryCard({
 
 type JournalView = "list" | "write";
 
-function JournalTab({ dateKey }: { dateKey: string }) {
+function JournalTab({ dateKey, refreshControl }: { dateKey: string; refreshControl: React.ReactElement<RefreshControlProps> }) {
   // Phase 3.5e: cloud-backed journal. All reads/writes go through
   // React Query hooks — journal store is no longer imported.
   const { data: recentEntries = [] } = useJournalEntries(90);
@@ -531,7 +543,7 @@ function JournalTab({ dateKey }: { dateKey: string }) {
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false} refreshControl={refreshControl}>
           {/* Back button + date */}
           <View style={jStyles.writeHeader}>
             <Pressable
@@ -596,7 +608,7 @@ function JournalTab({ dateKey }: { dateKey: string }) {
 
   // ─── List View ────────────────────────────────────────────────────────
   return (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false} refreshControl={refreshControl}>
       {/* Write today prompt */}
       {!hasEntryToday ? (
         <Panel onPress={openNewToday} style={jStyles.todayPrompt}>
@@ -670,7 +682,7 @@ function JournalTab({ dateKey }: { dateKey: string }) {
 
 // ─── Goals Tab ─────────────────────────────────────────────────────────────
 
-function GoalsTab({ dateKey }: { dateKey: string }) {
+function GoalsTab({ dateKey, refreshControl }: { dateKey: string; refreshControl: React.ReactElement<RefreshControlProps> }) {
   // Phase 3.5e: cloud-backed goals. Sub-tasks are not in the cloud
   // schema — the simplified model stores title + optional target_date.
   const { data: goals = [] } = useGoals();
@@ -719,7 +731,7 @@ function GoalsTab({ dateKey }: { dateKey: string }) {
   );
 
   return (
-    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false} refreshControl={refreshControl}>
       <SectionHeader title="ACTIVE GOALS" right={`${activeGoals.length}`} />
 
       {activeGoals.length === 0 ? (

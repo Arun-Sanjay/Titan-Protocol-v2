@@ -29,6 +29,7 @@ import {
   IDENTITIES,
 } from "../../stores/useIdentityStore";
 import { colors } from "../../theme/colors";
+import { shadows } from "../../theme";
 import { getTodayKey } from "../../lib/date";
 
 // ---------------------------------------------------------------------------
@@ -56,7 +57,7 @@ const RADIUS = 100;
 const SPRING_CONFIG = { damping: 15, stiffness: 150 };
 
 // Modes that show the radial menu (game modes)
-const GAME_MODES: Set<AppMode> = new Set([
+const GAME_MODES = new Set<string>([
   "full_protocol",
   "structured",
   "titan",
@@ -130,9 +131,9 @@ export default function RadialMenu() {
   const glowColor = useMemo(() => {
     if (mode === "titan") return "#FFD700";
     if (!archetype) return colors.primary;
-    const meta = IDENTITIES.find((i) => i.id === archetype);
-    if (!meta || meta.primaryEngine === "all") return colors.primary;
-    return (colors as Record<string, string>)[meta.primaryEngine] ?? colors.primary;
+    const entry = IDENTITIES.find((i) => i.key === archetype);
+    if (!entry || entry.primaryEngine === "all") return colors.primary;
+    return (colors as Record<string, string>)[entry.primaryEngine] ?? colors.primary;
   }, [mode, archetype]);
 
   // Don't render for non-game modes
@@ -256,8 +257,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
     alignItems: "center",
     justifyContent: "center",
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 10,
+    ...shadows.ring,
   },
   centerButton: {
     width: "100%",

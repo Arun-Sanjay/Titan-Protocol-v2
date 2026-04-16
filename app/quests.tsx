@@ -29,10 +29,13 @@ type LocalQuest = {
   title: string;
   description: string;
   targetType: "score" | "streak" | "completion" | "rank";
+  targetEngine: string | undefined | null;
   targetValue: number;
   currentValue: number;
   xpReward: number;
   status: "active" | "completed" | "failed";
+  completed: boolean;
+  active: boolean;
   createdAt: string;
   completedAt?: string;
 };
@@ -74,10 +77,13 @@ export default function QuestsScreen() {
     title: q.title,
     description: q.description ?? "",
     targetType: "completion" as const,
+    targetEngine: (q.metadata as Record<string, unknown>)?.engine as string | undefined ?? null,
     targetValue: q.target,
     currentValue: q.progress,
     xpReward: q.xp_reward,
     status: q.status as LocalQuest["status"],
+    completed: q.status === "completed",
+    active: q.status === "active",
     createdAt: q.created_at,
     completedAt: q.status === "completed" ? q.updated_at : undefined,
   })), [cloudQuests]);

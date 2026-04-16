@@ -47,7 +47,7 @@ type Props = { onComplete: () => void };
 export function FirstLaunchCinematic({ onComplete }: Props) {
   const userName = useStoryStore((s) => s.userName) || "RECRUIT";
   const identity = useOnboardingStore((s) => s.identity) ?? "titan";
-  const meta = IDENTITIES.find((i) => i.id === identity);
+  const meta = IDENTITIES.find((i) => i.key === identity);
   const archetypeName = meta?.name ?? IDENTITY_LABELS[identity as IdentityArchetype] ?? "THE TITAN";
   const markPlayed = useStoryStore((s) => s.markCinematicPlayed);
 

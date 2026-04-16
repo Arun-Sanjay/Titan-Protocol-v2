@@ -2,8 +2,19 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, fonts } from "../../../theme";
-import type { NarrativeEntry as EntryType, NarrativeEntryType } from "../../../stores/useNarrativeStore";
+import type { Tables } from "../../../types/supabase";
 import { formatDateShort } from "../../../lib/date";
+
+type NarrativeLogRow = Tables<"narrative_log">;
+
+type NarrativeEntryType =
+  | "milestone"
+  | "phase"
+  | "boss"
+  | "achievement"
+  | "identity"
+  | "streak"
+  | "skill";
 
 const TYPE_CONFIG: Record<NarrativeEntryType, { icon: string; color: string }> = {
   milestone: { icon: "flag", color: colors.warning },
@@ -16,11 +27,11 @@ const TYPE_CONFIG: Record<NarrativeEntryType, { icon: string; color: string }> =
 };
 
 type Props = {
-  entry: EntryType;
+  entry: NarrativeLogRow;
 };
 
 export function NarrativeEntryCard({ entry }: Props) {
-  const config = TYPE_CONFIG[entry.type] ?? TYPE_CONFIG.milestone;
+  const config = TYPE_CONFIG[entry.type as NarrativeEntryType] ?? TYPE_CONFIG.milestone;
 
   return (
     <View style={styles.container}>
@@ -39,20 +50,12 @@ export function NarrativeEntryCard({ entry }: Props) {
       {/* Content */}
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={[styles.title, { color: config.color }]}>{entry.title}</Text>
-          <Text style={styles.date}>{formatDateShort(entry.date)}</Text>
+          <Text style={[styles.title, { color: config.color }]} numberOfLines={1}>
+            {entry.type.charAt(0).toUpperCase() + entry.type.slice(1)}
+          </Text>
+          <Text style={styles.date}>{formatDateShort(entry.date_key)}</Text>
         </View>
-        <Text style={styles.body}>{entry.body}</Text>
-        {entry.stats && (
-          <View style={styles.stats}>
-            {entry.stats.titanScore !== undefined && (
-              <Text style={styles.stat}>Score: {entry.stats.titanScore}%</Text>
-            )}
-            {entry.stats.streak !== undefined && (
-              <Text style={styles.stat}>Streak: {entry.stats.streak}</Text>
-            )}
-          </View>
-        )}
+        <Text style={styles.body}>{entry.text}</Text>
       </View>
     </View>
   );

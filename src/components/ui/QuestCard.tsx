@@ -10,7 +10,7 @@ import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { colors, spacing, fonts, radius } from "../../theme";
+import { colors, spacing, fonts, radius, shadows } from "../../theme";
 import { generateDailyOperation, type OperationTask } from "../../lib/operation-engine";
 import { useStoryStore } from "../../stores/useStoryStore";
 import { useSystemNotification } from "./SystemNotification";
@@ -42,7 +42,7 @@ export function QuestCard({ delay = 0 }: Props) {
   const { data: profile } = useProfile();
   const streak = profile?.streak_current ?? 0;
   const { data: cloudTasks = [] } = useAllTasks();
-  const completionMap = useRecentCompletionMap();
+  const { data: completionMap = {} } = useRecentCompletionMap();
   const toggleCompletionMutation = useToggleCompletion();
   const awardXPMutation = useAwardXP();
   const enqueueRankUpMutation = useEnqueueRankUp();
@@ -53,7 +53,7 @@ export function QuestCard({ delay = 0 }: Props) {
 
   // Generate operation from cloud task data
   const operation = useMemo(
-    () => generateDailyOperation(userName, dayNumber, streak, storyAct, cloudTasks, completionMap),
+    () => generateDailyOperation(userName, dayNumber, streak, String(storyAct), cloudTasks, completionMap),
     [userName, dayNumber, streak, storyAct, cloudTasks, completionMap],
   );
 
@@ -196,12 +196,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.08)",
     overflow: "hidden",
-    // Subtle shadow
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 6,
+    ...shadows.card,
   },
   glowLine: {
     height: 2,

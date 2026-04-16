@@ -31,9 +31,9 @@ const ENGINE_ORDER: EngineKey[] = ["body", "mind", "money", "charisma"];
 
 function getProgressColor(identity: string | null): string {
   if (!identity || identity === "titan") return "#FFFFFF";
-  const meta = IDENTITIES.find((i) => i.id === identity);
-  if (!meta || meta.primaryEngine === "all") return "#FFFFFF";
-  const engineKey = meta.primaryEngine as EngineKey;
+  const entry = IDENTITIES.find((i) => i.key === identity);
+  if (!entry || entry.primaryEngine === "all") return "#FFFFFF";
+  const engineKey = entry.primaryEngine as EngineKey;
   const engineColors: Record<EngineKey, string> = {
     body: colors.body,
     mind: colors.mind,
@@ -76,7 +76,7 @@ export function WalkthroughShell() {
             // Apply default starter missions
             const missions = getStarterMissions(identity ?? "titan");
             for (const m of missions) {
-              addEngineTask(m.engine, { title: m.title, kind: m.kind });
+              addEngineTask(m.engine, m);
             }
             finish();
             router.replace("/(tabs)");
@@ -111,7 +111,7 @@ export function WalkthroughShell() {
     // 4. Save pinned tools + mark complete
     finish();
     // 5. Cast first identity vote
-    castVote();
+    castVote((identity as import("../../../stores/useIdentityStore").Archetype) ?? "titan");
     // 6. Navigate to main app
     router.replace("/(tabs)");
   };

@@ -399,7 +399,7 @@ export default function NutritionScreen() {
   // Cloud hooks for profile and meals
   const { data: cloudProfile } = useNutritionProfile();
   const upsertProfileMut = useUpsertNutritionProfile();
-  const { data: cloudMealLogs = [] } = useMealLogs(todayKey);
+  const { data: cloudMealLogs = [] } = useMealLogs();
   const createMealMut = useCreateMealLog();
   const deleteMealMut = useDeleteMealLog();
 
@@ -517,12 +517,12 @@ export default function NutritionScreen() {
     };
 
     createMealMut.mutate({
-      dateKey: todayKey,
+      date_key: todayKey,
       name: mealData.name,
       calories: mealData.calories,
-      proteinG: mealData.protein_g,
-      carbsG: mealData.carbs_g,
-      fatG: mealData.fat_g,
+      protein_g: mealData.protein_g,
+      carbs_g: mealData.carbs_g,
+      fat_g: mealData.fat_g,
     });
 
     // Save as quick meal if toggled
@@ -543,12 +543,12 @@ export default function NutritionScreen() {
   const handleUseQuickMeal = useCallback(
     (qm: QuickMeal) => {
       createMealMut.mutate({
-        dateKey: todayKey,
+        date_key: todayKey,
         name: qm.name,
         calories: qm.calories,
-        proteinG: qm.protein_g,
-        carbsG: qm.carbs_g,
-        fatG: qm.fat_g,
+        protein_g: qm.protein_g,
+        carbs_g: qm.carbs_g,
+        fat_g: qm.fat_g,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },

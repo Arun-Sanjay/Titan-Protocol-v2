@@ -30,16 +30,36 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { PageHeader } from "../../src/components/ui/PageHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
-// Phase 4.1: all gym types/constants/store from barrel — no direct store import.
+// Phase 5: cloud-backed hooks replace local Zustand store.
 import {
-  useGymData,
-  type Exercise,
-  type Template,
-  type GymSession,
-  type GymSet,
+  useGymSessions,
+  useActiveGymSession,
+  useStartGymSession,
+  useEndGymSession,
+  useDeleteGymSession,
+  useGymSets,
+  useAddGymSet,
+  useUpdateGymSet,
+  useDeleteGymSet,
+  useGymExercises,
+  useCreateGymExercise,
+  useGymTemplates,
+  useCreateGymTemplate,
+  useDeleteGymTemplate,
+  useGymPersonalRecords,
+  useUpsertGymPR,
+} from "../../src/hooks/queries/useGym";
+import type {
+  GymSession,
+  GymSet,
+  GymExercise,
+  GymTemplate,
+  GymPersonalRecord,
+} from "../../src/services/gym";
+// Constants/UI-only types still from the barrel (pure data, no store).
+import {
   type SetType,
   type MuscleGroup,
-  type PersonalRecord,
   MUSCLE_GROUPS,
   EQUIPMENT_LIST,
 } from "../../src/lib/gym-helpers";
@@ -216,16 +236,20 @@ const SetTypePicker = React.memo(function SetTypePicker({
 
 type ActiveSetRowProps = {
   gymSet: GymSet;
+  setType: SetType;
+  completed: boolean;
   previousWeight?: number;
   previousReps?: number;
   isPR: boolean;
-  onUpdate: (fields: Partial<Pick<GymSet, "weight" | "reps" | "setType" | "notes">>) => void;
+  onUpdate: (fields: { weight?: number; reps?: number; setType?: SetType; notes?: string }) => void;
   onComplete: () => void;
   onRemove: () => void;
 };
 
 const ActiveSetRow = React.memo(function ActiveSetRow({
   gymSet,
+  setType,
+  completed,
   previousWeight,
   previousReps,
   isPR,
@@ -233,25 +257,29 @@ const ActiveSetRow = React.memo(function ActiveSetRow({
   onComplete,
   onRemove,
 }: ActiveSetRowProps) {
+  const w = gymSet.weight ?? 0;
+  const r = gymSet.reps ?? 0;
   const [weight, setWeight] = useState(
-    gymSet.weight > 0 ? gymSet.weight.toString() : "",
+    w > 0 ? w.toString() : "",
   );
   const [reps, setReps] = useState(
-    gymSet.reps > 0 ? gymSet.reps.toString() : "",
+    r > 0 ? r.toString() : "",
   );
   const weightFocusedRef = useRef(false);
   const repsFocusedRef = useRef(false);
 
-  // Sync from store on external changes when not actively editing
+  // Sync from query data on external changes when not actively editing
   useEffect(() => {
     if (!weightFocusedRef.current) {
-      setWeight(gymSet.weight > 0 ? gymSet.weight.toString() : "");
+      const val = gymSet.weight ?? 0;
+      setWeight(val > 0 ? val.toString() : "");
     }
   }, [gymSet.weight]);
 
   useEffect(() => {
     if (!repsFocusedRef.current) {
-      setReps(gymSet.reps > 0 ? gymSet.reps.toString() : "");
+      const val = gymSet.reps ?? 0;
+      setReps(val > 0 ? val.toString() : "");
     }
   }, [gymSet.reps]);
 
@@ -295,16 +323,16 @@ const ActiveSetRow = React.memo(function ActiveSetRow({
   return (
     <Animated.View
       entering={FadeInDown.duration(200)}
-      style={[s.activeSetRow, gymSet.completed && s.activeSetRowCompleted]}
+      style={[s.activeSetRow, completed && s.activeSetRowCompleted]}
     >
       {/* Set number */}
-      <Text style={[s.activeSetNum, gymSet.completed && s.activeSetNumDone]}>
-        {gymSet.setIndex}
+      <Text style={[s.activeSetNum, completed && s.activeSetNumDone]}>
+        {gymSet.set_index}
       </Text>
 
       {/* Type */}
       <SetTypePicker
-        value={gymSet.setType}
+        value={setType}
         onChange={(type) => onUpdate({ setType: type })}
       />
 
@@ -313,7 +341,7 @@ const ActiveSetRow = React.memo(function ActiveSetRow({
 
       {/* Weight input */}
       <TextInput
-        style={[s.activeSetInput, gymSet.completed && s.activeSetInputDone]}
+        style={[s.activeSetInput, completed && s.activeSetInputDone]}
         value={weight}
         onChangeText={setWeight}
         onFocus={handleWeightFocus}
@@ -326,7 +354,7 @@ const ActiveSetRow = React.memo(function ActiveSetRow({
 
       {/* Reps input */}
       <TextInput
-        style={[s.activeSetInput, gymSet.completed && s.activeSetInputDone]}
+        style={[s.activeSetInput, completed && s.activeSetInputDone]}
         value={reps}
         onChangeText={setReps}
         onFocus={handleRepsFocus}
@@ -339,7 +367,7 @@ const ActiveSetRow = React.memo(function ActiveSetRow({
 
       {/* Complete/PR indicator — tap to toggle */}
       <View style={s.activeSetCheckCol}>
-        {gymSet.completed ? (
+        {completed ? (
           <Pressable onPress={onComplete} hitSlop={8}>
             {isPR ? (
               <PRBadge />
@@ -360,17 +388,19 @@ const ActiveSetRow = React.memo(function ActiveSetRow({
 // ─── Exercise Card (Active Workout) ─────────────────────────────────────────
 
 type ExerciseCardProps = {
-  exercise: Exercise;
+  exercise: GymExercise;
   sets: GymSet[];
   previousSets: GymSet[];
-  prRecord: PersonalRecord | undefined;
-  sessionPRSetIds: Set<number>;
+  prRecord: GymPersonalRecord | undefined;
+  completedSetIds: Set<string>;
+  setTypeMap: Record<string, SetType>;
+  sessionPRSetIds: Set<string>;
   onUpdateSet: (
-    setId: number,
-    fields: Partial<Pick<GymSet, "weight" | "reps" | "setType" | "notes">>,
+    setId: string,
+    fields: { weight?: number; reps?: number; setType?: SetType; notes?: string },
   ) => void;
-  onCompleteSet: (setId: number) => void;
-  onRemoveSet: (setId: number) => void;
+  onCompleteSet: (setId: string) => void;
+  onRemoveSet: (setId: string) => void;
   onAddSet: () => void;
 };
 
@@ -379,6 +409,8 @@ const ExerciseCard = React.memo(function ExerciseCard({
   sets,
   previousSets,
   prRecord,
+  completedSetIds,
+  setTypeMap,
   sessionPRSetIds,
   onUpdateSet,
   onCompleteSet,
@@ -393,7 +425,7 @@ const ExerciseCard = React.memo(function ExerciseCard({
           <Text style={s.exerciseCardName}>{exercise.name}</Text>
         </View>
         <View style={s.muscleBadge}>
-          <Text style={s.muscleBadgeText}>{exercise.muscleGroup}</Text>
+          <Text style={s.muscleBadgeText}>{exercise.muscle_group ?? ""}</Text>
         </View>
       </View>
 
@@ -417,13 +449,15 @@ const ExerciseCard = React.memo(function ExerciseCard({
 
       {/* Set rows */}
       {sets.map((gs) => {
-        const prevSet = previousSets.find((p) => p.setIndex === gs.setIndex);
+        const prevSet = previousSets.find((p) => p.set_index === gs.set_index);
         return (
           <ActiveSetRow
             key={gs.id}
             gymSet={gs}
-            previousWeight={prevSet?.weight}
-            previousReps={prevSet?.reps}
+            setType={setTypeMap[gs.id] ?? "normal"}
+            completed={completedSetIds.has(gs.id)}
+            previousWeight={prevSet?.weight ?? undefined}
+            previousReps={prevSet?.reps ?? undefined}
             isPR={sessionPRSetIds.has(gs.id)}
             onUpdate={(fields) => onUpdateSet(gs.id, fields)}
             onComplete={() => onCompleteSet(gs.id)}
@@ -444,7 +478,7 @@ const ExerciseCard = React.memo(function ExerciseCard({
 // ─── Template Card ──────────────────────────────────────────────────────────
 
 type TemplateCardProps = {
-  template: Template;
+  template: GymTemplate;
   exerciseCount: number;
   exerciseNames: string;
   lastPerformed: string | null;
@@ -537,9 +571,9 @@ const RecentCard = React.memo(function RecentCard({
     <Panel style={s.recentCard}>
       <View style={s.recentRow}>
         <View style={{ flex: 1 }}>
-          <Text style={s.recentName}>{session.templateName}</Text>
+          <Text style={s.recentName}>{session.name ?? "Workout"}</Text>
           <Text style={s.recentDate}>
-            {formatDateLong(session.dateKey)}
+            {formatDateLong(session.date_key)}
           </Text>
         </View>
         <Ionicons name="checkmark-circle" size={20} color={colors.body} />
@@ -619,9 +653,9 @@ const QuickStatsPanel = React.memo(function QuickStatsPanel({
 // ─── Exercise Picker (for Create Template) ──────────────────────────────────
 
 type ExercisePickerProps = {
-  exercises: Exercise[];
-  selectedIds: Set<number>;
-  onToggle: (id: number) => void;
+  exercises: GymExercise[];
+  selectedIds: Set<string>;
+  onToggle: (id: string) => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
 };
@@ -638,7 +672,7 @@ const ExercisePicker = React.memo(function ExercisePicker({
   const filtered = useMemo(() => {
     let list = exercises;
     if (activeGroup !== "All") {
-      list = list.filter((e) => e.muscleGroup === activeGroup);
+      list = list.filter((e) => e.muscle_group === activeGroup);
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -711,7 +745,7 @@ const ExercisePicker = React.memo(function ExercisePicker({
               <View style={s.exercisePickerInfo}>
                 <Text style={s.exercisePickerName}>{ex.name}</Text>
                 <Text style={s.exercisePickerMeta}>
-                  {ex.muscleGroup} / {ex.equipment}
+                  {ex.muscle_group ?? ""} / {ex.equipment ?? ""}
                 </Text>
               </View>
               {selected && (
@@ -739,40 +773,56 @@ const ExercisePicker = React.memo(function ExercisePicker({
 export default function WorkoutsScreen() {
   const router = useRouter();
 
-  // Store selectors
-  const exercises = useGymData((s) => s.exercises);
-  const templates = useGymData((s) => s.templates);
-  const sessions = useGymData((s) => s.sessions);
-  const sets = useGymData((s) => s.sets);
-  const activeSessionId = useGymData((s) => s.activeSessionId);
-  const templateExercises = useGymData((s) => s.templateExercises);
-  const personalRecords = useGymData((s) => s.personalRecords);
-  const restTimer = useGymData((s) => s.restTimer);
+  // ─── Cloud data via React Query hooks ────────────────────────────────────
+  const { data: exercises = [] } = useGymExercises();
+  const { data: templates = [] } = useGymTemplates();
+  const { data: sessions = [] } = useGymSessions();
+  const { data: activeSessionData } = useActiveGymSession();
+  const { data: personalRecordsList = [] } = useGymPersonalRecords();
 
+  // Active session sets (only fetch when there's an active session)
+  const activeSessionId = activeSessionData?.id ?? null;
+  const { data: activeSetsRaw = [] } = useGymSets(activeSessionId ?? "");
+
+  // Build a lookup of PRs by exercise_name for quick access
+  const personalRecords = useMemo(() => {
+    const map: Record<string, GymPersonalRecord> = {};
+    for (const pr of personalRecordsList) {
+      const existing = map[pr.exercise_name];
+      if (!existing || pr.weight > existing.weight) {
+        map[pr.exercise_name] = pr;
+      }
+    }
+    return map;
+  }, [personalRecordsList]);
+
+  // ─── Mutations ──────────────────────────────────────────────────────────
+  const startSessionMut = useStartGymSession();
+  const endSessionMut = useEndGymSession();
+  const deleteSessionMut = useDeleteGymSession();
+  const addSetMut = useAddGymSet();
+  const updateSetMut = useUpdateGymSet();
+  const deleteSetMut = useDeleteGymSet();
+  const createTemplateMut = useCreateGymTemplate();
+  const deleteTemplateMut = useDeleteGymTemplate();
+  const createExerciseMut = useCreateGymExercise();
+  const upsertPRMut = useUpsertGymPR();
   const awardXPMutation = useAwardXP();
   const enqueueRankUpMutation = useEnqueueRankUp();
 
-  const load = useGymData((s) => s.load);
-  const addExercise = useGymData((s) => s.addExercise);
-  const createTemplate = useGymData((s) => s.createTemplate);
-  const startSession = useGymData((s) => s.startSession);
-  const addSet = useGymData((s) => s.addSet);
-  const updateSet = useGymData((s) => s.updateSet);
-  const completeSet = useGymData((s) => s.completeSet);
-  const removeSet = useGymData((s) => s.removeSet);
-  const endSession = useGymData((s) => s.endSession);
-  const cancelSession = useGymData((s) => s.cancelSession);
-  const getSessionSets = useGymData((s) => s.getSessionSets);
-  const getTemplateExercises = useGymData((s) => s.getTemplateExercises);
-  const getPreviousSets = useGymData((s) => s.getPreviousSets);
-  const deleteTemplate = useGymData((s) => s.deleteTemplate);
-  const startRestTimer = useGymData((s) => s.startRestTimer);
-  const tickRestTimer = useGymData((s) => s.tickRestTimer);
-  const cancelRestTimer = useGymData((s) => s.cancelRestTimer);
-  const getTotalWorkouts = useGymData((s) => s.getTotalWorkouts);
-  const getWeekWorkouts = useGymData((s) => s.getWeekWorkouts);
-  const getTotalVolume = useGymData((s) => s.getTotalVolume);
-  const getCurrentStreak = useGymData((s) => s.getCurrentStreak);
+  // ─── Rest timer (local state — real-time UI) ───────────────────────────
+  const [restTimer, setRestTimer] = useState({ active: false, remaining: 0, duration: 0 });
+
+  const startRestTimer = useCallback((seconds: number) => {
+    setRestTimer({ active: true, remaining: seconds, duration: seconds });
+  }, []);
+  const cancelRestTimer = useCallback(() => {
+    setRestTimer({ active: false, remaining: 0, duration: 0 });
+  }, []);
+
+  // ─── Completed/setType local state (UI only, not in Supabase) ──────────
+  const [completedSetIds, setCompletedSetIds] = useState<Set<string>>(new Set());
+  const [setTypeMap, setSetTypeMap] = useState<Record<string, SetType>>({});
 
   // ─── Local UI State ─────────────────────────────────────────────────────
 
@@ -781,16 +831,16 @@ export default function WorkoutsScreen() {
   >("default");
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
-  const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<number>>(
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState<Set<string>>(
     new Set(),
   );
   const [exerciseSearch, setExerciseSearch] = useState("");
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickName, setQuickName] = useState("");
-  const [quickMuscle, setQuickMuscle] = useState<MuscleGroup>("Chest");
+  const [quickMuscle, setQuickMuscle] = useState<MuscleGroup>("chest");
   const [quickEquipment, setQuickEquipment] = useState("Barbell");
-  const [summarySessionId, setSummarySessionId] = useState<number | null>(null);
-  const [sessionPRSetIds, setSessionPRSetIds] = useState<Set<number>>(
+  const [summarySessionId, setSummarySessionId] = useState<string | null>(null);
+  const [sessionPRSetIds, setSessionPRSetIds] = useState<Set<string>>(
     new Set(),
   );
 
@@ -799,13 +849,7 @@ export default function WorkoutsScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ─── Load data ──────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  // Determine screen state from store
+  // Determine screen state from active session query
   useEffect(() => {
     if (activeSessionId !== null && screenState === "default") {
       setScreenState("active");
@@ -817,36 +861,39 @@ export default function WorkoutsScreen() {
 
   // ─── Active session derived data ────────────────────────────────────────
 
-  const activeSession = useMemo(
-    () => sessions.find((s) => s.id === activeSessionId) ?? null,
-    [sessions, activeSessionId],
-  );
+  const activeSession = activeSessionData ?? null;
 
+  // Resolve exercises for the active session's template
   const activeExercises = useMemo(() => {
-    if (!activeSession) return [];
-    return getTemplateExercises(activeSession.templateId);
-  }, [activeSession, templateExercises, exercises, getTemplateExercises]);
+    if (!activeSession?.template_id) return [];
+    const tpl = templates.find((t) => t.id === activeSession.template_id);
+    if (!tpl) return [];
+    const ids = (tpl.exercise_ids ?? []) as string[];
+    return ids
+      .map((eid) => exercises.find((e) => e.id === eid))
+      .filter(Boolean) as GymExercise[];
+  }, [activeSession, templates, exercises]);
 
-  const activeSets = useMemo(() => {
-    if (!activeSession) return [];
-    return getSessionSets(activeSession.id);
-  }, [activeSession, sets, getSessionSets]);
+  // Active sets come from the query directly
+  const activeSets = activeSetsRaw;
 
-  // Previous sets for each exercise (for progressive overload display)
+  // Previous sets for each exercise (for progressive overload display).
+  // Look at the most recent completed session with the same template.
   const previousSetsMap = useMemo(() => {
-    if (!activeSession) return new Map<number, GymSet[]>();
-    const map = new Map<number, GymSet[]>();
-    for (const ex of activeExercises) {
-      map.set(ex.id, getPreviousSets(activeSession.templateId, ex.id));
-    }
-    return map;
-  }, [activeSession, activeExercises, getPreviousSets, sessions, sets]);
+    if (!activeSession?.template_id) return new Map<string, GymSet[]>();
+    // We only have the sessions list; sets for previous sessions aren't
+    // loaded via the hook (which is per-session). For now return empty —
+    // progressive overload display will be wired later when we add a
+    // dedicated query. This keeps the migration focused.
+    return new Map<string, GymSet[]>();
+  }, [activeSession]);
 
   // ─── Elapsed timer ──────────────────────────────────────────────────────
 
   useEffect(() => {
     if (activeSession) {
-      const tick = () => setElapsed(Date.now() - activeSession.startedAt);
+      const startMs = new Date(activeSession.started_at).getTime();
+      const tick = () => setElapsed(Date.now() - startMs);
       tick();
       timerRef.current = setInterval(tick, 1000);
       return () => {
@@ -862,7 +909,10 @@ export default function WorkoutsScreen() {
   useEffect(() => {
     if (restTimer.active) {
       restTimerRef.current = setInterval(() => {
-        tickRestTimer();
+        setRestTimer((prev) => {
+          if (prev.remaining <= 1) return { active: false, remaining: 0, duration: prev.duration };
+          return { ...prev, remaining: prev.remaining - 1 };
+        });
       }, 1000);
       return () => {
         if (restTimerRef.current) clearInterval(restTimerRef.current);
@@ -873,7 +923,7 @@ export default function WorkoutsScreen() {
         restTimerRef.current = null;
       }
     }
-  }, [restTimer.active, tickRestTimer]);
+  }, [restTimer.active]);
 
   // Haptic when rest timer ends
   useEffect(() => {
@@ -887,70 +937,117 @@ export default function WorkoutsScreen() {
   const recentSessions = useMemo(
     () =>
       sessions
-        .filter((s_) => s_.endedAt !== null)
-        .sort((a, b) => b.startedAt - a.startedAt)
+        .filter((s_) => s_.ended_at !== null)
+        .sort((a, b) =>
+          new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
+        )
         .slice(0, 10),
     [sessions],
   );
 
+  // Exercise lookup map for templates
+  const exerciseMap = useMemo(
+    () => new Map(exercises.map((e) => [e.id, e])),
+    [exercises],
+  );
+
   const templateExCounts = useMemo(() => {
-    const counts: Record<number, number> = {};
+    const counts: Record<string, number> = {};
     for (const t of templates) {
-      counts[t.id] = getTemplateExercises(t.id).length;
+      const ids = (t.exercise_ids ?? []) as string[];
+      counts[t.id] = ids.filter((eid) => exerciseMap.has(eid)).length;
     }
     return counts;
-  }, [templates, templateExercises, exercises, getTemplateExercises]);
+  }, [templates, exerciseMap]);
 
   const templateExNames = useMemo(() => {
-    const names: Record<number, string> = {};
+    const names: Record<string, string> = {};
     for (const t of templates) {
-      const exs = getTemplateExercises(t.id);
-      names[t.id] = exs.map((e) => e.name).join(", ");
+      const ids = (t.exercise_ids ?? []) as string[];
+      names[t.id] = ids
+        .map((eid) => exerciseMap.get(eid)?.name)
+        .filter(Boolean)
+        .join(", ");
     }
     return names;
-  }, [templates, templateExercises, exercises, getTemplateExercises]);
+  }, [templates, exerciseMap]);
 
   const templateLastPerformed = useMemo(() => {
-    const result: Record<number, string | null> = {};
+    const result: Record<string, string | null> = {};
     for (const t of templates) {
       const lastSession = sessions
-        .filter((s_) => s_.templateId === t.id && s_.endedAt !== null)
-        .sort((a, b) => b.startedAt - a.startedAt)[0];
-      result[t.id] = lastSession ? formatDate(lastSession.dateKey) : null;
+        .filter((s_) => s_.template_id === t.id && s_.ended_at !== null)
+        .sort(
+          (a, b) =>
+            new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
+        )[0];
+      result[t.id] = lastSession ? formatDate(lastSession.date_key) : null;
     }
     return result;
   }, [templates, sessions]);
 
+  // Stats for recent sessions. Since we don't load sets for past sessions
+  // in bulk, we derive what we can from session-level data.
   const recentSessionStats = useMemo(() => {
     const stats: Record<
-      number,
+      string,
       { setCount: number; volume: number; duration: number; prCount: number }
     > = {};
     for (const session of recentSessions) {
-      const sessionSets = getSessionSets(session.id);
-      const completedSets = sessionSets.filter((s_) => s_.completed);
-      const volume = completedSets.reduce(
-        (sum, s_) => sum + s_.weight * s_.reps,
-        0,
-      );
-      const duration =
-        session.endedAt && session.startedAt
-          ? session.endedAt - session.startedAt
-          : 0;
+      const startMs = new Date(session.started_at).getTime();
+      const endMs = session.ended_at
+        ? new Date(session.ended_at).getTime()
+        : 0;
+      const duration = endMs > startMs ? endMs - startMs : 0;
+      // Without per-session sets loaded, show duration only.
+      // Volume/set counts require a dedicated bulk query (future).
       stats[session.id] = {
-        setCount: completedSets.length,
-        volume,
+        setCount: 0,
+        volume: 0,
         duration,
-        prCount: session.prCount ?? 0,
+        prCount: 0,
       };
     }
     return stats;
-  }, [recentSessions, sets, getSessionSets]);
+  }, [recentSessions]);
 
-  const totalWorkouts = useMemo(() => getTotalWorkouts(), [sessions]);
-  const weekWorkouts = useMemo(() => getWeekWorkouts(), [sessions]);
-  const totalVolume = useMemo(() => getTotalVolume(), [sessions, sets]);
-  const streak = useMemo(() => getCurrentStreak(), [sessions]);
+  const totalWorkouts = useMemo(
+    () => sessions.filter((s_) => s_.ended_at !== null).length,
+    [sessions],
+  );
+  const weekWorkouts = useMemo(() => {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return sessions.filter(
+      (s_) =>
+        s_.ended_at !== null &&
+        new Date(s_.started_at).getTime() >= weekAgo.getTime(),
+    ).length;
+  }, [sessions]);
+  // Total volume requires loading all sets — approximated as 0 until bulk query added.
+  const totalVolume = 0;
+  const streak = useMemo(() => {
+    const completedDates = sessions
+      .filter((s_) => s_.ended_at !== null)
+      .map((s_) => s_.date_key)
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .sort()
+      .reverse();
+    let count = 0;
+    const today = getTodayKey();
+    let expected = today;
+    for (const dk of completedDates) {
+      if (dk === expected) {
+        count++;
+        const d = new Date(expected + "T12:00:00");
+        d.setDate(d.getDate() - 1);
+        expected = d.toISOString().slice(0, 10);
+      } else if (dk < expected) {
+        break;
+      }
+    }
+    return count;
+  }, [sessions]);
 
   // ─── Handlers ───────────────────────────────────────────────────────────
 
@@ -968,83 +1065,143 @@ export default function WorkoutsScreen() {
       Alert.alert("Duplicate", "A template with this name already exists.");
       return;
     }
-    createTemplate(name, Array.from(selectedExerciseIds));
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setTemplateName("");
-    setSelectedExerciseIds(new Set());
-    setExerciseSearch("");
-    setShowCreateTemplate(false);
-  }, [templateName, selectedExerciseIds, createTemplate, templates]);
+    createTemplateMut.mutate(
+      { name, exercise_ids: Array.from(selectedExerciseIds) },
+      {
+        onSuccess: () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setTemplateName("");
+          setSelectedExerciseIds(new Set());
+          setExerciseSearch("");
+          setShowCreateTemplate(false);
+        },
+      },
+    );
+  }, [templateName, selectedExerciseIds, createTemplateMut, templates]);
 
   const handleStartSession = useCallback(
-    (templateId: number) => {
-      const sessionId = startSession(templateId, getTodayKey());
+    (templateId: string) => {
+      const tpl = templates.find((t) => t.id === templateId);
+      const tplName = tpl?.name ?? "Workout";
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       setSessionPRSetIds(new Set());
+      setCompletedSetIds(new Set());
+      setSetTypeMap({});
 
-      // Pre-populate sets from template exercises
-      const exs = getTemplateExercises(templateId);
-      for (const ex of exs) {
-        const prev = getPreviousSets(templateId, ex.id);
-        const numSets = Math.max(prev.length, 3); // At least 3 sets
-        for (let i = 0; i < numSets; i++) {
-          addSet(sessionId, ex.id, 0, 0, "normal");
-        }
-      }
-
-      setScreenState("active");
+      startSessionMut.mutate(
+        { date_key: getTodayKey(), name: tplName, template_id: templateId },
+        {
+          onSuccess: (newSession) => {
+            // Pre-populate 3 sets per exercise in the template
+            const ids = (tpl?.exercise_ids ?? []) as string[];
+            const exs = ids
+              .map((eid) => exerciseMap.get(eid))
+              .filter(Boolean) as GymExercise[];
+            for (const ex of exs) {
+              for (let i = 1; i <= 3; i++) {
+                addSetMut.mutate({
+                  session_id: newSession.id,
+                  exercise_name: ex.name,
+                  exercise_id: ex.id,
+                  set_index: i,
+                  weight: 0,
+                  reps: 0,
+                });
+              }
+            }
+            setScreenState("active");
+          },
+        },
+      );
     },
-    [startSession, getTemplateExercises, getPreviousSets, addSet],
+    [startSessionMut, addSetMut, templates, exerciseMap],
   );
 
   const handleDeleteTemplate = useCallback(
-    (id: number) => {
+    (id: string) => {
       Alert.alert("Delete Template", "Are you sure?", [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
           onPress: () => {
-            deleteTemplate(id);
+            deleteTemplateMut.mutate(id);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           },
         },
       ]);
     },
-    [deleteTemplate],
+    [deleteTemplateMut],
   );
 
   const handleAddSet = useCallback(
-    (exerciseId: number) => {
+    (exercise: GymExercise) => {
       if (!activeSession) return;
-      addSet(activeSession.id, exerciseId, 0, 0, "normal");
+      // Determine next set_index for this exercise
+      const exerciseSets = activeSets.filter((s_) => s_.exercise_id === exercise.id);
+      const nextIndex = exerciseSets.length > 0
+        ? Math.max(...exerciseSets.map((s_) => s_.set_index)) + 1
+        : 1;
+      addSetMut.mutate({
+        session_id: activeSession.id,
+        exercise_name: exercise.name,
+        exercise_id: exercise.id,
+        set_index: nextIndex,
+        weight: 0,
+        reps: 0,
+      });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    [activeSession, addSet],
+    [activeSession, activeSets, addSetMut],
   );
 
   const handleCompleteSet = useCallback(
-    (setId: number) => {
-      const isPR = completeSet(setId);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    (setId: string) => {
+      // Toggle completed state locally
+      setCompletedSetIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(setId)) {
+          next.delete(setId);
+          return next;
+        }
+        next.add(setId);
+        return next;
+      });
 
-      if (isPR) {
-        setSessionPRSetIds((prev) => new Set([...prev, setId]));
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Check for PR: find the set, compare against known PRs
+      const theSet = activeSets.find((s_) => s_.id === setId);
+      if (theSet) {
+        const w = theSet.weight ?? 0;
+        const r = theSet.reps ?? 0;
+        const existingPR = personalRecords[theSet.exercise_name];
+        const isPR =
+          w > 0 &&
+          r > 0 &&
+          (!existingPR || w * r > existingPR.weight * existingPR.reps);
+
+        if (isPR) {
+          setSessionPRSetIds((prev) => new Set([...prev, setId]));
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          upsertPRMut.mutate({
+            exercise_name: theSet.exercise_name,
+            weight: w,
+            reps: r,
+          });
+        }
       }
 
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       // Auto-start rest timer
       startRestTimer(DEFAULT_REST_SECONDS);
     },
-    [completeSet, startRestTimer],
+    [activeSets, personalRecords, startRestTimer, upsertPRMut],
   );
 
   const handleFinishWorkout = useCallback(() => {
     if (!activeSession) return;
 
     // Check if any sets were completed
-    const sessionSets = getSessionSets(activeSession.id);
-    const completedSets = sessionSets.filter((s_) => s_.completed);
+    const completedSets = activeSets.filter((s_) => completedSetIds.has(s_.id));
     if (completedSets.length === 0) {
       Alert.alert(
         "No Sets Completed",
@@ -1068,15 +1225,15 @@ export default function WorkoutsScreen() {
         }
       })
       .catch(() => {
-        // Non-fatal; workout is still recorded locally.
+        // Non-fatal; workout is still recorded in Supabase.
       });
 
-    endSession(activeSession.id);
+    endSessionMut.mutate(activeSession.id);
     setSummarySessionId(activeSession.id);
     setScreenState("summary");
     cancelRestTimer();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [activeSession, endSession, getSessionSets, cancelRestTimer, sessionPRSetIds, awardXPMutation, enqueueRankUpMutation]);
+  }, [activeSession, activeSets, completedSetIds, endSessionMut, cancelRestTimer, sessionPRSetIds, awardXPMutation, enqueueRankUpMutation]);
 
   const handleCancelWorkout = useCallback(() => {
     Alert.alert(
@@ -1088,10 +1245,14 @@ export default function WorkoutsScreen() {
           text: "Cancel Workout",
           style: "destructive",
           onPress: () => {
-            cancelSession();
+            if (activeSession) {
+              deleteSessionMut.mutate(activeSession.id);
+            }
             cancelRestTimer();
             setScreenState("default");
             setSessionPRSetIds(new Set());
+            setCompletedSetIds(new Set());
+            setSetTypeMap({});
             Haptics.notificationAsync(
               Haptics.NotificationFeedbackType.Warning,
             );
@@ -1099,7 +1260,7 @@ export default function WorkoutsScreen() {
         },
       ],
     );
-  }, [cancelSession, cancelRestTimer]);
+  }, [activeSession, deleteSessionMut, cancelRestTimer]);
 
   const handleQuickAdd = useCallback(() => {
     const name = quickName.trim();
@@ -1107,14 +1268,20 @@ export default function WorkoutsScreen() {
       Alert.alert("Error", "Enter an exercise name.");
       return;
     }
-    const id = addExercise(name, quickMuscle, quickEquipment);
-    setSelectedExerciseIds((prev) => new Set([...prev, id]));
-    setQuickName("");
-    setShowQuickAdd(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [quickName, quickMuscle, quickEquipment, addExercise]);
+    createExerciseMut.mutate(
+      { name, muscle_group: quickMuscle, equipment: quickEquipment },
+      {
+        onSuccess: (newExercise) => {
+          setSelectedExerciseIds((prev) => new Set([...prev, newExercise.id]));
+          setQuickName("");
+          setShowQuickAdd(false);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+      },
+    );
+  }, [quickName, quickMuscle, quickEquipment, createExerciseMut]);
 
-  const toggleExercise = useCallback((id: number) => {
+  const toggleExercise = useCallback((id: string) => {
     setSelectedExerciseIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -1128,6 +1295,8 @@ export default function WorkoutsScreen() {
     setScreenState("default");
     setSummarySessionId(null);
     setSessionPRSetIds(new Set());
+    setCompletedSetIds(new Set());
+    setSetTypeMap({});
   }, []);
 
   // ═════════════════════════════════════════════════════════════════════════
@@ -1139,15 +1308,19 @@ export default function WorkoutsScreen() {
 
   if (screenState === "summary" && summarySessionId) {
     const session = sessions.find((s_) => s_.id === summarySessionId);
-    const sessionSets = getSessionSets(summarySessionId);
-    const completedSets = sessionSets.filter((s_) => s_.completed);
+    // Use activeSets for the just-finished session (still in cache)
+    const sessionSets = activeSets;
+    const completedSets = sessionSets.filter((s_) => completedSetIds.has(s_.id));
     const totalSets = completedSets.length;
     const summaryVolume = completedSets.reduce(
-      (sum, s_) => sum + s_.weight * s_.reps,
+      (sum, s_) => sum + (s_.weight ?? 0) * (s_.reps ?? 0),
       0,
     );
-    const duration =
-      session && session.endedAt ? session.endedAt - session.startedAt : 0;
+    const startMs = session ? new Date(session.started_at).getTime() : 0;
+    const endMs = session?.ended_at
+      ? new Date(session.ended_at).getTime()
+      : Date.now();
+    const duration = endMs > startMs ? endMs - startMs : 0;
     const prCount = sessionPRSetIds.size;
 
     // XP calculation: 50 base + 20 per set + 100 per PR
@@ -1157,8 +1330,8 @@ export default function WorkoutsScreen() {
     const totalXP = baseXP + setXP + prXP;
 
     // Exercise breakdown
-    const exerciseMap = new Map(exercises.map((e) => [e.id, e]));
-    const exerciseIds = [...new Set(completedSets.map((s_) => s_.exerciseId))];
+    const summaryExerciseMap = new Map(exercises.map((e) => [e.id, e]));
+    const exerciseIds = [...new Set(completedSets.map((s_) => s_.exercise_id).filter(Boolean))] as string[];
 
     return (
       <SafeAreaView style={s.safe} edges={["top"]}>
@@ -1179,7 +1352,7 @@ export default function WorkoutsScreen() {
                 </Animated.View>
                 <Text style={s.summaryTitle}>WORKOUT COMPLETE</Text>
                 {session && (
-                  <Text style={s.summarySubtitle}>{session.templateName}</Text>
+                  <Text style={s.summarySubtitle}>{session.name ?? "Workout"}</Text>
                 )}
               </Animated.View>
 
@@ -1255,14 +1428,14 @@ export default function WorkoutsScreen() {
             </>
           }
           renderItem={({ item: exId, index }) => {
-            const exercise = exerciseMap.get(exId);
+            const exercise = summaryExerciseMap.get(exId);
             if (!exercise) return null;
             const exSets = completedSets
-              .filter((s_) => s_.exerciseId === exId)
-              .sort((a, b) => a.setIndex - b.setIndex);
+              .filter((s_) => s_.exercise_id === exId)
+              .sort((a, b) => a.set_index - b.set_index);
             const bestSet = exSets.reduce(
               (best, s_) =>
-                s_.weight * s_.reps > (best?.weight ?? 0) * (best?.reps ?? 0)
+                (s_.weight ?? 0) * (s_.reps ?? 0) > (best?.weight ?? 0) * (best?.reps ?? 0)
                   ? s_
                   : best,
               exSets[0],
@@ -1276,7 +1449,7 @@ export default function WorkoutsScreen() {
                   <Text style={s.summaryExName}>{exercise.name}</Text>
                   {exSets.map((gs) => (
                     <View key={gs.id} style={s.summarySetRow}>
-                      <Text style={s.summarySetNum}>Set {gs.setIndex}</Text>
+                      <Text style={s.summarySetNum}>Set {gs.set_index}</Text>
                       <Text
                         style={[
                           s.summarySetDetail,
@@ -1286,7 +1459,7 @@ export default function WorkoutsScreen() {
                           },
                         ]}
                       >
-                        {gs.weight} kg x {gs.reps}
+                        {gs.weight ?? 0} kg x {gs.reps ?? 0}
                       </Text>
                       {gs.id === bestSet?.id && (
                         <Text style={s.bestSetBadge}>BEST</Text>
@@ -1327,7 +1500,7 @@ export default function WorkoutsScreen() {
           </Pressable>
           <View style={s.activeHeaderCenter}>
             <Text style={s.activeHeaderTitle} numberOfLines={1}>
-              {activeSession.templateName}
+              {activeSession.name ?? "Workout"}
             </Text>
             <Text style={s.activeHeaderTimer}>
               {formatElapsed(elapsed)}
@@ -1359,8 +1532,8 @@ export default function WorkoutsScreen() {
             keyboardShouldPersistTaps="handled"
             renderItem={({ item: exercise }) => {
               const exerciseSets = activeSets
-                .filter((s_) => s_.exerciseId === exercise.id)
-                .sort((a, b) => a.setIndex - b.setIndex);
+                .filter((s_) => s_.exercise_id === exercise.id)
+                .sort((a, b) => a.set_index - b.set_index);
               const prevSets = previousSetsMap.get(exercise.id) ?? [];
 
               return (
@@ -1368,12 +1541,35 @@ export default function WorkoutsScreen() {
                   exercise={exercise}
                   sets={exerciseSets}
                   previousSets={prevSets}
-                  prRecord={personalRecords[exercise.id]}
+                  prRecord={personalRecords[exercise.name]}
+                  completedSetIds={completedSetIds}
+                  setTypeMap={setTypeMap}
                   sessionPRSetIds={sessionPRSetIds}
-                  onUpdateSet={(setId, fields) => updateSet(setId, fields)}
+                  onUpdateSet={(setId, fields) => {
+                    // Update setType in local map if provided
+                    if (fields.setType !== undefined) {
+                      setSetTypeMap((prev) => ({ ...prev, [setId]: fields.setType! }));
+                    }
+                    // Persist weight/reps to Supabase
+                    const updates: { weight?: number; reps?: number; notes?: string } = {};
+                    if (fields.weight !== undefined) updates.weight = fields.weight;
+                    if (fields.reps !== undefined) updates.reps = fields.reps;
+                    if (fields.notes !== undefined) updates.notes = fields.notes;
+                    if (Object.keys(updates).length > 0 && activeSession) {
+                      updateSetMut.mutate({
+                        setId,
+                        sessionId: activeSession.id,
+                        updates,
+                      });
+                    }
+                  }}
                   onCompleteSet={handleCompleteSet}
-                  onRemoveSet={(setId) => removeSet(setId)}
-                  onAddSet={() => handleAddSet(exercise.id)}
+                  onRemoveSet={(setId) => {
+                    if (activeSession) {
+                      deleteSetMut.mutate({ setId, sessionId: activeSession.id });
+                    }
+                  }}
+                  onAddSet={() => handleAddSet(exercise)}
                 />
               );
             }}
@@ -1604,7 +1800,7 @@ export default function WorkoutsScreen() {
                       onPress={() => {
                         setShowCreateTemplate(false);
                         setTemplateName("");
-                        setSelectedExerciseIds(new Set());
+                        setSelectedExerciseIds(new Set<string>());
                         setExerciseSearch("");
                         setShowQuickAdd(false);
                       }}

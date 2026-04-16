@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useMemo, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, AppState, useWindowDimensions } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, AppState, useWindowDimensions, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,7 @@ import { Panel } from "../../src/components/ui/Panel";
 import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { getTodayKey } from "../../src/lib/date";
 // Wave 1: Cloud hooks replace legacy engine store
+import { useQueryClient } from "@tanstack/react-query";
 import { useAllTasks, useAllCompletionsForDate } from "../../src/hooks/queries/useTasks";
 import { computeEngineScore, ENGINES, type EngineKey } from "../../src/services/tasks";
 import { useModeStore, selectActiveEngines } from "../../src/stores/useModeStore";
@@ -19,6 +20,13 @@ export default function EnginesScreen() {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
   const cardWidth = (screenWidth - spacing.lg * 2 - spacing.md) / 2;
+  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries();
+    setRefreshing(false);
+  }, [queryClient]);
   const [appActive, setAppActive] = useState(0);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (s) => {
@@ -80,7 +88,7 @@ export default function EnginesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <HUDBackground />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.textSecondary} />}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>
             <Ionicons name="arrow-back" size={22} color={colors.text} />

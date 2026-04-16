@@ -102,7 +102,7 @@ export default function HQScreen() {
   const { data: allTasks = [] } = useAllTasks();
   const { data: allCompletions = [] } = useAllCompletionsForDate(today);
   // Phase 3.6: 3-day completion map for operation engine
-  const recentCompletionMap = useRecentCompletionMap();
+  const { data: recentCompletionMap = {} } = useRecentCompletionMap();
   const { data: protocolSession = null } = useProtocolSession(today);
 
   const toggleCompletion = useToggleCompletion();

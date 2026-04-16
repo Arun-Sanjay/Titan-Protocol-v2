@@ -32,8 +32,14 @@ export type CloudTask = {
   [key: string]: unknown;  // Phase QA: accept extra fields from Supabase Task type
 };
 
-// Completions grouped by "{engine}:{dateKey}" → Set of task UUIDs
-export type CompletionsByEngineDate = Record<string, Set<string>>;
+/**
+ * Completions map from React Query hooks:
+ *   Record<taskId, dateKey[]>  — "which days was this task completed?"
+ *
+ * Internally, `getEngineScores` converts this into the engine:date shape
+ * it needs, so callers just pass the hook's `.data` directly.
+ */
+export type CompletionsByEngineDate = Record<string, string[]>;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -180,6 +186,7 @@ export function calculateTaskCount(
 // ─── Engine Analysis ──────────────────────────────────────────────────────────
 
 // Phase 3.6: accepts pre-loaded cloud data instead of reading MMKV.
+// `recentCompletions` is Record<taskId, dateKey[]> from React Query hooks.
 function getEngineScores(
   tasksByEngine: Record<EngineKey, CloudTask[]>,
   recentCompletions: CompletionsByEngineDate,
@@ -195,13 +202,14 @@ function getEngineScores(
     let days = 0;
     for (let i = 0; i < 3; i++) {
       const dk = addDays(today, -i);
-      const completedSet = recentCompletions[`${engine}:${dk}`] ?? new Set<string>();
       let earned = 0;
       let max = 0;
       for (const t of tasks) {
         const pts = t.kind === "main" ? 2 : 1;
         max += pts;
-        if (completedSet.has(t.id)) earned += pts;
+        // Check if this task was completed on this date
+        const taskDates = recentCompletions[t.id];
+        if (taskDates && taskDates.includes(dk)) earned += pts;
       }
       if (max > 0) {
         total += (earned / max) * 100;

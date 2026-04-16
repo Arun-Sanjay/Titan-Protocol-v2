@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, ScrollView, StyleSheet, Pressable, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,6 +8,7 @@ import { HUDBackground } from "../../src/components/ui/AnimatedBackground";
 import { XPBar } from "../../src/components/ui/XPBar";
 import { StreakBadge } from "../../src/components/ui/StreakBadge";
 import { Card } from "../../src/components/ui/Card";
+import { useQueryClient } from "@tanstack/react-query";
 import { useProfile } from "../../src/hooks/queries/useProfile";
 import { useUnlockedAchievements } from "../../src/hooks/queries/useAchievements";
 import { useSkillProgress } from "../../src/hooks/queries/useSkillTree";
@@ -26,6 +27,13 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { getRankForLevel, RANKS } from "../../src/db/gamification";
 
 export default function ProfileScreen() {
+  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await queryClient.invalidateQueries();
+    setRefreshing(false);
+  }, [queryClient]);
   const profileMode = useModeStore((s) => s.mode);
   const showNarrative = checkFeatureVisible(profileMode, "narrative");
   const showSkillTrees = checkFeatureVisible(profileMode, "skill_trees");
@@ -49,6 +57,7 @@ export default function ProfileScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.textSecondary} />}
       >
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} hitSlop={12} style={styles.backButton}>

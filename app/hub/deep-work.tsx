@@ -230,7 +230,7 @@ export default function DeepWorkScreen() {
   }, [logs]);
 
   // Cloud hooks for sessions
-  const { data: cloudSessions = [] } = useDeepWorkSessions(30);
+  const { data: cloudSessions = [] } = useDeepWorkSessions();
   const createSessionMut = useCreateDeepWorkSession();
 
   // AppState listener to refresh todayKey past midnight
@@ -330,8 +330,8 @@ export default function DeepWorkScreen() {
         const task = tasks.find((t) => t.id === taskId);
         if (task) {
           createSessionMut.mutate({
-            dateKey: todayKey,
-            taskName: task.taskName,
+            date_key: todayKey,
+            task_name: task.taskName,
             category: task.category,
             minutes: 0, // duration not tracked in legacy model
           });

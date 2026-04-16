@@ -8,11 +8,10 @@ export function PhaseIndicator() {
   const piMode = useModeStore((s) => s.mode);
   const visible = checkFeatureVisible(piMode, "phases");
   const currentPhase = useProgressionStore((s) => s.currentPhase);
-  const currentWeek = useProgressionStore((s) => s.currentWeek);
-  const phaseStartWeek = useProgressionStore((s) => s.phaseStartWeek);
+  const weekNumber = useProgressionStore((s) => s.weekNumber);
   const phaseInfo = useMemo(
     () => useProgressionStore.getState().getPhaseInfo(),
-    [currentPhase, currentWeek, phaseStartWeek],
+    [currentPhase, weekNumber],
   );
   const progress = selectPhaseProgress(phaseInfo);
   const label = selectPhaseLabel(phaseInfo);

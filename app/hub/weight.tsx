@@ -397,7 +397,7 @@ export default function WeightScreen() {
       }
       return;
     }
-    createWeightLogMut.mutate({ dateKey: todayKey, weightKg: +val.toFixed(1) });
+    createWeightLogMut.mutate({ date_key: todayKey, weight_kg: +val.toFixed(1) });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setWeightInput("");
   }, [weightInput, todayKey, createWeightLogMut]);
@@ -513,10 +513,10 @@ export default function WeightScreen() {
             {bmi && (
               <View style={styles.bmiRow}>
                 <Text style={styles.bmiLabel}>BMI</Text>
-                <Text style={[styles.bmiValue, { color: colors[bmi.color] }]}>
+                <Text style={[styles.bmiValue, { color: (colors as Record<string, string>)[bmi.color] }]}>
                   {bmi.value}
                 </Text>
-                <Text style={[styles.bmiCategory, { color: colors[bmi.color] }]}>
+                <Text style={[styles.bmiCategory, { color: (colors as Record<string, string>)[bmi.color] }]}>
                   {bmi.label}
                 </Text>
               </View>

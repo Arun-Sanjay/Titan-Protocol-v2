@@ -64,11 +64,11 @@ export function Day7Cinematic({ onComplete }: Props) {
 
   // Phase 3.6: cloud task data for operation engine
   const { data: cloudTasks = [] } = useAllTasks();
-  const completionMap = useRecentCompletionMap();
+  const { data: completionMap = {} } = useRecentCompletionMap();
 
   // Get today's task count for the operation overview
   const taskCount = useMemo(() => {
-    const op = generateDailyOperation(userName, 7, streak, storyAct, cloudTasks, completionMap);
+    const op = generateDailyOperation(userName, 7, streak, String(storyAct), cloudTasks, completionMap);
     return op.taskCount;
   }, [userName, streak, storyAct, cloudTasks, completionMap]);
 

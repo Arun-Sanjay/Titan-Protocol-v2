@@ -58,11 +58,11 @@ export function OperationBriefing({
 
   // Phase 3.6: cloud task data for the operation engine
   const { data: cloudTasks = [] } = useAllTasks();
-  const completionMap = useRecentCompletionMap();
+  const { data: completionMap = {} } = useRecentCompletionMap();
 
   // Generate the operation with real tasks from Supabase
   const operation = useMemo(
-    () => generateDailyOperation(userName, dayNumber, streak, storyAct, cloudTasks, completionMap),
+    () => generateDailyOperation(userName, dayNumber, streak, String(storyAct), cloudTasks, completionMap),
     [userName, dayNumber, streak, storyAct, cloudTasks, completionMap],
   );
 

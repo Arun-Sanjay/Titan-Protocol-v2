@@ -31,7 +31,7 @@ import Animated, {
   Easing,
   runOnJS,
 } from "react-native-reanimated";
-import { colors, spacing, radius, fonts } from "../../theme";
+import { colors, spacing, radius, fonts, shadows } from "../../theme";
 import { playSystemPing, playWarning, playRewardChime } from "../../lib/sound";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -142,13 +142,7 @@ export function SystemWindow({
 
   const rewardGlow =
     type === "reward"
-      ? {
-          shadowColor: colors.success,
-          shadowOffset: { width: 0, height: 0 } as const,
-          shadowOpacity: 0.35,
-          shadowRadius: 24,
-          elevation: 20,
-        }
+      ? shadows.glow
       : undefined;
 
   return (

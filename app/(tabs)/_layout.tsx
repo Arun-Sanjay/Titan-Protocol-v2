@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
-import { colors } from "../../src/theme";
+import { colors, shadows } from "../../src/theme";
 
 // ---------------------------------------------------------------------------
 // Tab definitions
@@ -137,11 +137,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.08)",
     paddingTop: 6,
-    shadowColor: "rgba(255,255,255,0.06)",
-    shadowOffset: { width: 0, height: -1 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-    elevation: 0,
+    ...shadows.card,
   },
   tabPressable: {
     flex: 1,
@@ -158,11 +154,7 @@ const styles = StyleSheet.create({
     width: 24, height: 2, borderRadius: 1,
     backgroundColor: "rgba(255,255,255,0.8)",
     marginBottom: 4,
-    shadowColor: "rgba(242,247,255,0.9)",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    elevation: 4,
+    ...shadows.glow,
   },
   label: {
     fontSize: 9,

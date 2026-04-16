@@ -382,12 +382,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.20)",
     alignItems: "center",
     justifyContent: "center",
-    // Shadow
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
-    shadowRadius: 32,
-    elevation: 12,
+    ...shadows.panel,
   },
   fabIcon: {
     fontSize: 28,

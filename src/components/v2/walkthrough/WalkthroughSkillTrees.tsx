@@ -51,9 +51,9 @@ const ENGINE_COLORS: Record<string, string> = {
 
 function getPrimaryEngine(identity: string | null): string {
   if (!identity) return "body";
-  const meta = IDENTITIES.find((i) => i.id === identity);
-  if (!meta || meta.primaryEngine === "all") return "body";
-  return meta.primaryEngine;
+  const entry = IDENTITIES.find((i) => i.key === identity);
+  if (!entry || entry.primaryEngine === "all") return "body";
+  return entry.primaryEngine;
 }
 
 export function WalkthroughSkillTrees({ onNext, onBack }: Props) {

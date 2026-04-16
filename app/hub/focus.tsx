@@ -382,7 +382,7 @@ export default function FocusTimerScreen() {
   const { data: cloudSettings } = useCloudFocusSettings();
   const upsertSettingsMut = useUpsertFocusSettings();
   const recordSessionMut = useRecordFocusSession();
-  const { data: cloudFocusSessions = [] } = useFocusSessions(dateKey);
+  const { data: cloudFocusSessions = [] } = useFocusSessions();
 
   const [phase, setPhase] = useState<Phase>("focus");
   const [running, setRunning] = useState(false);
@@ -481,8 +481,8 @@ export default function FocusTimerScreen() {
         completeSession(currentDateKey);
         // Record session to cloud
         recordSessionMut.mutate({
-          dateKey: currentDateKey,
-          durationMinutes: settings.focusMinutes,
+          date_key: currentDateKey,
+          duration_minutes: settings.focusMinutes,
           completed: true,
         });
         awardXPMutation

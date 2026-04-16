@@ -11,7 +11,7 @@ import { titanColors } from "../../../theme/colors";
 import { getJSON, setJSON } from "../../../db/storage";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { useIdentityStore, IDENTITIES } from "../../../stores/useIdentityStore";
-import { IDENTITY_LABELS } from "../../../stores/useModeStore";
+import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 import { useEngineStore, ENGINES, selectAllTasksForDate } from "../../../stores/useEngineStore";
 import { useProfileStore } from "../../../stores/useProfileStore";
 import { useHabitStore } from "../../../stores/useHabitStore";
@@ -129,17 +129,17 @@ export function DailyBriefing({ onEnter }: Props) {
   const protocolStreak = useProtocolStore((s) => s.streakCurrent);
   // Phase 3.6: cloud task data for operation engine
   const { data: cloudTasks = [] } = useAllTasks();
-  const completionMap = useRecentCompletionMap();
+  const { data: completionMap = {} } = useRecentCompletionMap();
 
   const operation = useMemo(
     () => dayNumber > 1
-      ? generateDailyOperation(userName, dayNumber, protocolStreak, storyAct, cloudTasks, completionMap)
+      ? generateDailyOperation(userName, dayNumber, protocolStreak, String(storyAct), cloudTasks, completionMap)
       : null,
     [dayNumber, userName, protocolStreak, storyAct, cloudTasks, completionMap],
   );
 
   // Meta
-  const meta = IDENTITIES.find((i) => i.id === (archetype ?? identity));
+  const meta = IDENTITIES.find((i) => i.key === (archetype ?? identity));
 
   // Enter button pulse
   const pulse = useSharedValue(0.4);
@@ -202,7 +202,7 @@ export function DailyBriefing({ onEnter }: Props) {
           {ARCHETYPE_ICONS[(archetype ?? identity) ?? "titan"] ?? "\u26A1"}
         </Text>
         <Text style={styles.identityName}>
-          {meta?.name ?? (identity ? IDENTITY_LABELS[identity] : "The Titan")}
+          {meta?.name ?? (identity ? IDENTITY_LABELS[identity as IdentityArchetype] : "The Titan")}
         </Text>
       </Animated.View>
 

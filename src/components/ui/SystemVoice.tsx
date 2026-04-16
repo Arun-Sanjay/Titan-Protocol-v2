@@ -77,7 +77,7 @@ export function SystemVoice({ delay = 0 }: Props) {
   // Get message
   const message = useMemo(
     () => getDashboardMessage(
-      userName, dayNumber, storyAct, performance,
+      userName, dayNumber, String(storyAct), performance,
       streak, titanScore,
       ENGINE_LABELS[weakEngine], ENGINE_LABELS[strongEngine],
     ),

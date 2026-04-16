@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { StyleSheet, Text, Platform } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -9,7 +9,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, fonts, radius, spacing } from "../../theme";
+import { colors, fonts, radius, spacing, shadows } from "../../theme";
 import { useIsOnline } from "../../hooks/useIsOnline";
 
 /**
@@ -92,18 +92,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    // iOS shadow (cheap, no elevation on Android per Phase 2.1D)
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 0,
-      },
-    }),
+    ...shadows.card,
   },
   icon: {
     marginRight: spacing.sm,

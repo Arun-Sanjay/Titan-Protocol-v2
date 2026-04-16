@@ -21,7 +21,7 @@ import Animated, {
   Easing,
   runOnJS,
 } from "react-native-reanimated";
-import { colors, fonts, spacing, radius } from "../../theme";
+import { colors, fonts, spacing, radius, shadows } from "../../theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -192,10 +192,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     // Glass effect
     backgroundColor: "rgba(0, 0, 10, 0.92)",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 10,
+    ...shadows.glow,
   },
   topLine: {
     height: 2,

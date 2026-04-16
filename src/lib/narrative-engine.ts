@@ -11,7 +11,7 @@
 
 import { getJSON, setJSON } from "../db/storage";
 import { selectIdentityMeta, type Archetype } from "../stores/useIdentityStore";
-import { getCurrentChapter, type Chapter } from "../data/chapters";
+import { getDayNumber as getDayNumberFromChapters, type Chapter } from "../data/chapters";
 import { ARCHETYPE_STORIES, type StoryEntry } from "../data/archetype-stories";
 import { addNarrativeLogEntry } from "../services/narrative";
 import { logError } from "./error-log";
@@ -50,7 +50,7 @@ export function addEntry(entry: NarrativeEntry): void {
   // Wave 4: cloud write — fire-and-forget so narrative generation
   // never blocks the calling code path (protocol completion, etc.)
   addNarrativeLogEntry({
-    dateKey: entry.date,
+    date_key: entry.date,
     type: entry.type,
     text: entry.text,
   }).catch((e) => {
@@ -60,13 +60,10 @@ export function addEntry(entry: NarrativeEntry): void {
 
 // ─── Day counter ────────────────────────────────────────────────────────────
 
+/** Uses the canonical getDayNumber from chapters.ts (includes dev offset + anti-regression clamp). */
 function getDayNumber(): number {
-  const firstDay = getJSON<string>("first_active_date", "");
-  if (!firstDay) return 1;
-  const start = new Date(firstDay + "T00:00:00");
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.max(1, Math.floor((now.getTime() - start.getTime()) / 86_400_000) + 1);
+  const firstActiveDate = getJSON<string | null>("first_active_date", null);
+  return getDayNumberFromChapters(firstActiveDate);
 }
 
 function getArchetypeName(archetype: Archetype | null): string {
