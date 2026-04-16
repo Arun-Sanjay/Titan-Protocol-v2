@@ -1,0 +1,151 @@
+name: Android CI
+
+# Triggers
+#   - push to main: checks → APK build → artifact upload
+#   - PR to main: checks only (the slow APK build is skipped to save minutes)
+#   - workflow_dispatch: manual trigger from the Actions tab
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Job 1: TypeScript + Jest ──────────────────────────────────────────────
+  checks:
+    name: Type-check & tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm install
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Jest tests
+        run: npx jest --passWithNoTests
+
+  # ─── Job 2: Build Android release APK ──────────────────────────────────────
+  # Mirrors the standalone "Build Android APK" workflow style. Skipped on PRs.
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: checks
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm install
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Provision .env. Prefer secrets if set; fall back to .env.example
+      # because the Supabase URL + anon key are publishable (RLS-gated).
+      - name: Provision .env
+        env:
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            {
+              echo "EXPO_PUBLIC_SUPABASE_URL=${SUPABASE_URL}"
+              echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
+            } > .env
+            echo "✓ .env built from CI secrets"
+          elif [ -f .env.example ]; then
+            cp .env.example .env
+            echo "✓ .env copied from .env.example (publishable values)"
+          else
+            echo "⚠ No .env.example and no secrets — build will likely fail at runtime"
+          fi
+
+      - name: Setup signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+            echo "TITAN_STORE_FILE=$(pwd)/android/app/release.keystore" >> android/gradle.properties
+            echo "TITAN_STORE_PASSWORD=$KEYSTORE_PASSWORD" >> android/gradle.properties
+            echo "TITAN_KEY_ALIAS=$KEY_ALIAS" >> android/gradle.properties
+            echo "TITAN_KEY_PASSWORD=$KEY_PASSWORD" >> android/gradle.properties
+            echo "✓ Production signing configured"
+          else
+            echo "⚠ No secrets — generating debug keystore for release build"
+            keytool -genkey -v \
+              -keystore android/app/release.keystore \
+              -alias titan \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android \
+              -dname "CN=Titan Protocol, O=Titan, L=Dev, ST=Dev, C=US"
+            echo "TITAN_STORE_FILE=$(pwd)/android/app/release.keystore" >> android/gradle.properties
+            echo "TITAN_STORE_PASSWORD=android" >> android/gradle.properties
+            echo "TITAN_KEY_ALIAS=titan" >> android/gradle.properties
+            echo "TITAN_KEY_PASSWORD=android" >> android/gradle.properties
+          fi
+
+          # Inject signingConfig into android/app/build.gradle.
+          # Idempotent: re-running on a fresh checkout always starts from the
+          # tracked version of the file.
+          cd android/app
+          if ! grep -q "TITAN_STORE_FILE" build.gradle; then
+            sed -i '/buildTypes {/i\    signingConfigs {\n        release {\n            storeFile file(TITAN_STORE_FILE)\n            storePassword TITAN_STORE_PASSWORD\n            keyAlias TITAN_KEY_ALIAS\n            keyPassword TITAN_KEY_PASSWORD\n        }\n    }' build.gradle
+            sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/g' build.gradle
+            echo "✓ Signing config injected"
+          else
+            echo "Signing config already present, skipping"
+          fi
+
+      # Compute a monotonically increasing versionCode. GitHub's run_number
+      # increments on every workflow run and never goes backwards, which
+      # matches Play Store's requirement. Kept <2,100,000,000 (Google's max)
+      # trivially — 2 billion runs is not a problem.
+      - name: Compute versionCode
+        id: vc
+        run: echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Release APK
+        run: |
+          cd android
+          ./gradlew assembleRelease \
+            -PTITAN_VERSION_CODE=${{ steps.vc.outputs.code }} \
+            -PTITAN_VERSION_NAME=1.0.0
+
+      - name: Set version string
+        id: version
+        run: echo "tag=$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: titan-protocol-android-${{ steps.version.outputs.tag }}
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
