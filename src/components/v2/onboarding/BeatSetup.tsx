@@ -363,30 +363,22 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
 
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // -- Confirm --------------------------------------------------------------
 
   const handleConfirm = useCallback(async () => {
     if (saving) return;
     setSaving(true);
+    setSaveError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Phase 4.3: batch inserts instead of individual mutations. The old
-    // code fired N × mutateAsync (one per task/habit), each calling
-    // requireUserId() → getUser() — a separate network roundtrip. With
-    // 8 tasks + 6 habits that's 28+ calls to Supabase, which hangs or
-    // times out on slower connections. Now: 1 getUser + 2 batch inserts.
-    //
-    // Errors throw so the outer catch can retry or surface feedback.
-    // Habit engine "all" is mapped to the user's top-priority engine so
-    // the Supabase enum constraint isn't violated.
     const doSave = async () => {
       const userId = await requireUserId();
 
       const checkedTasks = tasks.filter((t) => t.checked);
       const checkedHabits = habits.filter((h) => h.checked);
 
-      // Batch insert all tasks in one call.
       if (checkedTasks.length > 0) {
         const taskRows = checkedTasks.map((t) => ({
           user_id: userId,
@@ -400,10 +392,7 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
         if (error) throw error;
       }
 
-      // Batch insert all habits in one call.
       if (checkedHabits.length > 0) {
-        // Map engine "all" → first engine in priority list so the
-        // Supabase enum constraint is satisfied.
         const fallbackEngine = engines[0] ?? "body";
         const habitRows = checkedHabits.map((h) => ({
           user_id: userId,
@@ -418,9 +407,10 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
       }
     };
 
-    // Race the save against a 10-second timeout. On failure or timeout,
-    // retry once before giving up. The user still advances even if both
-    // attempts fail — partial setup is better than blocking onboarding.
+    // Race against a 10s timeout, one retry. On final failure, block
+    // the user here with an error+retry UI — silently advancing meant
+    // users landed on an empty dashboard with no idea what went wrong.
+    let lastError: unknown = null;
     let saved = false;
     for (let attempt = 0; attempt < 2 && !saved; attempt++) {
       try {
@@ -432,16 +422,25 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
         ]);
         saved = true;
       } catch (e) {
+        lastError = e;
         logError(`BeatSetup.confirm.attempt${attempt}`, e);
       }
     }
 
-    // Invalidate caches so the dashboard picks up the newly created items.
+    if (!saved) {
+      setSaving(false);
+      const message =
+        lastError instanceof Error ? lastError.message : "Something went wrong";
+      setSaveError(message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
     queryClient.invalidateQueries({ queryKey: tasksKeys.all });
     queryClient.invalidateQueries({ queryKey: habitsKeys.all });
 
     onComplete();
-  }, [tasks, habits, onComplete, saving, queryClient]);
+  }, [tasks, habits, onComplete, saving, queryClient, engines]);
 
   const canConfirm = hasMinOneMainPerEngine(tasks, engines);
 
@@ -681,9 +680,14 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
             {saving ? "SAVING..." : "CONFIRM SETUP"}
           </Text>
         </Pressable>
-        {!canConfirm && (
+        {!canConfirm && !saveError && (
           <Text style={styles.hintText}>
             Select at least 1 mission per engine
+          </Text>
+        )}
+        {saveError && (
+          <Text style={styles.errorText}>
+            Couldn't save — {saveError}. Tap CONFIRM SETUP to retry.
           </Text>
         )}
       </Animated.View>
@@ -1012,5 +1016,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: "center",
     marginTop: spacing.sm,
+  },
+  errorText: {
+    ...fonts.mono,
+    fontSize: 11,
+    color: "#F87171",
+    textAlign: "center",
+    marginTop: spacing.sm,
+    lineHeight: 16,
   },
 });

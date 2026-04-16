@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { supabase } from "../lib/supabase";
+import { supabase, ensureProfileRow } from "../lib/supabase";
+import { logError } from "../lib/error-log";
 import type { Session, User } from "@supabase/supabase-js";
 
 type AuthState = {
@@ -38,17 +39,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         user: session?.user ?? null,
         isLoading: false,
       });
+      if (session?.user) {
+        ensureProfileRow(session.user.id, session.user.email ?? null).catch(
+          (e) => logError("useAuthStore.ensureProfileRow.initial", e),
+        );
+      }
     });
 
     // Subscribe to auth state changes (sign-in, sign-out, token refresh)
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       set({
         session,
         user: session?.user ?? null,
         isLoading: false,
       });
+      if (session?.user && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+        ensureProfileRow(session.user.id, session.user.email ?? null).catch(
+          (e) => logError("useAuthStore.ensureProfileRow.change", e, { event }),
+        );
+      }
     });
 
     // Store cleanup reference for potential future use

@@ -18,6 +18,7 @@ import { useStoryStore } from "../../../stores/useStoryStore";
 import { useModeStore, type IdentityArchetype } from "../../../stores/useModeStore";
 import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { useWalkthroughStore } from "../../../stores/useWalkthroughStore";
+import { useIdentityStore, type Archetype } from "../../../stores/useIdentityStore";
 import { markFirstLaunchSeen } from "../../../components/v2/story/FirstLaunchCinematic";
 import { markBriefingSeen } from "../../../components/v2/story/DailyBriefing";
 import { getJSON, setJSON } from "../../../db/storage";
@@ -276,6 +277,7 @@ export function CinematicOnboarding({ onComplete }: Props) {
               advanceBeat(6, () => {
                 archetypeRef.current = archetype;
                 setIdentity(archetype as IdentityArchetype);
+                useIdentityStore.getState().changeIdentity(archetype as Archetype);
               });
             }}
           />
@@ -289,6 +291,7 @@ export function CinematicOnboarding({ onComplete }: Props) {
             onComplete={(finalArchetype: string) => {
               archetypeRef.current = finalArchetype;
               setIdentity(finalArchetype as any);
+              useIdentityStore.getState().changeIdentity(finalArchetype as Archetype);
               advanceBeat(7);
             }}
           />

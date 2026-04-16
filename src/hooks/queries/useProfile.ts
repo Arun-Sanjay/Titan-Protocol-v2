@@ -200,25 +200,27 @@ type OnboardingData = {
 
 export function useCompleteOnboarding() {
   const qc = useQueryClient();
+  const userId = useAuthStore((s) => s.user?.id);
+  const userEmail = useAuthStore((s) => s.user?.email);
 
   return useMutation({
     mutationFn: async (data?: OnboardingData) => {
-      const userId = (await supabase.auth.getUser()).data.user!.id;
-      const updatePayload: Record<string, unknown> = {
+      if (!userId) throw new Error("Not authenticated");
+      const payload: Record<string, unknown> = {
+        id: userId,
+        email: userEmail ?? null,
         onboarding_completed: true,
       };
-      if (data?.archetype) updatePayload.archetype = data.archetype;
+      if (data?.archetype) payload.archetype = data.archetype;
       if (data?.display_name !== undefined)
-        updatePayload.display_name = data.display_name;
-      if (data?.mode) updatePayload.mode = data.mode;
-      if (data?.focus_engines) updatePayload.focus_engines = data.focus_engines;
-      if (data?.first_use_date)
-        updatePayload.first_use_date = data.first_use_date;
+        payload.display_name = data.display_name;
+      if (data?.mode) payload.mode = data.mode;
+      if (data?.focus_engines) payload.focus_engines = data.focus_engines;
+      if (data?.first_use_date) payload.first_use_date = data.first_use_date;
 
       const { error } = await supabase
         .from("profiles")
-        .update(updatePayload)
-        .eq("id", userId);
+        .upsert(payload, { onConflict: "id" });
       if (error) throw error;
     },
     onSuccess: () => {
