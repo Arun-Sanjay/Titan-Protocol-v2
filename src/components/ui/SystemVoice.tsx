@@ -12,7 +12,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { colors, spacing, fonts, radius } from "../../theme";
 import { getDashboardMessage } from "../../data/protocol-messages";
 import { useStoryStore } from "../../stores/useStoryStore";
-import { useProfileStore } from "../../stores/useProfileStore";
+import { useProfile } from "../../hooks/queries/useProfile";
 import { useEngineStore, ENGINES } from "../../stores/useEngineStore";
 import { getDayNumber } from "../../data/chapters";
 import { getJSON } from "../../db/storage";
@@ -30,7 +30,7 @@ type Props = {
 export function SystemVoice({ delay = 0 }: Props) {
   const userName = useStoryStore((s) => s.userName) || "Recruit";
   const storyAct = useStoryStore((s) => s.currentAct);
-  const streak = useProfileStore((s) => s.profile.streak);
+  const streak = useProfile().data?.streak_current ?? 0;
   const scores = useEngineStore((s) => s.scores);
 
   const firstActiveDate = getJSON<string | null>("first_active_date", null);

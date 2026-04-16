@@ -17,7 +17,7 @@ import { RankBadge } from "./RankBadge";
 import { useStatStore } from "../../stores/useStatStore";
 import { useRankStore } from "../../stores/useRankStore";
 import { useTitleStore } from "../../stores/useTitleStore";
-import { useProfileStore } from "../../stores/useProfileStore";
+import { useProfile } from "../../hooks/queries/useProfile";
 import { useProtocolStore } from "../../stores/useProtocolStore";
 import { useFieldOpStore } from "../../stores/useFieldOpStore";
 import { useStoryStore } from "../../stores/useStoryStore";
@@ -64,7 +64,8 @@ export function StatusWindow({
   const { stats, totalOutput, todayGains } = useStatStore();
   const { rank } = useRankStore();
   const { equippedId, unlockedIds } = useTitleStore();
-  const { profile } = useProfileStore();
+  const { data: profile } = useProfile();
+  const profileLevel = profile?.level ?? 1;
   const { streakCurrent } = useProtocolStore();
   const fieldOpStore = useFieldOpStore();
   const { userName } = useStoryStore();
@@ -122,7 +123,7 @@ export function StatusWindow({
                 </Text>
               </View>
             </View>
-            <KeyValue label="Level" value={String(profile.level)} />
+            <KeyValue label="Level" value={String(profileLevel)} />
           </View>
 
           {/* Stats section */}

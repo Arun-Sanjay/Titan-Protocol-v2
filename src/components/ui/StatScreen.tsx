@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { colors, spacing, fonts, radius } from "../../theme";
-import { useProfileStore } from "../../stores/useProfileStore";
+import { useProfile } from "../../hooks/queries/useProfile";
 import { useEngineStore, ENGINES, selectTotalScore } from "../../stores/useEngineStore";
 import { useIdentityStore, selectIdentityMeta } from "../../stores/useIdentityStore";
 import { useModeStore, IDENTITY_LABELS } from "../../stores/useModeStore";
@@ -37,7 +37,10 @@ const ARCHETYPE_ICONS: Record<string, string> = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function StatScreen() {
-  const profile = useProfileStore((s) => s.profile);
+  const { data: profile } = useProfile();
+  const profileLevel = profile?.level ?? 1;
+  const profileXP = profile?.xp ?? 0;
+  const profileStreak = profile?.streak_current ?? 0;
   const scores = useEngineStore((s) => s.scores);
   const archetype = useIdentityStore((s) => s.archetype);
   const identity = useModeStore((s) => s.identity);
@@ -75,7 +78,7 @@ export function StatScreen() {
         <View style={styles.charInfo}>
           <Text style={styles.charName}>{displayName}</Text>
           <View style={styles.charMeta}>
-            <Text style={styles.levelBadge}>LEVEL {profile.level}</Text>
+            <Text style={styles.levelBadge}>LEVEL {profileLevel}</Text>
             <Text style={[styles.rankBadge, { color: rank.color }]}>
               RANK {rank.letter}
             </Text>
@@ -119,11 +122,11 @@ export function StatScreen() {
       >
         <View style={styles.footerItem}>
           <Text style={styles.footerLabel}>STREAK</Text>
-          <Text style={styles.footerValue}>{profile.streak}</Text>
+          <Text style={styles.footerValue}>{profileStreak}</Text>
         </View>
         <View style={styles.footerItem}>
           <Text style={styles.footerLabel}>XP</Text>
-          <Text style={styles.footerValue}>{profile.xp}</Text>
+          <Text style={styles.footerValue}>{profileXP}</Text>
         </View>
         <View style={styles.footerItem}>
           <Text style={styles.footerLabel}>DAYS ACTIVE</Text>
