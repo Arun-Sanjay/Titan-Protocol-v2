@@ -36,11 +36,14 @@ import {
   type MoneyLoan,
   type CategoryTotal,
 } from "../../src/lib/money-helpers";
-import { getJSON, setJSON, nextId } from "../../src/db/storage";
 import {
   useTransactions,
   useCreateTransaction,
   useDeleteTransaction,
+  useLoans,
+  useCreateLoan,
+  useUpdateLoan,
+  useDeleteLoan,
 } from "../../src/hooks/queries/useMoney";
 import type { MoneyTransaction } from "../../src/services/money";
 import { getTodayKey, getMonthKey, getMonthLabel, addDays } from "../../src/lib/date";
@@ -759,28 +762,63 @@ const AddLoanForm = React.memo(function AddLoanForm({
 export default function CashflowScreen() {
   const router = useRouter();
   const { data: transactions = [] } = useTransactions();
-  // Phase 4.1: Loans managed via direct MMKV reads — no store import.
-  const LOANS_KEY = "money_loans";
-  const [loans, setLoans] = useState<MoneyLoan[]>(() => getJSON<MoneyLoan[]>(LOANS_KEY, []));
-  const addLoan = useCallback((loan: Omit<MoneyLoan, "id">) => {
-    const id = nextId();
-    const entry: MoneyLoan = { id, ...loan, paid: loan.paid ?? 0 };
-    const updated = [entry, ...loans];
-    setJSON(LOANS_KEY, updated);
-    setLoans(updated);
-  }, [loans]);
-  const markLoanPaid = useCallback((id: number) => {
-    const updated = loans.map((l) =>
-      l.id === id ? { ...l, status: "paid" as const, paid: l.amount } : l,
-    );
-    setJSON(LOANS_KEY, updated);
-    setLoans(updated);
-  }, [loans]);
-  const deleteLoan = useCallback((id: number) => {
-    const updated = loans.filter((l) => l.id !== id);
-    setJSON(LOANS_KEY, updated);
-    setLoans(updated);
-  }, [loans]);
+  const { data: cloudLoans = [] } = useLoans();
+  const createLoanMutation = useCreateLoan();
+  const updateLoanMutation = useUpdateLoan();
+  const deleteLoanMutation = useDeleteLoan();
+
+  const loans: MoneyLoan[] = useMemo(
+    () =>
+      cloudLoans.map((row) => ({
+        id: row.id as unknown as number,
+        lender: row.lender,
+        amount: row.amount,
+        paid: row.paid,
+        dateISO: row.date_iso,
+        dueISO: row.due_iso,
+        status: row.status as "unpaid" | "paid",
+        name: row.name ?? undefined,
+        interestRate: row.interest_rate ?? undefined,
+        monthlyPayment: row.monthly_payment ?? undefined,
+        startDate: row.start_date ?? undefined,
+      })),
+    [cloudLoans],
+  );
+
+  const addLoan = useCallback(
+    (loan: Omit<MoneyLoan, "id">) => {
+      createLoanMutation.mutate({
+        lender: loan.lender,
+        amount: loan.amount,
+        date_iso: loan.dateISO,
+        due_iso: loan.dueISO,
+        name: loan.name,
+        interest_rate: loan.interestRate,
+        monthly_payment: loan.monthlyPayment,
+        start_date: loan.startDate,
+      });
+    },
+    [createLoanMutation],
+  );
+
+  const markLoanPaid = useCallback(
+    (id: number) => {
+      const loan = loans.find((l) => l.id === id);
+      if (!loan) return;
+      updateLoanMutation.mutate({
+        loanId: String(id),
+        updates: { status: "paid", paid: loan.amount },
+      });
+    },
+    [loans, updateLoanMutation],
+  );
+
+  const deleteLoanLocal = useCallback(
+    (id: number) => {
+      deleteLoanMutation.mutate(String(id));
+    },
+    [deleteLoanMutation],
+  );
 
   const [showForm, setShowForm] = useState(false);
   const [showLoanForm, setShowLoanForm] = useState(false);
@@ -890,12 +928,12 @@ export default function CashflowScreen() {
           style: "destructive",
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            deleteLoan(id);
+            deleteLoanLocal(id);
           },
         },
       ]);
     },
-    [deleteLoan],
+    [deleteLoanLocal],
   );
 
   const handleCategoryPress = useCallback((cat: string) => {

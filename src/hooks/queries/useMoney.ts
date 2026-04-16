@@ -4,16 +4,20 @@ import {
   listTransactions,
   createTransaction,
   deleteTransaction,
+  listLoans,
+  createLoan,
+  updateLoan,
+  deleteLoan,
   type MoneyTransaction,
+  type MoneyLoan,
 } from "../../services/money";
-
-// ─── Query Keys ─────────────────────────────────────────────────────────────
 
 export const moneyKeys = {
   all: ["money_transactions"] as const,
+  loans: ["money_loans"] as const,
 };
 
-// ─── Hooks ──────────────────────────────────────────────────────────────────
+// ─── Transactions ──────────────────────────────────────────────────────────
 
 export function useTransactions() {
   const userId = useAuthStore((s) => s.user?.id);
@@ -24,11 +28,8 @@ export function useTransactions() {
   });
 }
 
-// ─── Mutations ──────────────────────────────────────────────────────────────
-
 export function useCreateTransaction() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: createTransaction,
     onMutate: async () => {
@@ -47,7 +48,6 @@ export function useCreateTransaction() {
 
 export function useDeleteTransaction() {
   const qc = useQueryClient();
-
   return useMutation({
     mutationFn: deleteTransaction,
     onMutate: async (txId) => {
@@ -63,6 +63,61 @@ export function useDeleteTransaction() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: moneyKeys.all });
+    },
+  });
+}
+
+// ─── Loans ─────────────────────────────────────────────────────────────────
+
+export function useLoans() {
+  const userId = useAuthStore((s) => s.user?.id);
+  return useQuery({
+    queryKey: moneyKeys.loans,
+    queryFn: listLoans,
+    enabled: Boolean(userId),
+  });
+}
+
+export function useCreateLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createLoan,
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: moneyKeys.loans });
+    },
+  });
+}
+
+export function useUpdateLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: {
+      loanId: string;
+      updates: Partial<Pick<MoneyLoan, "paid" | "status" | "amount" | "interest_rate" | "monthly_payment">>;
+    }) => updateLoan(vars.loanId, vars.updates),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: moneyKeys.loans });
+    },
+  });
+}
+
+export function useDeleteLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: deleteLoan,
+    onMutate: async (loanId) => {
+      await qc.cancelQueries({ queryKey: moneyKeys.loans });
+      const prev = qc.getQueryData<MoneyLoan[]>(moneyKeys.loans);
+      qc.setQueryData<MoneyLoan[]>(moneyKeys.loans, (old) =>
+        old?.filter((l) => l.id !== loanId) ?? [],
+      );
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prev) qc.setQueryData(moneyKeys.loans, ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: moneyKeys.loans });
     },
   });
 }

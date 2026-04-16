@@ -21,26 +21,34 @@ import { colors, spacing, radius, fonts } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
-// Phase 4.1: types from barrel, MMKV reads inline — no store import.
-import { type DeepWorkCategory, type DeepWorkTask } from "../../src/lib/deep-work-helpers";
-import { getJSON, setJSON, nextId } from "../../src/db/storage";
-
-type DeepWorkLog = {
-  id: number;
-  taskId: number;
-  dateKey: string;
-  completed: boolean;
-  earningsToday: number;
-};
-
-const DW_TASKS_KEY = "deep_work_tasks";
-const DW_LOGS_KEY = "deep_work_logs";
+import { type DeepWorkCategory } from "../../src/lib/deep-work-helpers";
 import {
   useDeepWorkSessions,
   useCreateDeepWorkSession,
   useDeleteDeepWorkSession,
+  useDeepWorkTasks,
+  useCreateDeepWorkTask,
+  useDeleteDeepWorkTask,
+  useDeepWorkLogs,
+  useUpsertDeepWorkLog,
 } from "../../src/hooks/queries/useDeepWork";
 import type { DeepWorkSession } from "../../src/services/deep-work";
+
+// UI-facing task shape (cloud rows are adapted to this).
+type DeepWorkTask = {
+  id: string;
+  taskName: string;
+  category: DeepWorkCategory;
+  createdAt: string;
+};
+
+type DeepWorkLog = {
+  id: string;
+  taskId: string;
+  dateKey: string;
+  completed: boolean;
+  earningsToday: number;
+};
 import { getTodayKey, toLocalDateKey, addDays } from "../../src/lib/date";
 import { formatCurrency } from "../../src/lib/format";
 
@@ -184,50 +192,73 @@ const TaskRow = React.memo(function TaskRow({
 export default function DeepWorkScreen() {
   const router = useRouter();
 
-  // Phase 4.1: MMKV reads inline — no store import.
-  const [tasks, setTasks] = useState<DeepWorkTask[]>(() => getJSON<DeepWorkTask[]>(DW_TASKS_KEY, []));
-  const [logs, setLogs] = useState<DeepWorkLog[]>(() => getJSON<DeepWorkLog[]>(DW_LOGS_KEY, []));
-  const addTask = useCallback((taskName: string, category: DeepWorkCategory) => {
-    const id = nextId();
-    const task: DeepWorkTask = { id, taskName, category, createdAt: Date.now() };
-    const updated = [...tasks, task];
-    setJSON(DW_TASKS_KEY, updated);
-    setTasks(updated);
-  }, [tasks]);
-  const deleteTask = useCallback((id: number) => {
-    const updatedTasks = tasks.filter((t) => t.id !== id);
-    const updatedLogs = logs.filter((l) => l.taskId !== id);
-    setJSON(DW_TASKS_KEY, updatedTasks);
-    setJSON(DW_LOGS_KEY, updatedLogs);
-    setTasks(updatedTasks);
-    setLogs(updatedLogs);
-  }, [tasks, logs]);
-  const logWork = useCallback((taskId: number, dateKey: string, completed: boolean, earnings: number) => {
-    const safeEarnings = Number.isFinite(earnings) ? Math.max(0, earnings) : 0;
-    const existing = logs.find((l) => l.taskId === taskId && l.dateKey === dateKey);
-    let updated: DeepWorkLog[];
-    if (existing) {
-      updated = logs.map((l) =>
-        l.id === existing.id ? { ...l, completed, earningsToday: safeEarnings } : l);
-    } else {
-      const log: DeepWorkLog = { id: nextId(), taskId, dateKey, completed, earningsToday: safeEarnings };
-      updated = [...logs, log];
-    }
-    setJSON(DW_LOGS_KEY, updated);
-    setLogs(updated);
-  }, [logs]);
+  const { data: cloudTasks = [] } = useDeepWorkTasks();
+  const { data: cloudLogs = [] } = useDeepWorkLogs();
+  const createTaskMutation = useCreateDeepWorkTask();
+  const deleteTaskMutation = useDeleteDeepWorkTask();
+  const upsertLogMutation = useUpsertDeepWorkLog();
+
+  const tasks: DeepWorkTask[] = useMemo(
+    () =>
+      cloudTasks.map((t) => ({
+        id: t.id,
+        taskName: t.task_name,
+        category: t.category as DeepWorkCategory,
+        createdAt: t.created_at,
+      })),
+    [cloudTasks],
+  );
+  const logs: DeepWorkLog[] = useMemo(
+    () =>
+      cloudLogs.map((l) => ({
+        id: l.id,
+        taskId: l.task_id,
+        dateKey: l.date_key,
+        completed: l.completed,
+        earningsToday: l.earnings_today,
+      })),
+    [cloudLogs],
+  );
+
+  const addTask = useCallback(
+    (taskName: string, category: DeepWorkCategory) => {
+      createTaskMutation.mutate({ task_name: taskName, category });
+    },
+    [createTaskMutation],
+  );
+  const deleteTask = useCallback(
+    (id: string) => {
+      deleteTaskMutation.mutate(id);
+    },
+    [deleteTaskMutation],
+  );
+  const logWork = useCallback(
+    (taskId: string, dateKey: string, completed: boolean, earnings: number) => {
+      const safeEarnings = Number.isFinite(earnings) ? Math.max(0, earnings) : 0;
+      upsertLogMutation.mutate({
+        task_id: taskId,
+        date_key: dateKey,
+        completed,
+        earnings_today: safeEarnings,
+      });
+    },
+    [upsertLogMutation],
+  );
   const getLogsByDate = useCallback((dk: string) => logs.filter((l) => l.dateKey === dk), [logs]);
-  const getWeeklyEarnings = useCallback((endDate: string) => {
-    const end = new Date(endDate + "T00:00:00");
-    const start = new Date(end);
-    start.setDate(start.getDate() - 6);
-    return logs
-      .filter((l) => {
-        const d = new Date(l.dateKey + "T00:00:00");
-        return d >= start && d <= end;
-      })
-      .reduce((sum, l) => sum + l.earningsToday, 0);
-  }, [logs]);
+  const getWeeklyEarnings = useCallback(
+    (endDate: string) => {
+      const end = new Date(endDate + "T00:00:00");
+      const start = new Date(end);
+      start.setDate(start.getDate() - 6);
+      return logs
+        .filter((l) => {
+          const d = new Date(l.dateKey + "T00:00:00");
+          return d >= start && d <= end;
+        })
+        .reduce((sum, l) => sum + l.earningsToday, 0);
+    },
+    [logs],
+  );
 
   // Cloud hooks for sessions
   const { data: cloudSessions = [] } = useDeepWorkSessions();
@@ -306,7 +337,7 @@ export default function DeepWorkScreen() {
   }, [newTaskName, newCategory, addTask]);
 
   const handleDeleteTask = useCallback(
-    (id: number) => {
+    (id: string) => {
       Alert.alert("Delete Task", "This will also remove all logs for this task.", [
         { text: "Cancel", style: "cancel" },
         {
@@ -323,7 +354,7 @@ export default function DeepWorkScreen() {
   );
 
   const handleToggle = useCallback(
-    (taskId: number, completed: boolean, currentEarnings: number) => {
+    (taskId: string, completed: boolean, currentEarnings: number) => {
       logWork(taskId, todayKey, completed, currentEarnings);
       // Also create a cloud session when marking as completed
       if (completed) {
@@ -342,7 +373,7 @@ export default function DeepWorkScreen() {
   );
 
   const handleEarningsChange = useCallback(
-    (taskId: number, earnings: number, currentCompleted: boolean) => {
+    (taskId: string, earnings: number, currentCompleted: boolean) => {
       logWork(taskId, todayKey, currentCompleted, earnings);
     },
     [logWork, todayKey]
