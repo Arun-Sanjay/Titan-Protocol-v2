@@ -54,7 +54,53 @@ No NativeWind, no styled-components, no Redux, no SWR, no Zustand for user data.
 
 ---
 
-## 3. Supabase
+## 3. @titan/shared Package
+
+The data layer lives in a shared package at `../shared` (`@titan/shared`), linked in `package.json` via `"file:../shared"`. It is the **single source of truth** for: services, React Query hooks, types, scoring logic, date utilities, and gamification constants.
+
+### What shared owns
+
+- `services/` — all Supabase service functions (tasks, habits, profile, protocol, etc.)
+- `hooks/queries/` — all React Query hooks
+- `lib/` — `supabase.ts` (client init), `query-client.ts`, `auth-context.tsx`, `scoring-v2.ts`, `date.ts`
+- `types/` — `supabase.ts` (generated), `game.ts` (domain types)
+- `db/` — `gamification.ts` (ranks, XP, daily grades)
+
+### Initialization (mobile side)
+
+Mobile's `src/lib/supabase.ts` delegates to shared:
+```typescript
+import { initSupabase } from "@titan/shared/lib/supabase";
+initSupabase({ url, anonKey, storage: AsyncStorage });
+```
+
+Mobile's `src/lib/query-client.ts` delegates to shared:
+```typescript
+import { createTitanQueryClient } from "@titan/shared/lib/query-client";
+```
+
+`TitanAuthProvider` from `@titan/shared/lib/auth-context` wraps the root layout, receiving `userId` from mobile's `useAuthStore`:
+```typescript
+<TitanAuthProvider userId={userId}>
+  {children}
+</TitanAuthProvider>
+```
+
+Mobile can use `useAuth` from shared alongside its own hooks.
+
+### Metro config
+
+`metro.config.js` adds `../shared` to `watchFolders` so HMR picks up changes in the shared package during development.
+
+### Rules
+
+- **New Supabase table/feature?** Create the service + hook in `shared/`, not in `mobile/src/`.
+- **Mobile keeps platform-specific files only:** Zustand/MMKV stores, React Native components, theme, assets, animations, audio, haptics, notifications.
+- **Never duplicate** service or hook logic in mobile that already exists in shared.
+
+---
+
+## 4. Supabase
 
 **Project ref:** `rmvodrpgaffxeultskst` (region `ap-south-1`)
 
@@ -70,7 +116,7 @@ Use the Supabase MCP tools for all schema work. See the skill file for the workf
 
 ---
 
-## 4. Data Layer Pattern (for every new feature)
+## 5. Data Layer Pattern (for every new feature)
 
 ### Service (`src/services/xxx.ts`)
 ```typescript
@@ -113,7 +159,7 @@ export function useXxx() {
 
 ---
 
-## 5. Golden Rules
+## 6. Golden Rules
 
 1. **One data layer.** Supabase + React Query. No MMKV stores for user data. No Zustand stores for cloud-bound data.
 2. **Services throw, hooks catch.** Service functions throw on Supabase error. Hooks handle via mutation callbacks.
@@ -128,7 +174,7 @@ export function useXxx() {
 
 ---
 
-## 6. File Structure
+## 7. File Structure
 
 ```
 titan-android/
@@ -158,7 +204,7 @@ titan-android/
 
 ---
 
-## 7. What Needs Building (Phase 1)
+## 8. What Needs Building (Phase 1)
 
 The UI, cinematics, theme, and game logic are complete. What's missing is the data layer wiring:
 
@@ -171,7 +217,7 @@ The UI, cinematics, theme, and game logic are complete. What's missing is the da
 
 ---
 
-## 8. Commands
+## 9. Commands
 
 ```bash
 npm run start              # expo start
