@@ -165,6 +165,7 @@ import { checkIntegrityStatus, loadIntegrity, type IntegrityStatus } from "../sr
 import type { TransmissionContext } from "../src/lib/transmissions";
 
 import "../src/db/database";
+import { runMigrations } from "../src/db/sqlite/migrator";
 
 // Map day numbers to cinematic components
 const DAY_CINEMATICS: Record<number, React.ComponentType<{ onComplete: () => void }>> = {
@@ -198,6 +199,28 @@ export default function RootLayout() {
     JetBrainsMono_700Bold,
     JetBrainsMono_800ExtraBold,
   });
+
+  // Local-first migration — Phase 0: open SQLite and apply pending
+  // migrations before any hook fires a query. Render-blocking: we stay
+  // on the native splash until the DB is ready, same pattern as fonts.
+  const [dbReady, setDbReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    runMigrations()
+      .then(() => {
+        if (!cancelled) setDbReady(true);
+      })
+      .catch((e) => {
+        logError("sqlite.runMigrations", e);
+        // Still flip ready to true so the app boots; individual queries
+        // will surface their own errors. A "reset local DB" dev tool is
+        // planned (see docs/MIGRATION_LOCAL_FIRST.md §7).
+        if (!cancelled) setDbReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Phase 3.2: Auth bootstrap. Initialize reads the persisted session from
   // AsyncStorage and subscribes to onAuthStateChange. isLoading stays true
@@ -562,6 +585,11 @@ export default function RootLayout() {
   // splash screen (configured in app.json) stays visible meanwhile, so
   // users see the splash, not a flash of system fonts.
   if (!fontsLoaded) {
+    return null;
+  }
+
+  // Local-first migration: hold render until SQLite migrations have run.
+  if (!dbReady) {
     return null;
   }
 
