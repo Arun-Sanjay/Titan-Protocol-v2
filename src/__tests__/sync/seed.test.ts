@@ -56,11 +56,14 @@ describe("initialSeed", () => {
 
   test("iterates every table in PULL_ORDER and reports progress", async () => {
     const progress: Array<{ table: string | null; completed: number }> = [];
-    const res = await initialSeed("u1", (p) =>
-      progress.push({
-        table: p.currentTable,
-        completed: p.tablesCompleted,
-      }),
+    const res = await initialSeed(
+      "u1",
+      (p) =>
+        progress.push({
+          table: p.currentTable,
+          completed: p.tablesCompleted,
+        }),
+      { interTableDelayMs: 0, skipRefresh: true },
     );
     expect(res.success).toBe(true);
     // First callback fires before the first pull (0 completed).
@@ -82,7 +85,10 @@ describe("initialSeed", () => {
 
   test("aborts on auth error and reports failing table", async () => {
     fake.state.setSelectError("habits", { status: 401 });
-    const res = await initialSeed("u1");
+    const res = await initialSeed("u1", undefined, {
+      interTableDelayMs: 0,
+      skipRefresh: true,
+    });
     expect(res.success).toBe(false);
     if (!res.success) {
       expect(res.error).toBe("auth");
@@ -92,7 +98,10 @@ describe("initialSeed", () => {
 
   test("aborts on transient error and reports table", async () => {
     fake.state.setSelectError("tasks", { status: 500, message: "db down" });
-    const res = await initialSeed("u1");
+    const res = await initialSeed("u1", undefined, {
+      interTableDelayMs: 0,
+      skipRefresh: true,
+    });
     expect(res.success).toBe(false);
     if (!res.success) {
       expect(res.error).toBe("db down");
@@ -112,17 +121,17 @@ describe("seededForUser (user-switch detection)", () => {
   });
 
   test("true after initialSeed completes for the same user", async () => {
-    await initialSeed("u1");
+    await initialSeed("u1", undefined, { interTableDelayMs: 0, skipRefresh: true });
     expect(await seededForUser("u1")).toBe(true);
   });
 
   test("false when queried for a different user than the one seeded", async () => {
-    await initialSeed("u1");
+    await initialSeed("u1", undefined, { interTableDelayMs: 0, skipRefresh: true });
     expect(await seededForUser("u2")).toBe(false);
   });
 
   test("resetLocalDataForUserSwitch clears the marker", async () => {
-    await initialSeed("u1");
+    await initialSeed("u1", undefined, { interTableDelayMs: 0, skipRefresh: true });
     expect(await seededForUser("u1")).toBe(true);
     await resetLocalDataForUserSwitch();
     expect(await seededForUser("u1")).toBe(false);

@@ -1,4 +1,6 @@
 import { get, run } from "../db/sqlite/client";
+import { supabase } from "../lib/supabase";
+import { logError } from "../lib/error-log";
 import { pullTable } from "./pull";
 import { PULL_ORDER } from "./tables";
 
@@ -78,6 +80,16 @@ export async function resetLocalDataForUserSwitch(): Promise<void> {
 
 // ─── Seeding ────────────────────────────────────────────────────────────────
 
+/** Short pause between sequential pulls so supabase-js's internal token
+ *  machinery has a chance to settle. Without this, 42 back-to-back
+ *  queries can trigger a refresh cascade that ends in a 429 on /token
+ *  and a spurious SIGNED_OUT. See useAuthStore for the recovery layer. */
+const INTER_TABLE_DELAY_MS = 150;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Full initial pull for a fresh sign-in on this device. Pulls each
  * table in `PULL_ORDER` (profiles first, then dependents alphabetically).
@@ -93,10 +105,26 @@ export async function resetLocalDataForUserSwitch(): Promise<void> {
 export async function initialSeed(
   userId: string,
   onProgress?: (p: SeedProgress) => void,
+  options: { interTableDelayMs?: number; skipRefresh?: boolean } = {},
 ): Promise<SeedResult> {
+  const delayMs = options.interTableDelayMs ?? INTER_TABLE_DELAY_MS;
   const total = PULL_ORDER.length;
   let completed = 0;
   let totalRows = 0;
+
+  // Proactively refresh the session so every pull hits a freshly-issued
+  // token. Supabase tokens live for ~1h — one refresh up front means the
+  // 42 pulls below run entirely inside that window without triggering
+  // supabase-js's per-request EXPIRY_MARGIN_MS refresh check. Errors are
+  // swallowed: if refresh fails (offline, 429), the pulls will surface
+  // their own auth error with proper classification.
+  if (!options.skipRefresh) {
+    try {
+      await supabase.auth.refreshSession();
+    } catch (e) {
+      logError("initialSeed.refreshSession", e);
+    }
+  }
 
   onProgress?.({
     currentTable: PULL_ORDER[0] ?? null,
@@ -128,6 +156,12 @@ export async function initialSeed(
 
     completed++;
     totalRows += res.pulled;
+
+    // Pace the pulls. Small enough that seeding 42 tables still finishes
+    // in ~7s; large enough that supabase-js doesn't see a tight burst.
+    if (completed < total && delayMs > 0) {
+      await sleep(delayMs);
+    }
   }
 
   await writeUserMarker(userId);

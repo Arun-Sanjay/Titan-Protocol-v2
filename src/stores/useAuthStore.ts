@@ -20,24 +20,28 @@ type AuthState = {
  * instant redirect (no waiting for onAuthStateChange round-trip). `_layout.tsx`
  * gates the entire app on `isLoading` and `user`.
  *
- * Before the local-first migration, this store carried a defensive recovery
- * path for stray SIGNED_OUT events. The root cause was supabase-js firing a
- * refresh on every PostgREST request (via `_getAccessToken`'s 90s expiry
- * margin) — with clock skew + back-to-back reads during onboarding, the
- * refreshes cascaded into a 429 rate limit, after which supabase-js cleared
- * the session. Once the service layer became SQLite-authoritative (Phase 2),
- * PostgREST stopped running on the per-tap path — push/pull fire on AppState
- * transitions and a 60s interval, not per-interaction. Without the cascade
- * there's nothing to recover from; SIGNED_OUT means SIGNED_OUT.
+ * ─── Spurious SIGNED_OUT recovery ───────────────────────────────────────────
  *
- * What's left here: the `explicitSignOut` flag is still useful so the
- * ensureProfileRow dedup key resets cleanly; `scheduleEnsureProfile` still
- * defers out of the callback per supabase-js docs.
+ * supabase-js emits `SIGNED_OUT` on a bunch of failure modes that aren't
+ * "the user actually signed out" — the most common being a 429 on the
+ * /token refresh endpoint. The initial seed (42 sequential PostgREST
+ * queries) can tickle the refresh cascade even with fresh tokens,
+ * especially with any device clock skew. Phase 4 removed the recovery
+ * path assuming local-first made cascades impossible; the seed then
+ * surfaced the exact scenario the recovery was built for.
+ *
+ * Recovery: if we get SIGNED_OUT but still hold a refresh_token in
+ * memory, try `setSession` ONCE to re-validate. On success, keep the
+ * user. On failure, accept the sign-out as real and route to login.
  */
 
-// Dedup key so SIGNED_IN + TOKEN_REFRESHED in quick succession upsert the
-// profile at most once per user.
+let explicitSignOut = false;
+let recoveryInFlight = false;
+let lastRecoveryAttempt = 0;
 let lastEnsuredProfileFor: string | null = null;
+
+/** Don't retry recovery more than once per window. Cascade defence. */
+const RECOVERY_COOLDOWN_MS = 60_000;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
@@ -73,8 +77,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       if (event === "SIGNED_OUT") {
-        set({ session: null, user: null, isLoading: false });
-        lastEnsuredProfileFor = null;
+        handleSignedOut(get, set);
         return;
       }
 
@@ -95,12 +98,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
+    explicitSignOut = true;
     try {
       await supabase.auth.signOut();
     } catch (e) {
       logError("useAuthStore.signOut", e);
     } finally {
       set({ session: null, user: null });
+      explicitSignOut = false;
       lastEnsuredProfileFor = null;
     }
   },
@@ -111,25 +116,88 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 /**
  * Fire-and-forget profile upsert, deferred out of the onAuthStateChange
  * callback (supabase-js docs forbid Supabase calls inside callbacks — they
- * can deadlock on the internal lock).
- *
- * Local-first: the upsert writes to SQLite + enqueues the profile for push.
- * No network hit on the auth flow itself.
+ * can deadlock on the internal lock). Local-first: writes SQLite + outbox.
  */
 function scheduleEnsureProfile(userId: string, email: string | null) {
   if (lastEnsuredProfileFor === userId) return;
   lastEnsuredProfileFor = userId;
   setTimeout(() => {
-    // Lazy import to avoid a cycle (profile service imports the auth store's
-    // requireUserId path via lib/supabase).
     import("../services/profile")
-      .then(({ upsertProfile }) =>
-        upsertProfile({
-          email,
-        }),
-      )
+      .then(({ upsertProfile }) => upsertProfile({ email }))
       .catch((e) =>
         logError("useAuthStore.ensureProfileRow", e, { userId }),
       );
   }, 0);
+}
+
+/**
+ * Handle a SIGNED_OUT event.
+ *
+ * Explicit sign-out: clear immediately.
+ * Stray sign-out (429 cascade, etc.): try setSession once. `setSession`
+ * uses strict JWT expiry (no 90s margin), so if the access token has any
+ * life left it'll re-validate without triggering another refresh. If it
+ * genuinely fails, THEN we clear and the root layout redirects to login.
+ */
+function handleSignedOut(
+  get: () => AuthState,
+  set: (partial: Partial<AuthState>) => void,
+) {
+  if (explicitSignOut) {
+    set({ session: null, user: null, isLoading: false });
+    explicitSignOut = false;
+    lastEnsuredProfileFor = null;
+    return;
+  }
+
+  const snapshot = get().session;
+  if (!snapshot?.refresh_token || !snapshot.access_token) {
+    set({ session: null, user: null, isLoading: false });
+    lastEnsuredProfileFor = null;
+    return;
+  }
+
+  const now = Date.now();
+  if (recoveryInFlight || now - lastRecoveryAttempt < RECOVERY_COOLDOWN_MS) {
+    // Already mid-recovery, or cascade is repeating. Accept the sign-out.
+    recoveryInFlight = false;
+    set({ session: null, user: null, isLoading: false });
+    lastEnsuredProfileFor = null;
+    return;
+  }
+
+  recoveryInFlight = true;
+  lastRecoveryAttempt = now;
+
+  // Short delay lets any rate-limit window pass before we touch /user.
+  setTimeout(() => {
+    supabase.auth
+      .setSession({
+        access_token: snapshot.access_token,
+        refresh_token: snapshot.refresh_token,
+      })
+      .then(({ data, error }) => {
+        recoveryInFlight = false;
+        if (error || !data.session) {
+          logError(
+            "useAuthStore.recovery.failed",
+            error ?? new Error("setSession returned no session"),
+          );
+          set({ session: null, user: null, isLoading: false });
+          lastEnsuredProfileFor = null;
+          return;
+        }
+        // setSession fires its own SIGNED_IN; this set() is defensive.
+        set({
+          session: data.session,
+          user: data.session.user,
+          isLoading: false,
+        });
+      })
+      .catch((e) => {
+        // Network error during recovery — keep session so user can continue.
+        recoveryInFlight = false;
+        logError("useAuthStore.recovery.network", e);
+      });
+  }, 1500);
 }
