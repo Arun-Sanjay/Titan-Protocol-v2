@@ -141,6 +141,7 @@ import { OfflineBanner } from "../src/components/ui/OfflineBanner";
 import { OnboardingGate } from "../src/components/OnboardingGate";
 import { AppResumeSyncMount } from "../src/components/AppResumeSyncMount";
 import { SyncEngineMount } from "../src/components/SyncEngineMount";
+import { SeedGate } from "../src/components/SeedGate";
 import { ProfileHydrator } from "../src/components/ProfileHydrator";
 import { RankUpOverlayMount } from "../src/components/RankUpOverlayMount";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
@@ -650,6 +651,7 @@ export default function RootLayout() {
       <RootErrorBoundary>
       <SystemWindowProvider>
       <SystemNotificationProvider>
+      <SeedGate>
       <OnboardingGate>
       <AppResumeSyncMount />
       <SyncEngineMount />
@@ -778,6 +780,7 @@ export default function RootLayout() {
       )}
       {showWarning && <IntegrityWarningOverlay onDismiss={handleWarningDismiss} />}
       </OnboardingGate>
+      </SeedGate>
       </SystemNotificationProvider>
       </SystemWindowProvider>
       </RootErrorBoundary>
