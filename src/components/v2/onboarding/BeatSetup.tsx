@@ -24,7 +24,9 @@ import { habitsKeys } from "../../../hooks/queries/useHabits";
 import { useQueryClient } from "@tanstack/react-query";
 import { logError } from "../../../lib/error-log";
 import { Panel } from "../../ui/Panel";
-import { supabase, requireUserId } from "../../../lib/supabase";
+import { requireUserId } from "../../../lib/supabase";
+import { sqliteUpsertMany, newId } from "../../../db/sqlite/service-helpers";
+import type { Tables } from "../../../types/supabase";
 // Phase 3.6: dual-write removed — operation engine now reads from
 // Supabase via cloud hooks. MMKV mirror no longer needed.
 import type { EngineKey } from "../../../db/schema";
@@ -380,30 +382,40 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
       const checkedHabits = habits.filter((h) => h.checked);
 
       if (checkedTasks.length > 0) {
-        const taskRows = checkedTasks.map((t) => ({
+        const taskRows: Tables<"tasks">[] = checkedTasks.map((t) => ({
+          id: newId(),
           user_id: userId,
           engine: t.engine,
           title: t.title,
           kind: t.kind,
           days_per_week: 7,
           is_active: true,
+          legacy_local_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         }));
-        const { error } = await supabase.from("tasks").insert(taskRows);
-        if (error) throw error;
+        await sqliteUpsertMany("tasks", taskRows);
       }
 
       if (checkedHabits.length > 0) {
         const fallbackEngine = engines[0] ?? "body";
-        const habitRows = checkedHabits.map((h) => ({
+        const habitRows: Tables<"habits">[] = checkedHabits.map((h) => ({
+          id: newId(),
           user_id: userId,
           title: h.title,
           icon: h.icon,
           engine: h.engine === "all" ? fallbackEngine : h.engine,
           current_chain: 0,
           best_chain: 0,
+          frequency: null,
+          trigger_text: null,
+          duration_text: null,
+          last_broken_date: null,
+          legacy_local_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         }));
-        const { error } = await supabase.from("habits").insert(habitRows);
-        if (error) throw error;
+        await sqliteUpsertMany("habits", habitRows);
       }
     };
 
