@@ -140,6 +140,7 @@ import { RootErrorBoundary } from "../src/components/ui/RootErrorBoundary";
 import { OfflineBanner } from "../src/components/ui/OfflineBanner";
 import { OnboardingGate } from "../src/components/OnboardingGate";
 import { AppResumeSyncMount } from "../src/components/AppResumeSyncMount";
+import { SyncEngineMount } from "../src/components/SyncEngineMount";
 import { ProfileHydrator } from "../src/components/ProfileHydrator";
 import { RankUpOverlayMount } from "../src/components/RankUpOverlayMount";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
@@ -651,6 +652,7 @@ export default function RootLayout() {
       <SystemNotificationProvider>
       <OnboardingGate>
       <AppResumeSyncMount />
+      <SyncEngineMount />
       <ProfileHydrator />
       <StatusBar style="light" backgroundColor={colors.bg} />
       <Stack

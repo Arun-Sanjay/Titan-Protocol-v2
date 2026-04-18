@@ -33,7 +33,15 @@ export function _resetDbForTests(): void {
   dbPromise = null;
 }
 
-type BindParams = SQLiteBindValue[] | Record<string, SQLiteBindValue>;
+// Widened BindParams so callers can pass the kind of loose `unknown[]`
+// that comes out of service-layer PK extraction (`pkCols.map(c => row[c])`)
+// without a cast at every call site. The cast happens once here when we
+// hand the values to expo-sqlite.
+export type BindParams =
+  | SQLiteBindValue[]
+  | unknown[]
+  | Record<string, SQLiteBindValue>
+  | Record<string, unknown>;
 
 export async function all<T = unknown>(
   sql: string,
