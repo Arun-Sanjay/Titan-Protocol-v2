@@ -37,19 +37,8 @@ export async function requireUserId(): Promise<string> {
   return session.user.id;
 }
 
-/**
- * Idempotently ensure a profiles row exists for the signed-in user.
- * The server-side handle_new_user trigger is the primary path, but this
- * client-side upsert is a belt-and-suspenders fallback so that an older
- * account (signed up before the trigger was installed) or a transient
- * trigger failure cannot leave the user with no profile row — without
- * which every FK-ed write (tasks, habits, journal_entries) fails 23503.
- */
-export async function ensureProfileRow(
-  userId: string,
-  email: string | null,
-): Promise<void> {
-  await supabase
-    .from("profiles")
-    .upsert({ id: userId, email }, { onConflict: "id", ignoreDuplicates: true });
-}
+// NOTE: the old `ensureProfileRow` helper (which did a direct
+// `supabase.from('profiles').upsert(...)` on every SIGNED_IN) was removed
+// in Phase 4 of the local-first migration. The auth store now calls the
+// profile service's `upsertProfile` instead, which writes SQLite first
+// and enqueues the row for the background push.
