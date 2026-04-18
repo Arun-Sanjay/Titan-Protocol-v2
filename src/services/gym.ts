@@ -1,5 +1,13 @@
-import { supabase, requireUserId } from "../lib/supabase";
-import type { Tables, TablesInsert } from "../types/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteDelete,
+  sqliteGet,
+  sqliteList,
+  sqliteUpsert,
+} from "../db/sqlite/service-helpers";
+import type { Tables } from "../types/supabase";
+import type { Json } from "../types/supabase";
 
 // ─── Re-exported Types ─────────────────────────────────────────────────────
 
@@ -12,25 +20,19 @@ export type GymPersonalRecord = Tables<"gym_personal_records">;
 // ─── Sessions ──────────────────────────────────────────────────────────────
 
 export async function listSessions(limit = 30): Promise<GymSession[]> {
-  const { data, error } = await supabase
-    .from("gym_sessions")
-    .select("*")
-    .order("started_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<GymSession>("gym_sessions", {
+    order: "started_at DESC",
+    limit,
+  });
 }
 
 export async function getActiveSession(): Promise<GymSession | null> {
-  const { data, error } = await supabase
-    .from("gym_sessions")
-    .select("*")
-    .is("ended_at", null)
-    .order("started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const [row] = await sqliteList<GymSession>("gym_sessions", {
+    where: "ended_at IS NULL",
+    order: "started_at DESC",
+    limit: 1,
+  });
+  return row ?? null;
 }
 
 export async function startSession(params: {
@@ -39,39 +41,42 @@ export async function startSession(params: {
   template_id?: string;
 }): Promise<GymSession> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("gym_sessions")
-    .insert({
-      user_id: userId,
-      date_key: params.date_key,
-      name: params.name ?? null,
-      template_id: params.template_id ?? null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const row: GymSession = {
+    id: newId(),
+    user_id: userId,
+    date_key: params.date_key,
+    name: params.name ?? null,
+    template_id: params.template_id ?? null,
+    notes: null,
+    started_at: new Date().toISOString(),
+    ended_at: null,
+  };
+  return sqliteUpsert("gym_sessions", row);
 }
 
 export async function endSession(sessionId: string): Promise<GymSession> {
-  const { data, error } = await supabase
-    .from("gym_sessions")
-    .update({ ended_at: new Date().toISOString() })
-    .eq("id", sessionId)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const existing = await sqliteGet<GymSession>("gym_sessions", {
+    id: sessionId,
+  });
+  if (!existing) throw new Error("Session not found");
+  const merged: GymSession = {
+    ...existing,
+    ended_at: new Date().toISOString(),
+  };
+  return sqliteUpsert("gym_sessions", merged);
 }
 
 export async function deleteSession(sessionId: string): Promise<void> {
-  // Delete sets first (FK constraint)
-  await supabase.from("gym_sets").delete().eq("session_id", sessionId);
-  const { error } = await supabase
-    .from("gym_sessions")
-    .delete()
-    .eq("id", sessionId);
-  if (error) throw error;
+  // Delete sets first (preserves the old behaviour where sets are removed
+  // before the parent session).
+  const sets = await sqliteList<GymSet>("gym_sets", {
+    where: "session_id = ?",
+    params: [sessionId],
+  });
+  for (const s of sets) {
+    await sqliteDelete("gym_sets", { id: s.id });
+  }
+  await sqliteDelete("gym_sessions", { id: sessionId });
 }
 
 // ─── Sets ──────────────────────────────────────────────────────────────────
@@ -79,13 +84,11 @@ export async function deleteSession(sessionId: string): Promise<void> {
 export async function listSetsForSession(
   sessionId: string,
 ): Promise<GymSet[]> {
-  const { data, error } = await supabase
-    .from("gym_sets")
-    .select("*")
-    .eq("session_id", sessionId)
-    .order("set_index", { ascending: true });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<GymSet>("gym_sets", {
+    where: "session_id = ?",
+    params: [sessionId],
+    order: "set_index ASC",
+  });
 }
 
 export async function addSet(params: {
@@ -99,53 +102,40 @@ export async function addSet(params: {
   notes?: string;
 }): Promise<GymSet> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("gym_sets")
-    .insert({
-      user_id: userId,
-      session_id: params.session_id,
-      exercise_name: params.exercise_name,
-      exercise_id: params.exercise_id ?? null,
-      set_index: params.set_index,
-      weight: params.weight ?? null,
-      reps: params.reps ?? null,
-      rpe: params.rpe ?? null,
-      notes: params.notes ?? null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const row: GymSet = {
+    id: newId(),
+    user_id: userId,
+    session_id: params.session_id,
+    exercise_name: params.exercise_name,
+    exercise_id: params.exercise_id ?? null,
+    set_index: params.set_index,
+    weight: params.weight ?? null,
+    reps: params.reps ?? null,
+    rpe: params.rpe ?? null,
+    notes: params.notes ?? null,
+    created_at: new Date().toISOString(),
+  };
+  return sqliteUpsert("gym_sets", row);
 }
 
 export async function updateSet(
   setId: string,
   updates: { weight?: number; reps?: number; rpe?: number; notes?: string },
 ): Promise<GymSet> {
-  const { data, error } = await supabase
-    .from("gym_sets")
-    .update(updates)
-    .eq("id", setId)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const existing = await sqliteGet<GymSet>("gym_sets", { id: setId });
+  if (!existing) throw new Error("Set not found");
+  const merged: GymSet = { ...existing, ...updates };
+  return sqliteUpsert("gym_sets", merged);
 }
 
 export async function deleteSet(setId: string): Promise<void> {
-  const { error } = await supabase.from("gym_sets").delete().eq("id", setId);
-  if (error) throw error;
+  await sqliteDelete("gym_sets", { id: setId });
 }
 
 // ─── Exercises ──────────────────────────────────────────────────────────────
 
 export async function listExercises(): Promise<GymExercise[]> {
-  const { data, error } = await supabase
-    .from("gym_exercises")
-    .select("*")
-    .order("name", { ascending: true });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<GymExercise>("gym_exercises", { order: "name ASC" });
 }
 
 export async function createExercise(params: {
@@ -155,39 +145,27 @@ export async function createExercise(params: {
   notes?: string;
 }): Promise<GymExercise> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("gym_exercises")
-    .insert({
-      user_id: userId,
-      name: params.name,
-      muscle_group: params.muscle_group ?? null,
-      equipment: params.equipment ?? null,
-      notes: params.notes ?? null,
-      is_custom: true,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const row: GymExercise = {
+    id: newId(),
+    user_id: userId,
+    name: params.name,
+    muscle_group: params.muscle_group ?? null,
+    equipment: params.equipment ?? null,
+    notes: params.notes ?? null,
+    is_custom: true,
+    created_at: new Date().toISOString(),
+  };
+  return sqliteUpsert("gym_exercises", row);
 }
 
 export async function deleteExercise(exerciseId: string): Promise<void> {
-  const { error } = await supabase
-    .from("gym_exercises")
-    .delete()
-    .eq("id", exerciseId);
-  if (error) throw error;
+  await sqliteDelete("gym_exercises", { id: exerciseId });
 }
 
 // ─── Templates ──────────────────────────────────────────────────────────────
 
 export async function listTemplates(): Promise<GymTemplate[]> {
-  const { data, error } = await supabase
-    .from("gym_templates")
-    .select("*")
-    .order("name", { ascending: true });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<GymTemplate>("gym_templates", { order: "name ASC" });
 }
 
 export async function createTemplate(params: {
@@ -196,37 +174,29 @@ export async function createTemplate(params: {
   exercise_ids?: string[];
 }): Promise<GymTemplate> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("gym_templates")
-    .insert({
-      user_id: userId,
-      name: params.name,
-      description: params.description ?? null,
-      exercise_ids: params.exercise_ids ?? [],
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const now = new Date().toISOString();
+  const row: GymTemplate = {
+    id: newId(),
+    user_id: userId,
+    name: params.name,
+    description: params.description ?? null,
+    exercise_ids: (params.exercise_ids ?? []) as unknown as Json,
+    created_at: now,
+    updated_at: now,
+  };
+  return sqliteUpsert("gym_templates", row);
 }
 
 export async function deleteTemplate(templateId: string): Promise<void> {
-  const { error } = await supabase
-    .from("gym_templates")
-    .delete()
-    .eq("id", templateId);
-  if (error) throw error;
+  await sqliteDelete("gym_templates", { id: templateId });
 }
 
 // ─── Personal Records ────────────────────────────────────────────────────
 
 export async function listPersonalRecords(): Promise<GymPersonalRecord[]> {
-  const { data, error } = await supabase
-    .from("gym_personal_records")
-    .select("*")
-    .order("achieved_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<GymPersonalRecord>("gym_personal_records", {
+    order: "achieved_at DESC",
+  });
 }
 
 export async function upsertPersonalRecord(params: {
@@ -235,16 +205,13 @@ export async function upsertPersonalRecord(params: {
   reps: number;
 }): Promise<GymPersonalRecord> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("gym_personal_records")
-    .insert({
-      user_id: userId,
-      exercise_name: params.exercise_name,
-      weight: params.weight,
-      reps: params.reps,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const row: GymPersonalRecord = {
+    id: newId(),
+    user_id: userId,
+    exercise_name: params.exercise_name,
+    weight: params.weight,
+    reps: params.reps,
+    achieved_at: new Date().toISOString(),
+  };
+  return sqliteUpsert("gym_personal_records", row);
 }

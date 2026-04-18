@@ -1,4 +1,11 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteDelete,
+  sqliteGet,
+  sqliteList,
+  sqliteUpsert,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 
 // ─── Re-exported Types ─────────────────────────────────────────────────────
@@ -11,40 +18,53 @@ export type WaterLog = Tables<"water_logs">;
 // ─── Nutrition Profile ─────────────────────────────────────────────────────
 
 export async function getNutritionProfile(): Promise<NutritionProfile | null> {
-  const { data, error } = await supabase
-    .from("nutrition_profile")
-    .select("*")
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const userId = await requireUserId();
+  return sqliteGet<NutritionProfile>("nutrition_profile", { user_id: userId });
 }
 
 export async function upsertNutritionProfile(
   profile: Partial<Omit<NutritionProfile, "user_id" | "updated_at">>,
 ): Promise<NutritionProfile> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("nutrition_profile")
-    .upsert({
-      user_id: userId,
-      ...profile,
-      updated_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const now = new Date().toISOString();
+  const existing = await sqliteGet<NutritionProfile>("nutrition_profile", {
+    user_id: userId,
+  });
+
+  const base: NutritionProfile = existing ?? {
+    user_id: userId,
+    sex: null,
+    age: null,
+    height_cm: null,
+    weight_kg: null,
+    body_fat_pct: null,
+    steps_per_day: null,
+    workouts_per_week: null,
+    goal: null,
+    goal_rate: null,
+    protein_preference: null,
+    daily_calorie_target: null,
+    protein_target_g: null,
+    carbs_target_g: null,
+    fat_target_g: null,
+    bmr: null,
+    tdee: null,
+    updated_at: now,
+  };
+
+  const merged: NutritionProfile = {
+    ...base,
+    ...profile,
+    user_id: userId,
+    updated_at: now,
+  };
+  return sqliteUpsert("nutrition_profile", merged);
 }
 
 // ─── Meal Logs ─────────────────────────────────────────────────────────────
 
 export async function listMealLogs(): Promise<MealLog[]> {
-  const { data, error } = await supabase
-    .from("meal_logs")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<MealLog>("meal_logs", { order: "created_at DESC" });
 }
 
 export async function createMealLog(meal: {
@@ -56,40 +76,28 @@ export async function createMealLog(meal: {
   fat_g?: number;
 }): Promise<MealLog> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("meal_logs")
-    .insert({
-      user_id: userId,
-      name: meal.name,
-      date_key: meal.date_key,
-      calories: meal.calories ?? 0,
-      protein_g: meal.protein_g ?? 0,
-      carbs_g: meal.carbs_g ?? 0,
-      fat_g: meal.fat_g ?? 0,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const row: MealLog = {
+    id: newId(),
+    user_id: userId,
+    name: meal.name,
+    date_key: meal.date_key,
+    calories: meal.calories ?? 0,
+    protein_g: meal.protein_g ?? 0,
+    carbs_g: meal.carbs_g ?? 0,
+    fat_g: meal.fat_g ?? 0,
+    created_at: new Date().toISOString(),
+  };
+  return sqliteUpsert("meal_logs", row);
 }
 
 export async function deleteMealLog(mealId: string): Promise<void> {
-  const { error } = await supabase
-    .from("meal_logs")
-    .delete()
-    .eq("id", mealId);
-  if (error) throw error;
+  await sqliteDelete("meal_logs", { id: mealId });
 }
 
 // ─── Quick Meals ───────────────────────────────────────────────────────────
 
 export async function listQuickMeals(): Promise<QuickMeal[]> {
-  const { data, error } = await supabase
-    .from("quick_meals")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<QuickMeal>("quick_meals", { order: "created_at DESC" });
 }
 
 export async function createQuickMeal(meal: {
@@ -100,46 +108,36 @@ export async function createQuickMeal(meal: {
   fat_g?: number;
 }): Promise<QuickMeal> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("quick_meals")
-    .insert({
-      user_id: userId,
-      name: meal.name,
-      calories: meal.calories ?? 0,
-      protein_g: meal.protein_g ?? 0,
-      carbs_g: meal.carbs_g ?? 0,
-      fat_g: meal.fat_g ?? 0,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const row: QuickMeal = {
+    id: newId(),
+    user_id: userId,
+    name: meal.name,
+    calories: meal.calories ?? 0,
+    protein_g: meal.protein_g ?? 0,
+    carbs_g: meal.carbs_g ?? 0,
+    fat_g: meal.fat_g ?? 0,
+    created_at: new Date().toISOString(),
+  };
+  return sqliteUpsert("quick_meals", row);
 }
 
 export async function deleteQuickMeal(id: string): Promise<void> {
-  const { error } = await supabase.from("quick_meals").delete().eq("id", id);
-  if (error) throw error;
+  await sqliteDelete("quick_meals", { id });
 }
 
 // ─── Water Logs ────────────────────────────────────────────────────────────
 
 export async function getWaterLog(dateKey: string): Promise<WaterLog | null> {
-  const { data, error } = await supabase
-    .from("water_logs")
-    .select("*")
-    .eq("date_key", dateKey)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const [row] = await sqliteList<WaterLog>("water_logs", {
+    where: "date_key = ?",
+    params: [dateKey],
+    limit: 1,
+  });
+  return row ?? null;
 }
 
 export async function listWaterLogs(): Promise<WaterLog[]> {
-  const { data, error } = await supabase
-    .from("water_logs")
-    .select("*")
-    .order("date_key", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<WaterLog>("water_logs", { order: "date_key DESC" });
 }
 
 export async function adjustWaterGlasses(
@@ -147,30 +145,26 @@ export async function adjustWaterGlasses(
   delta: number,
 ): Promise<WaterLog> {
   const userId = await requireUserId();
-  const { data: existing } = await supabase
-    .from("water_logs")
-    .select("id, glasses")
-    .eq("date_key", dateKey)
-    .maybeSingle();
+  const now = new Date().toISOString();
 
+  const existing = await getWaterLog(dateKey);
   if (existing) {
     const next = Math.max(0, existing.glasses + delta);
-    const { data, error } = await supabase
-      .from("water_logs")
-      .update({ glasses: next, updated_at: new Date().toISOString() })
-      .eq("id", existing.id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    const merged: WaterLog = {
+      ...existing,
+      glasses: next,
+      updated_at: now,
+    };
+    return sqliteUpsert("water_logs", merged);
   }
 
   const next = Math.max(0, delta);
-  const { data, error } = await supabase
-    .from("water_logs")
-    .insert({ user_id: userId, date_key: dateKey, glasses: next })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const row: WaterLog = {
+    id: newId(),
+    user_id: userId,
+    date_key: dateKey,
+    glasses: next,
+    updated_at: now,
+  };
+  return sqliteUpsert("water_logs", row);
 }

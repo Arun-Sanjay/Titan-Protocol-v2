@@ -1,4 +1,9 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteList,
+  sqliteUpsert,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 
 // ─── Re-exported Types ─────────────────────────────────────────────────────
@@ -8,12 +13,9 @@ export type MindTrainingResult = Tables<"mind_training_results">;
 // ─── Service Functions ─────────────────────────────────────────────────────
 
 export async function listMindTrainingResults(): Promise<MindTrainingResult[]> {
-  const { data, error } = await supabase
-    .from("mind_training_results")
-    .select("*")
-    .order("answered_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<MindTrainingResult>("mind_training_results", {
+    order: "answered_at DESC",
+  });
 }
 
 export async function recordMindResult(result: {
@@ -25,19 +27,16 @@ export async function recordMindResult(result: {
   timeSpentMs?: number;
 }): Promise<MindTrainingResult> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("mind_training_results")
-    .insert({
-      user_id: userId,
-      exercise_id: result.exerciseId,
-      type: result.type,
-      correct: result.correct,
-      category: result.category ?? null,
-      selected_option: result.selectedOption ?? null,
-      time_spent_ms: result.timeSpentMs ?? null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const row: MindTrainingResult = {
+    id: newId(),
+    user_id: userId,
+    exercise_id: result.exerciseId,
+    type: result.type,
+    correct: result.correct,
+    category: result.category ?? null,
+    selected_option: result.selectedOption ?? null,
+    time_spent_ms: result.timeSpentMs ?? null,
+    answered_at: new Date().toISOString(),
+  };
+  return sqliteUpsert("mind_training_results", row);
 }

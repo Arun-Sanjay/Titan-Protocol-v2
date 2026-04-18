@@ -1,4 +1,11 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteDelete,
+  sqliteGet,
+  sqliteList,
+  sqliteUpsert,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 
 // ─── Re-exported Types ─────────────────────────────────────────────────────
@@ -9,12 +16,9 @@ export type MoneyLoan = Tables<"money_loans">;
 // ─── Service Functions ─────────────────────────────────────────────────────
 
 export async function listTransactions(): Promise<MoneyTransaction[]> {
-  const { data, error } = await supabase
-    .from("money_transactions")
-    .select("*")
-    .order("date_key", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<MoneyTransaction>("money_transactions", {
+    order: "date_key DESC",
+  });
 }
 
 export async function createTransaction(tx: {
@@ -25,39 +29,28 @@ export async function createTransaction(tx: {
   note?: string;
 }): Promise<MoneyTransaction> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("money_transactions")
-    .insert({
-      user_id: userId,
-      amount: tx.amount,
-      category: tx.category,
-      type: tx.type,
-      date_key: tx.date_key,
-      note: tx.note ?? null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const now = new Date().toISOString();
+  const row: MoneyTransaction = {
+    id: newId(),
+    user_id: userId,
+    amount: tx.amount,
+    category: tx.category,
+    type: tx.type,
+    date_key: tx.date_key,
+    note: tx.note ?? null,
+    created_at: now,
+  };
+  return sqliteUpsert("money_transactions", row);
 }
 
 export async function deleteTransaction(txId: string): Promise<void> {
-  const { error } = await supabase
-    .from("money_transactions")
-    .delete()
-    .eq("id", txId);
-  if (error) throw error;
+  await sqliteDelete("money_transactions", { id: txId });
 }
 
 // ─── Loans ─────────────────────────────────────────────────────────────────
 
 export async function listLoans(): Promise<MoneyLoan[]> {
-  const { data, error } = await supabase
-    .from("money_loans")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<MoneyLoan>("money_loans", { order: "created_at DESC" });
 }
 
 export async function createLoan(loan: {
@@ -71,45 +64,35 @@ export async function createLoan(loan: {
   start_date?: string;
 }): Promise<MoneyLoan> {
   const userId = await requireUserId();
-  const { data, error } = await supabase
-    .from("money_loans")
-    .insert({
-      user_id: userId,
-      lender: loan.lender,
-      amount: loan.amount,
-      paid: 0,
-      date_iso: loan.date_iso,
-      due_iso: loan.due_iso ?? null,
-      status: "unpaid",
-      name: loan.name ?? null,
-      interest_rate: loan.interest_rate ?? null,
-      monthly_payment: loan.monthly_payment ?? null,
-      start_date: loan.start_date ?? null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const now = new Date().toISOString();
+  const row: MoneyLoan = {
+    id: newId(),
+    user_id: userId,
+    lender: loan.lender,
+    amount: loan.amount,
+    paid: 0,
+    date_iso: loan.date_iso,
+    due_iso: loan.due_iso ?? null,
+    status: "unpaid",
+    name: loan.name ?? null,
+    interest_rate: loan.interest_rate ?? null,
+    monthly_payment: loan.monthly_payment ?? null,
+    start_date: loan.start_date ?? null,
+    created_at: now,
+  };
+  return sqliteUpsert("money_loans", row);
 }
 
 export async function updateLoan(
   loanId: string,
   updates: Partial<Pick<MoneyLoan, "paid" | "status" | "amount" | "interest_rate" | "monthly_payment">>,
 ): Promise<MoneyLoan> {
-  const { data, error } = await supabase
-    .from("money_loans")
-    .update(updates)
-    .eq("id", loanId)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const existing = await sqliteGet<MoneyLoan>("money_loans", { id: loanId });
+  if (!existing) throw new Error("Loan not found");
+  const merged: MoneyLoan = { ...existing, ...updates };
+  return sqliteUpsert("money_loans", merged);
 }
 
 export async function deleteLoan(loanId: string): Promise<void> {
-  const { error } = await supabase
-    .from("money_loans")
-    .delete()
-    .eq("id", loanId);
-  if (error) throw error;
+  await sqliteDelete("money_loans", { id: loanId });
 }

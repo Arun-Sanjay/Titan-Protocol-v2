@@ -1,4 +1,9 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  sqliteList,
+  sqliteUpsert,
+  sqliteUpsertMany,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 
 // ─── Re-exported Types ─────────────────────────────────────────────────────
@@ -8,38 +13,39 @@ export type UserTitle = Tables<"user_titles">;
 // ─── Service Functions ─────────────────────────────────────────────────────
 
 export async function listUserTitles(): Promise<UserTitle[]> {
-  const { data, error } = await supabase
-    .from("user_titles")
-    .select("*")
-    .order("unlocked_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<UserTitle>("user_titles", { order: "unlocked_at DESC" });
 }
 
 export async function equipTitle(titleId: string): Promise<void> {
-  const userId = await requireUserId();
+  await requireUserId();
 
-  // Unequip all first
-  const { error: unequipErr } = await supabase
-    .from("user_titles")
-    .update({ equipped: false })
-    .eq("user_id", userId);
-  if (unequipErr) throw unequipErr;
-
-  // Equip the selected title
-  const { error: equipErr } = await supabase
-    .from("user_titles")
-    .update({ equipped: true })
-    .eq("user_id", userId)
-    .eq("title_id", titleId);
-  if (equipErr) throw equipErr;
+  // Unequip all currently-equipped titles, then equip the target.
+  // `sqliteUpsert` writes rows one at a time; walking the equipped set is
+  // cheaper than loading every row because we only need to update the
+  // ones that were actually flagged.
+  const rows = await sqliteList<UserTitle>("user_titles");
+  const toUpdate: UserTitle[] = [];
+  let foundTarget = false;
+  for (const row of rows) {
+    if (row.title_id === titleId) {
+      foundTarget = true;
+      if (!row.equipped) toUpdate.push({ ...row, equipped: true });
+    } else if (row.equipped) {
+      toUpdate.push({ ...row, equipped: false });
+    }
+  }
+  if (!foundTarget) return; // user doesn't own that title; no-op matches old behaviour
+  if (toUpdate.length > 0) {
+    await sqliteUpsertMany("user_titles", toUpdate);
+  }
 }
 
 export async function unequipAllTitles(): Promise<void> {
-  const userId = await requireUserId();
-  const { error } = await supabase
-    .from("user_titles")
-    .update({ equipped: false })
-    .eq("user_id", userId);
-  if (error) throw error;
+  await requireUserId();
+  const rows = await sqliteList<UserTitle>("user_titles", {
+    where: "equipped = 1",
+  });
+  if (rows.length === 0) return;
+  const updated = rows.map((r) => ({ ...r, equipped: false }));
+  await sqliteUpsertMany("user_titles", updated);
 }

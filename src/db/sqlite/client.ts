@@ -74,13 +74,45 @@ export async function exec(source: string): Promise<void> {
   await db.execAsync(source);
 }
 
+// Tracks transaction depth per opened database so nested `transaction()`
+// calls use SAVEPOINTs instead of a second BEGIN (which SQLite rejects).
+// Incremented on entry and decremented on exit regardless of
+// success/failure — a rollback releases the savepoint and re-throws.
+let txDepth = 0;
+
 export async function transaction<T>(
   task: (tx: SQLiteDatabase) => Promise<T>,
 ): Promise<T> {
   const db = await getDb();
-  let result!: T;
-  await db.withTransactionAsync(async () => {
-    result = await task(db);
-  });
-  return result;
+  if (txDepth === 0) {
+    txDepth++;
+    try {
+      let result!: T;
+      await db.withTransactionAsync(async () => {
+        result = await task(db);
+      });
+      return result;
+    } finally {
+      txDepth--;
+    }
+  }
+  // Nested call — use a SAVEPOINT.
+  const sp = `sp_${txDepth}_${Date.now()}`;
+  txDepth++;
+  try {
+    await db.execAsync(`SAVEPOINT ${sp}`);
+    const result = await task(db);
+    await db.execAsync(`RELEASE SAVEPOINT ${sp}`);
+    return result;
+  } catch (err) {
+    try {
+      await db.execAsync(`ROLLBACK TO SAVEPOINT ${sp}`);
+      await db.execAsync(`RELEASE SAVEPOINT ${sp}`);
+    } catch {
+      // ignore — outer transaction will rollback fully
+    }
+    throw err;
+  } finally {
+    txDepth--;
+  }
 }

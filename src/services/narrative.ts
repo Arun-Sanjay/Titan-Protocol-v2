@@ -1,4 +1,12 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteList,
+  sqliteUpsert,
+} from "../db/sqlite/service-helpers";
+import type { Tables } from "../types/supabase";
+
+export type NarrativeLogEntry = Tables<"narrative_log">;
 
 export async function addNarrativeLogEntry(entry: {
   date_key: string;
@@ -6,21 +14,20 @@ export async function addNarrativeLogEntry(entry: {
   type: string;
 }): Promise<void> {
   const userId = await requireUserId();
-  const { error } = await supabase.from("narrative_log").insert({
+  const row: NarrativeLogEntry = {
+    id: newId(),
     user_id: userId,
     date_key: entry.date_key,
     text: entry.text,
     type: entry.type,
-  });
-  if (error) throw error;
+    created_at: new Date().toISOString(),
+  };
+  await sqliteUpsert("narrative_log", row);
 }
 
-export async function listNarrativeLog(limit = 100) {
-  const { data, error } = await supabase
-    .from("narrative_log")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return data ?? [];
+export async function listNarrativeLog(limit = 100): Promise<NarrativeLogEntry[]> {
+  return sqliteList<NarrativeLogEntry>("narrative_log", {
+    order: "created_at DESC",
+    limit,
+  });
 }

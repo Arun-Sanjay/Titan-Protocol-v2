@@ -1,47 +1,47 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteGet,
+  sqliteList,
+  sqliteUpsert,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 
 export type RankUpEvent = Tables<"rank_up_events">;
 
-/**
- * List undismissed rank-up events, oldest first.
- * Uses the partial index `rank_ups_user_undismissed_idx` on (user_id, created_at)
- * WHERE dismissed_at IS NULL.
- */
+/** Undismissed rank-up events, oldest first. */
 export async function listPendingRankUps(): Promise<RankUpEvent[]> {
-  const { data, error } = await supabase
-    .from("rank_up_events")
-    .select("*")
-    .is("dismissed_at", null)
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<RankUpEvent>("rank_up_events", {
+    where: "dismissed_at IS NULL",
+    order: "created_at ASC",
+  });
 }
 
-/**
- * Enqueue a rank-up event (fires when awardXP detects a level change).
- */
+/** Enqueue a rank-up event (fires when awardXP detects a level change). */
 export async function enqueueRankUp(params: {
   fromLevel: number;
   toLevel: number;
 }): Promise<void> {
   const userId = await requireUserId();
-  const { error } = await supabase.from("rank_up_events").insert({
+  const now = new Date().toISOString();
+  await sqliteUpsert("rank_up_events", {
+    id: newId(),
     user_id: userId,
     from_level: params.fromLevel,
     to_level: params.toLevel,
+    dismissed_at: null,
+    created_at: now,
   });
-  if (error) throw error;
 }
 
-/**
- * Soft-dismiss a rank-up event by setting dismissed_at.
- * Does NOT delete — preserves the event for analytics/history.
- */
+/** Soft-dismiss a rank-up event by stamping dismissed_at. */
 export async function dismissRankUp(eventId: string): Promise<void> {
-  const { error } = await supabase
-    .from("rank_up_events")
-    .update({ dismissed_at: new Date().toISOString() })
-    .eq("id", eventId);
-  if (error) throw error;
+  const existing = await sqliteGet<RankUpEvent>("rank_up_events", {
+    id: eventId,
+  });
+  if (!existing) return;
+  await sqliteUpsert("rank_up_events", {
+    ...existing,
+    dismissed_at: new Date().toISOString(),
+  });
 }

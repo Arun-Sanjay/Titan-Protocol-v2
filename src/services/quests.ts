@@ -1,6 +1,12 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteList,
+  sqliteUpsertMany,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 import type { Quest as QuestUI } from "../types/quest-ui";
+import type { Json } from "../types/supabase";
 
 // ─── Re-exported Types ─────────────────────────────────────────────────────
 
@@ -9,24 +15,25 @@ export type Quest = Tables<"quests">;
 // ─── Service Functions ─────────────────────────────────────────────────────
 
 export async function listActiveQuests(): Promise<Quest[]> {
-  const { data, error } = await supabase
-    .from("quests")
-    .select("*")
-    .eq("status", "active")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<Quest>("quests", {
+    where: "status = ?",
+    params: ["active"],
+    order: "created_at DESC",
+  });
 }
 
 /**
- * Persist generated weekly quests to Supabase. Skips if there are
- * already active quests for this user (idempotent).
+ * Persist generated weekly quests. Mirrors the old Supabase behaviour:
+ * caller decides idempotency (the old code left dedupe to the UI layer).
  */
 export async function insertWeeklyQuests(quests: QuestUI[]): Promise<void> {
   if (quests.length === 0) return;
   const userId = await requireUserId();
   const today = new Date().toISOString().slice(0, 10);
-  const rows = quests.map((q) => ({
+  const now = new Date().toISOString();
+
+  const rows: Quest[] = quests.map((q) => ({
+    id: newId(),
     user_id: userId,
     week_start_key: today,
     type: q.type,
@@ -34,15 +41,18 @@ export async function insertWeeklyQuests(quests: QuestUI[]): Promise<void> {
     description: q.description,
     target: q.targetValue,
     progress: q.currentValue,
-    status: "active" as const,
+    status: "active" as Quest["status"],
     xp_reward: q.xpReward,
     metadata: {
       type: q.type,
       targetType: q.targetType,
       targetEngine: q.targetEngine ?? null,
       templateId: q.templateId ?? null,
-    },
+    } as Json,
+    created_at: now,
+    expires_at: null,
+    updated_at: now,
   }));
-  const { error } = await supabase.from("quests").insert(rows);
-  if (error) throw error;
+
+  await sqliteUpsertMany("quests", rows);
 }

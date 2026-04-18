@@ -34,6 +34,7 @@ function openFresh(): Database.Database {
 /** Reset the in-memory DB. Call from `beforeEach`. */
 export function _resetTestDb(): void {
   db = openFresh();
+  txDepth = 0;
 }
 
 /** Direct DB access for assertions that want to peek. */
@@ -89,23 +90,47 @@ export async function exec(source: string): Promise<void> {
 }
 
 /**
- * better-sqlite3's native `db.transaction(fn)(args)` wrapper requires
- * a synchronous function body. Our production code uses async task
- * bodies that may await network or nested SQLite calls. In the fake
- * we run BEGIN/COMMIT manually — all our DB calls are synchronous
- * under the hood (better-sqlite3), so this is safe.
+ * Nested-transaction-safe wrapper. Matches the production client.ts
+ * semantics: the outermost call does BEGIN/COMMIT; nested calls use
+ * SAVEPOINT so a service can wrap its own transaction around code that
+ * itself calls `transaction()` (sqliteUpsert -> enqueueUpsert, etc.).
  */
+let txDepth = 0;
+
 export async function transaction<T>(
   task: (tx: Database.Database) => Promise<T>,
 ): Promise<T> {
-  db.prepare("BEGIN").run();
+  if (txDepth === 0) {
+    txDepth++;
+    db.prepare("BEGIN").run();
+    try {
+      const result = await task(db);
+      db.prepare("COMMIT").run();
+      return result;
+    } catch (err) {
+      db.prepare("ROLLBACK").run();
+      throw err;
+    } finally {
+      txDepth--;
+    }
+  }
+  const sp = `sp_${txDepth}_${Date.now()}`;
+  txDepth++;
+  db.exec(`SAVEPOINT ${sp}`);
   try {
     const result = await task(db);
-    db.prepare("COMMIT").run();
+    db.exec(`RELEASE SAVEPOINT ${sp}`);
     return result;
   } catch (err) {
-    db.prepare("ROLLBACK").run();
+    try {
+      db.exec(`ROLLBACK TO SAVEPOINT ${sp}`);
+      db.exec(`RELEASE SAVEPOINT ${sp}`);
+    } catch {
+      // outer rollback will clean up
+    }
     throw err;
+  } finally {
+    txDepth--;
   }
 }
 
