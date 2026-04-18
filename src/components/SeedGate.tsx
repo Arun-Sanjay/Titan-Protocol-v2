@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "../stores/useAuthStore";
-import { hasSeeded, initialSeed, type SeedProgress } from "../sync/seed";
+import {
+  initialSeed,
+  resetLocalDataForUserSwitch,
+  seededForUser,
+  type SeedProgress,
+} from "../sync/seed";
 import { SyncingScreen, SyncingScreenError } from "./SyncingScreen";
 import { logError } from "../lib/error-log";
 
@@ -34,6 +39,7 @@ export function SeedGate({ children }: { children: React.ReactNode }) {
   const seededFor = useRef<string | null>(null);
 
   const runSeed = useCallback(async () => {
+    if (!userId) return;
     setState({
       phase: "seeding",
       progress: {
@@ -43,14 +49,14 @@ export function SeedGate({ children }: { children: React.ReactNode }) {
         totalRowsPulled: 0,
       },
     });
-    const res = await initialSeed((p) => {
+    const res = await initialSeed(userId, (p) => {
       setState((prev) =>
         prev.phase === "seeding" ? { phase: "seeding", progress: p } : prev,
       );
     });
     if (res.success) {
       setState({ phase: "seeded" });
-      seededFor.current = userId ?? null;
+      seededFor.current = userId;
     } else {
       setState({
         phase: "error",
@@ -67,7 +73,7 @@ export function SeedGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Already confirmed seeded for this user — pass through.
+    // Already confirmed seeded for this user in this session — pass through.
     if (seededFor.current === userId) {
       setState({ phase: "seeded" });
       return;
@@ -76,12 +82,17 @@ export function SeedGate({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        if (await hasSeeded()) {
+        if (await seededForUser(userId)) {
           if (cancelled) return;
           seededFor.current = userId;
           setState({ phase: "seeded" });
           return;
         }
+        // Either first install (no marker) OR a different user signed in
+        // on this device. Either way, wipe any leftover state from a
+        // previous user before re-seeding.
+        await resetLocalDataForUserSwitch();
+        if (cancelled) return;
         await runSeed();
       } catch (e) {
         if (cancelled) return;

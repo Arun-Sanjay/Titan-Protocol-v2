@@ -18,6 +18,7 @@ import {
   hasSeeded,
   initialSeed,
   resetLocalDataForUserSwitch,
+  seededForUser,
 } from "../../sync/seed";
 import { PULL_ORDER } from "../../sync/tables";
 
@@ -55,7 +56,7 @@ describe("initialSeed", () => {
 
   test("iterates every table in PULL_ORDER and reports progress", async () => {
     const progress: Array<{ table: string | null; completed: number }> = [];
-    const res = await initialSeed((p) =>
+    const res = await initialSeed("u1", (p) =>
       progress.push({
         table: p.currentTable,
         completed: p.tablesCompleted,
@@ -81,7 +82,7 @@ describe("initialSeed", () => {
 
   test("aborts on auth error and reports failing table", async () => {
     fake.state.setSelectError("habits", { status: 401 });
-    const res = await initialSeed();
+    const res = await initialSeed("u1");
     expect(res.success).toBe(false);
     if (!res.success) {
       expect(res.error).toBe("auth");
@@ -91,12 +92,42 @@ describe("initialSeed", () => {
 
   test("aborts on transient error and reports table", async () => {
     fake.state.setSelectError("tasks", { status: 500, message: "db down" });
-    const res = await initialSeed();
+    const res = await initialSeed("u1");
     expect(res.success).toBe(false);
     if (!res.success) {
       expect(res.error).toBe("db down");
       expect(res.errorTable).toBe("tasks");
     }
+  });
+});
+
+describe("seededForUser (user-switch detection)", () => {
+  beforeEach(() => {
+    _resetTestDb();
+    fake.state.reset();
+  });
+
+  test("false on a fresh install (no marker)", async () => {
+    expect(await seededForUser("u1")).toBe(false);
+  });
+
+  test("true after initialSeed completes for the same user", async () => {
+    await initialSeed("u1");
+    expect(await seededForUser("u1")).toBe(true);
+  });
+
+  test("false when queried for a different user than the one seeded", async () => {
+    await initialSeed("u1");
+    expect(await seededForUser("u2")).toBe(false);
+  });
+
+  test("resetLocalDataForUserSwitch clears the marker", async () => {
+    await initialSeed("u1");
+    expect(await seededForUser("u1")).toBe(true);
+    await resetLocalDataForUserSwitch();
+    expect(await seededForUser("u1")).toBe(false);
+    // hasSeeded also flips back to false (sync_meta wiped)
+    expect(await hasSeeded()).toBe(false);
   });
 });
 

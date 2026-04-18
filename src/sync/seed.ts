@@ -2,6 +2,15 @@ import { get, run } from "../db/sqlite/client";
 import { pullTable } from "./pull";
 import { PULL_ORDER } from "./tables";
 
+/**
+ * A sentinel row in `sync_meta` that records the userId whose data
+ * this install was last seeded with. SeedGate uses it to detect the
+ * "signed out + signed back in as a different user on the same
+ * device" case and wipe before re-seeding, so user A's tasks never
+ * leak into user B's session.
+ */
+const USER_MARKER_ROW = "__user__";
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface SeedProgress {
@@ -18,16 +27,38 @@ export type SeedResult =
 // ─── Seed state ─────────────────────────────────────────────────────────────
 
 /**
- * Has an initial seed ever completed for this install? We don't have a
- * per-user first-sync marker — instead we check whether `sync_meta` has
- * at least one row. sync_meta is only written after a successful pull,
- * so its presence means we've synced something.
+ * Has this device been seeded for the given user? Checks the
+ * `__user__` marker row in `sync_meta`. If the marker is absent, this
+ * is a fresh install OR a pre-marker legacy seed — treat as un-seeded
+ * so we run a fresh pull. If the marker is for a different userId,
+ * the caller must wipe and re-seed before exposing stale data.
+ */
+export async function seededForUser(userId: string): Promise<boolean> {
+  const row = await get<{ last_pulled_at: string | null }>(
+    `SELECT last_pulled_at FROM sync_meta WHERE table_name = ?`,
+    [USER_MARKER_ROW],
+  );
+  return row?.last_pulled_at === userId;
+}
+
+/**
+ * Legacy — returns true once ANY seed has completed on this install.
+ * Kept for places (like dev screens) that just want "is there local
+ * data". New call sites should prefer `seededForUser`.
  */
 export async function hasSeeded(): Promise<boolean> {
   const row = await get<{ c: number }>(
     `SELECT COUNT(*) AS c FROM sync_meta`,
   );
   return (row?.c ?? 0) > 0;
+}
+
+async function writeUserMarker(userId: string): Promise<void> {
+  await run(
+    `INSERT INTO sync_meta (table_name, last_pulled_at) VALUES (?, ?)
+     ON CONFLICT(table_name) DO UPDATE SET last_pulled_at = excluded.last_pulled_at`,
+    [USER_MARKER_ROW, userId],
+  );
 }
 
 /**
@@ -52,10 +83,15 @@ export async function resetLocalDataForUserSwitch(): Promise<void> {
  * table in `PULL_ORDER` (profiles first, then dependents alphabetically).
  * Idempotent — can be re-run safely; merge semantics handle the overlap.
  *
+ * Writes the `__user__` sentinel to `sync_meta` on success so
+ * `seededForUser(userId)` can distinguish "seeded for this user" from
+ * "seeded for a different user who previously used this device".
+ *
  * `onProgress` is called once per table started and once on completion.
  * The UI (SyncingScreen) uses it to show "Syncing (3 / 42)…".
  */
 export async function initialSeed(
+  userId: string,
   onProgress?: (p: SeedProgress) => void,
 ): Promise<SeedResult> {
   const total = PULL_ORDER.length;
@@ -93,6 +129,8 @@ export async function initialSeed(
     completed++;
     totalRows += res.pulled;
   }
+
+  await writeUserMarker(userId);
 
   onProgress?.({
     currentTable: null,
