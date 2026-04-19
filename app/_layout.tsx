@@ -291,13 +291,24 @@ export default function RootLayout() {
   // never re-checked even if getDayNumber() would now return a new day.
   const [currentDate, setCurrentDate] = useState(getTodayKey);
   useEffect(() => {
+    // Poll the wall clock every 30s so a device-clock change (tester
+    // skipping days, traveller crossing midnight without backgrounding)
+    // triggers the cinematic / briefing flow without waiting for an
+    // AppState transition.
+    const tick = setInterval(() => {
+      const today = getTodayKey();
+      setCurrentDate((prev) => (prev !== today ? today : prev));
+    }, 30_000);
     const sub = AppState.addEventListener("change", (next) => {
       if (next === "active") {
         const today = getTodayKey();
         setCurrentDate((prev) => (prev !== today ? today : prev));
       }
     });
-    return () => sub.remove();
+    return () => {
+      clearInterval(tick);
+      sub.remove();
+    };
   }, []);
   // Integrity overlays
   const [showStreakBreak, setShowStreakBreak] = useState<{
@@ -330,6 +341,7 @@ export default function RootLayout() {
   const walkthroughCompleted = useWalkthroughStore((s) => s.completed);
   const archetype = useIdentityStore((s) => s.archetype);
   const getCinematicForDay = useStoryStore((s) => s.getCinematicForDay);
+  const markCinematicPlayed = useStoryStore((s) => s.markCinematicPlayed);
   const storyFlags = useStoryStore((s) => s.storyFlags);
   const userName = useStoryStore((s) => s.userName);
   // Phase 4.1: read streak directly from MMKV — root layout is above
@@ -484,7 +496,16 @@ export default function RootLayout() {
   };
 
   const handleDayCinematicComplete = () => {
+    // Belt-and-suspenders: each Day[N]Cinematic's Accept button calls
+    // markCinematicPlayed(N) internally, but if the component unmounts
+    // via any other path (error, force-close) the flag never lands. Mark
+    // here against the ACTIVE day so the gate above doesn't re-fire the
+    // same cinematic every time the effect re-runs.
+    const activeDay = showDayCinematic;
     setShowDayCinematic(null);
+    if (activeDay != null) {
+      markCinematicPlayed(activeDay);
+    }
     // Day cinematics already show the OperationBriefing with tasks,
     // so mark briefing as seen to prevent showing it again
     markBriefingSeen();

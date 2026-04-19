@@ -1,19 +1,21 @@
 /**
  * Achievement integration — fire-and-forget bridge.
  *
- * Gathers current AppState from SQLite (profile, protocol session,
- * progression, task completions), runs the achievement checker, and
- * persists any newly unlocked achievements via the achievements service.
- * Also invalidates the React Query cache so the UI picks up new unlocks.
+ * Gathers current AppState from SQLite, reads the authoritative set of
+ * already-unlocked achievement IDs from SQLite, runs the checker with
+ * both, and persists any new unlocks. Also invalidates the React Query
+ * cache so the Profile tab picks up the new unlock.
  *
- * Designed to be called from mutation `onSettled` callbacks.
- * All errors are swallowed — a failed achievement check must never
- * block the core user flow.
+ * Call from mutation `onSettled`. All errors are swallowed — a failed
+ * achievement check must never break the user's primary action.
  */
 
 import { getTodayKey } from "./date";
 import { checkAllAchievements, type AppState } from "./achievement-checker";
-import { insertUnlockedAchievements } from "../services/achievements";
+import {
+  insertUnlockedAchievements,
+  listUnlockedAchievements,
+} from "../services/achievements";
 import {
   computeEngineScore,
   ENGINES,
@@ -26,10 +28,6 @@ import { getProtocolSession } from "../services/protocol";
 import type { QueryClient } from "@tanstack/react-query";
 import { achievementsKeys } from "../hooks/queries/useAchievements";
 
-/**
- * Build the current AppState from the local (SQLite) source of truth.
- * Each read is independent so we fire them in parallel.
- */
 async function gatherAppState(): Promise<AppState> {
   const todayKey = getTodayKey();
 
@@ -43,7 +41,6 @@ async function gatherAppState(): Promise<AppState> {
 
   const streak = profile?.streak_current ?? 0;
 
-  // Day number (days since first_use_date, 1-based)
   const firstUse = profile?.first_use_date;
   let dayNumber = 1;
   if (firstUse) {
@@ -71,9 +68,6 @@ async function gatherAppState(): Promise<AppState> {
     engineScores[engine] = computeEngineScore(tasks, completions, engine);
   }
 
-  // `current_phase` is read off progression but no longer needed by the
-  // checker's app-state (it uses cachedCurrentPhase directly). Preserved
-  // here just to keep the shape consistent with the older signature.
   void progression;
 
   return {
@@ -87,25 +81,35 @@ async function gatherAppState(): Promise<AppState> {
 }
 
 /**
- * Run the full achievement check and persist any new unlocks.
+ * Run the full achievement check. Gathers app state AND the unlocked
+ * set from SQLite so the checker sees a consistent snapshot. Any new
+ * unlocks are persisted to SQLite and the React Query cache is
+ * invalidated so UI components observing the unlocked list pick them
+ * up.
  *
- * Fire-and-forget: errors are caught internally so a failed check
- * never breaks the calling mutation flow.
+ * Fire-and-forget: errors are caught internally.
  */
 export async function runAchievementCheck(
   queryClient?: QueryClient,
 ): Promise<void> {
   try {
-    const appState = await gatherAppState();
-    const newIds = checkAllAchievements(appState);
+    const [appState, unlockedRows] = await Promise.all([
+      gatherAppState(),
+      listUnlockedAchievements(),
+    ]);
+    const alreadyUnlocked = new Set(
+      unlockedRows.map((row) => row.achievement_id),
+    );
 
-    if (newIds.length > 0) {
-      await insertUnlockedAchievements(newIds).catch(() => {});
-      if (queryClient) {
-        queryClient.invalidateQueries({ queryKey: achievementsKeys.unlocked });
-      }
+    const newIds = checkAllAchievements(appState, alreadyUnlocked);
+    if (newIds.length === 0) return;
+
+    await insertUnlockedAchievements(newIds).catch(() => {});
+
+    if (queryClient) {
+      queryClient.invalidateQueries({ queryKey: achievementsKeys.unlocked });
     }
   } catch {
-    // Swallow all errors — achievement checking is never critical
+    // Swallow — achievement checking never blocks the user's flow.
   }
 }

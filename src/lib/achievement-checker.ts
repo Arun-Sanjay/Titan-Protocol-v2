@@ -14,8 +14,6 @@ import { cachedTitanModeUnlocked } from "./cached-cloud";
 import { cachedCurrentPhase } from "./cached-cloud";
 import { useAchievementStore, type AchievementDef } from "../stores/useAchievementStore";
 import { queryClient } from "./query-client";
-import { achievementsKeys } from "../hooks/queries/useAchievements";
-import type { AchievementUnlocked } from "../services/achievements";
 import { habitsKeys } from "../hooks/queries/useHabits";
 import type { Habit } from "../services/habits";
 import { getJSON } from "../db/storage";
@@ -55,28 +53,26 @@ export type AppState = {
  * Check all achievements against current state.
  * Returns array of newly unlocked achievement IDs.
  *
- * Phase 1.5 fix: previously this called `unlockAchievement()` inside the
- * iteration loop, which mutated the store mid-pass. The local
- * `unlockedIds` snapshot was taken at the top of the function and never
- * refreshed, so any meta-achievement that depended on another
- * achievement being unlocked would silently fail to fire in the same
- * pass. Also: a `defs` array was being built but never read (the loop
- * iterated `ALL_DEFS` directly).
+ * `alreadyUnlocked` is the authoritative set of IDs the user already
+ * holds — the caller (runAchievementCheck) reads it from SQLite so the
+ * check has the real truth, not whatever happens to be in the React
+ * Query cache at the moment. Before this parameter existed, we pulled
+ * from queryClient, which was often empty — every tap then thought the
+ * first-task achievement was new and fired the celebration toast on
+ * every tap.
  *
- * Now we keep a live `Set` of unlocked IDs (snapshot + in-flight
- * unlocks) and apply the actual store mutations after the loop has
- * finished.
+ * Multiple passes so meta-achievements (those that depend on another
+ * achievement being unlocked) fire in the same `checkAllAchievements`
+ * call. Each pass that adds new unlocks triggers another pass; loop
+ * count bounded to prevent infinite cycles.
  */
-export function checkAllAchievements(appState: AppState): string[] {
-  const cached = queryClient.getQueryData<AchievementUnlocked[]>(achievementsKeys.unlocked) ?? [];
-  const initial = new Set(cached.map((row) => row.achievement_id));
-  const liveUnlocked = new Set(initial);
+export function checkAllAchievements(
+  appState: AppState,
+  alreadyUnlocked: Set<string>,
+): string[] {
+  const liveUnlocked = new Set(alreadyUnlocked);
   const pending: { id: string; def: AchievementDef }[] = [];
 
-  // Multiple passes so meta-achievements (those that depend on another
-  // achievement being unlocked) fire in the same `checkAllAchievements`
-  // call. Each pass that adds new unlocks triggers another pass; we
-  // bound the loop count to prevent infinite cycles.
   let changed = true;
   let safety = 8;
   while (changed && safety-- > 0) {
