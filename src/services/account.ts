@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase, requireUserId } from "../lib/supabase";
 import { SYNCED_TABLES } from "../sync/tables";
 import { run } from "../db/sqlite/client";
 
@@ -13,16 +13,13 @@ import { run } from "../db/sqlite/client";
  *   3. Sign out so the app returns to the login screen.
  */
 export async function deleteAllUserData(): Promise<void> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  const userId = await requireUserId();
 
   // Server-side cascade via profiles delete.
   const { error } = await supabase
     .from("profiles")
     .delete()
-    .eq("id", user.id);
+    .eq("id", userId);
   if (error) throw error;
 
   // Local wipe so we don't upload stale rows on the next backup.
