@@ -4,13 +4,9 @@ import { useQueryClient } from "@tanstack/react-query";
 
 /**
  * App resume hook — invalidates every React Query cache on foreground
- * entry so screens with stale data refetch from SQLite.
- *
- * Before the local-first migration this also refreshed the Supabase
- * auth token; with SyncEngineMount mounted, the sync engine's own
- * AppState listener now drives push/pull (including any token refresh
- * that Supabase's client does internally), so that work is gone from
- * here. This hook only handles the refetch nudge.
+ * entry so screens with stale data refetch from SQLite. SQLite reads
+ * are cheap (~1ms) so this is low-cost, and it keeps the UI in sync
+ * with any writes that happened while the app was backgrounded.
  *
  * Throttled to once per 30s so a rapid-fire background/foreground
  * transition doesn't thrash every active query.

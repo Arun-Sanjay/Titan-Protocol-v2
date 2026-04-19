@@ -4,9 +4,6 @@ jest.mock("../../lib/supabase", () => ({
   requireUserId: async () => "u1",
   ensureProfileRow: async () => {},
 }));
-jest.mock("../../sync/engine", () => ({
-  scheduleMutationPush: jest.fn(),
-}));
 jest.mock("../../lib/error-log", () => ({ logError: jest.fn() }));
 jest.mock("expo-crypto", () => ({
   randomUUID: () => {

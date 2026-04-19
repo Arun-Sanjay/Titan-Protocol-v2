@@ -25,6 +25,7 @@ import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { NarrativeTimeline } from "../../src/components/v2/narrative/NarrativeTimeline";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { getRankForLevel, RANKS } from "../../src/db/gamification";
+import { CloudBackupSection } from "../../src/components/CloudBackupSection";
 
 export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
@@ -113,6 +114,9 @@ export default function ProfileScreen() {
 
         {/* Titan Mode Card */}
         <TitanModeCard />
+
+        {/* Cloud backup — manual only */}
+        <CloudBackupSection />
 
         {/* Achievements */}
         <AchievementLink />

@@ -9,23 +9,33 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { colors } from "../theme";
-import type { SeedProgress } from "../sync/seed";
 
 /**
- * Full-screen blocker shown during the first-install seed pull. Keeps
- * the UI out of the authenticated routes (OnboardingGate et al) until
- * every SQLite table has been populated from Supabase — otherwise
- * screens would briefly render empty lists with no explanation and
- * users would assume their data was lost.
- *
- * The HUD-style pulsing dot matches the cinematic aesthetic already
- * used by the splash/transmission overlays. Reanimated handles the
- * loop; cleanup cancels the animation (Phase-0 Android OOM guardrail).
+ * Generic progress shape shared by backup and restore. A "table" is
+ * the current unit of work; `tablesCompleted / tablesTotal` drives the
+ * progress counter.
+ */
+export interface SyncProgress {
+  currentTable: string | null;
+  tablesCompleted: number;
+  tablesTotal: number;
+  /** Count of rows moved so far — used for the footer tally. */
+  rowsMoved: number;
+}
+
+/**
+ * Full-screen blocker for manual backup / restore. Pulsing HUD-dot
+ * matches the existing cinematic aesthetic. Reanimated handles the
+ * loop; cleanup cancels the animation (Android OOM guardrail).
  */
 export function SyncingScreen({
+  title = "SYNCING",
+  subtitle,
   progress,
 }: {
-  progress: SeedProgress;
+  title?: string;
+  subtitle?: string;
+  progress: SyncProgress;
 }): React.ReactElement {
   const opacity = useSharedValue(0.4);
 
@@ -56,10 +66,8 @@ export function SyncingScreen({
         <View style={styles.dotRow}>
           <Animated.View style={[styles.dot, dotStyle]} />
         </View>
-        <Text style={styles.title}>SYNCING YOUR PROTOCOL</Text>
-        <Text style={styles.subtitle}>
-          Pulling your data from the cloud
-        </Text>
+        <Text style={styles.title}>{title}</Text>
+        {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
         <View style={styles.progress}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.progressText}>
@@ -69,6 +77,11 @@ export function SyncingScreen({
         {progress.currentTable && (
           <Text style={styles.currentTable}>{progress.currentTable}</Text>
         )}
+        {progress.rowsMoved > 0 && (
+          <Text style={styles.rowCount}>
+            {progress.rowsMoved.toLocaleString()} rows
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -77,26 +90,35 @@ export function SyncingScreen({
 // ─── Error state ────────────────────────────────────────────────────────────
 
 export function SyncingScreenError({
+  title = "SYNC FAILED",
   error,
   errorTable,
   onRetry,
+  onDismiss,
 }: {
+  title?: string;
   error: string;
   errorTable?: string;
-  onRetry: () => void;
+  onRetry?: () => void;
+  onDismiss?: () => void;
 }): React.ReactElement {
   return (
     <View style={styles.root}>
       <View style={styles.inner}>
-        <Text style={[styles.title, { color: colors.danger }]}>
-          SYNC FAILED
-        </Text>
-        <Text style={styles.subtitle}>
-          {friendlyError(error, errorTable)}
-        </Text>
-        <Pressable style={styles.retryButton} onPress={onRetry}>
-          <Text style={styles.retryText}>RETRY</Text>
-        </Pressable>
+        <Text style={[styles.title, { color: colors.danger }]}>{title}</Text>
+        <Text style={styles.subtitle}>{friendlyError(error, errorTable)}</Text>
+        <View style={styles.buttonRow}>
+          {onDismiss && (
+            <Pressable style={styles.secondaryButton} onPress={onDismiss}>
+              <Text style={styles.secondaryText}>CLOSE</Text>
+            </Pressable>
+          )}
+          {onRetry && (
+            <Pressable style={styles.primaryButton} onPress={onRetry}>
+              <Text style={styles.primaryText}>RETRY</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -171,16 +193,38 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: "uppercase",
   },
-  retryButton: {
-    marginTop: 24,
-    paddingHorizontal: 32,
+  rowCount: {
+    color: colors.textMuted,
+    fontSize: 11,
+    letterSpacing: 1,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 16,
+  },
+  primaryButton: {
+    paddingHorizontal: 28,
     paddingVertical: 10,
     borderWidth: 1,
     borderColor: colors.primary,
     borderRadius: 6,
   },
-  retryText: {
+  primaryText: {
     color: colors.primary,
+    fontSize: 13,
+    letterSpacing: 2,
+    fontWeight: "700",
+  },
+  secondaryButton: {
+    paddingHorizontal: 28,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.surfaceBorder,
+    borderRadius: 6,
+  },
+  secondaryText: {
+    color: colors.text,
     fontSize: 13,
     letterSpacing: 2,
     fontWeight: "700",

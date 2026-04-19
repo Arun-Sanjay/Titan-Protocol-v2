@@ -93,7 +93,7 @@ export async function exec(source: string): Promise<void> {
  * Nested-transaction-safe wrapper. Matches the production client.ts
  * semantics: the outermost call does BEGIN/COMMIT; nested calls use
  * SAVEPOINT so a service can wrap its own transaction around code that
- * itself calls `transaction()` (sqliteUpsert -> enqueueUpsert, etc.).
+ * itself calls `transaction()`.
  */
 let txDepth = 0;
 

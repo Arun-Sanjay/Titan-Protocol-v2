@@ -1,9 +1,14 @@
 /**
- * Local-first service layer helpers.
+ * Local-first service layer helpers. Writes go to SQLite only — there
+ * is no background sync, no outbox, no network side-effects. Cloud
+ * backup/restore is a manual operation triggered from the Profile tab
+ * (see `src/sync/backup.ts` and `src/sync/restore.ts`).
  *
- * The shape every service uses:
+ * Usage:
  *
- *   import { sqliteList, sqliteGet, sqliteUpsert, sqliteDelete, newId } from "../db/sqlite/service-helpers";
+ *   import {
+ *     sqliteList, sqliteGet, sqliteUpsert, sqliteDelete, newId,
+ *   } from "../db/sqlite/service-helpers";
  *
  *   export async function listThings() {
  *     return sqliteList<Thing>("things", { order: "created_at ASC" });
@@ -15,18 +20,13 @@
  *     });
  *   }
  *
- * Every mutation: writes to SQLite with `_dirty=1`, enqueues an outbox
- * mutation, and schedules a debounced push via the sync engine. The
- * service function returns the authoritative row synchronously (at
- * SQLite-write latency ~1ms) — the network round-trip is out of the
- * critical path.
+ * Every mutation completes at SQLite latency (~1ms). The write is the
+ * finished story — nothing else happens behind it.
  */
 
 import { randomUUID } from "expo-crypto";
 import { all, get, run, transaction } from "./client";
 import { rowFromSqlite, rowToSqlite, stripSyncColumns } from "./coerce";
-import { enqueueDelete, enqueueUpsert } from "../../sync/outbox";
-import { scheduleMutationPush } from "../../sync/engine";
 import { primaryKeyFor } from "../../sync/tables";
 
 export interface ListOptions {
@@ -75,7 +75,7 @@ export async function sqliteGet<T>(
   ) as T;
 }
 
-/** Count rows in `table` matching an optional WHERE clause. */
+/** Count rows matching an optional WHERE clause. */
 export async function sqliteCount(
   table: string,
   options: { where?: string; params?: unknown[] } = {},
@@ -92,12 +92,9 @@ export async function sqliteCount(
 // ─── Writes ─────────────────────────────────────────────────────────────────
 
 /**
- * Writes a full row to SQLite and enqueues an upsert to the outbox in
- * one transaction. `updated_at` is refreshed to "now" unless already
- * present; `created_at` defaults to "now" when absent. Returns the
- * final row shape (the one that was persisted + enqueued).
- *
- * Schedules a debounced push so rapid consecutive calls coalesce.
+ * Write a full row to SQLite. `updated_at` is refreshed to "now" unless
+ * already present; `created_at` defaults to "now" when absent. Returns
+ * the final row shape (the one that was persisted).
  */
 export async function sqliteUpsert<T extends Record<string, unknown>>(
   table: string,
@@ -106,12 +103,10 @@ export async function sqliteUpsert<T extends Record<string, unknown>>(
   const now = new Date().toISOString();
   const finalRow: Record<string, unknown> = { ...row };
   if (finalRow.created_at == null) finalRow.created_at = now;
-  // Only touch updated_at if the table actually has the column. Some
-  // insert-only tables (completions, habit_logs, narrative_entries, etc.)
-  // don't carry updated_at.
+
   const sqliteReady = rowToSqlite(table, {
     ...finalRow,
-    _dirty: 1,
+    _dirty: 0,
     _deleted: 0,
   });
   if ("updated_at" in sqliteReady) {
@@ -122,22 +117,16 @@ export async function sqliteUpsert<T extends Record<string, unknown>>(
   const cols = Object.keys(sqliteReady);
   const placeholders = cols.map(() => "?").join(", ");
 
-  await transaction(async () => {
-    await run(
-      `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders})`,
-      cols.map((c) => sqliteReady[c]),
-    );
-    await enqueueUpsert(table, finalRow);
-  });
-  scheduleMutationPush();
+  await run(
+    `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders})`,
+    cols.map((c) => sqliteReady[c]),
+  );
   return finalRow as T;
 }
 
 /**
- * Batch form — writes many rows in one transaction. Used by onboarding
- * and bulk imports to avoid paying the push-schedule overhead per row.
- * All rows get one shared `now` timestamp so an entire batch lines up
- * at the same `updated_at` (helpful for cursor semantics).
+ * Batch write — writes many rows in one transaction. Used by onboarding
+ * and bulk imports so a 50-row insert is one commit instead of 50.
  */
 export async function sqliteUpsertMany<T extends Record<string, unknown>>(
   table: string,
@@ -153,7 +142,7 @@ export async function sqliteUpsertMany<T extends Record<string, unknown>>(
 
       const sqliteReady = rowToSqlite(table, {
         ...finalRow,
-        _dirty: 1,
+        _dirty: 0,
         _deleted: 0,
       });
       if ("updated_at" in sqliteReady) {
@@ -167,24 +156,28 @@ export async function sqliteUpsertMany<T extends Record<string, unknown>>(
         `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders})`,
         cols.map((c) => sqliteReady[c]),
       );
-      await enqueueUpsert(table, finalRow);
     }
   });
-  scheduleMutationPush();
   return rows;
 }
 
 /**
- * Soft-delete a row by primary key. Marks the row `_deleted=1, _dirty=1`
- * locally (readers with the `_deleted = 0` filter stop seeing it
- * instantly) and enqueues a delete for the push loop.
+ * Soft-delete a row by primary key. Marks the row `_deleted=1` locally;
+ * readers filtered by `_deleted = 0` stop seeing it instantly. The
+ * tombstone is kept so a future backup still knows the row was deleted
+ * (important for multi-device restore to converge).
  */
 export async function sqliteDelete(
   table: string,
   pk: Record<string, unknown>,
 ): Promise<void> {
-  await enqueueDelete(table, pk);
-  scheduleMutationPush();
+  const pkCols = primaryKeyFor(table);
+  const whereClause = pkCols.map((c) => `${c} = ?`).join(" AND ");
+  const pkValues = pkCols.map((c) => pk[c]);
+  await run(
+    `UPDATE ${table} SET _deleted = 1 WHERE ${whereClause}`,
+    pkValues,
+  );
 }
 
 // ─── Utilities ──────────────────────────────────────────────────────────────
