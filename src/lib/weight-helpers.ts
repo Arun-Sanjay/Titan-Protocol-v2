@@ -1,15 +1,73 @@
 /**
- * Phase 4.1: Re-export pure weight helpers/types so screens can import
- * them without pulling in the Zustand store file.
+ * Pure weight helpers and types. Cloud state comes from useWeight hook.
  */
 
-export {
-  getMovingAverage,
-  getWeeklyRate,
-  getGoalETA,
-  getTrend,
-  isValidWeight,
-  type WeightEntry,
-  type GoalProgress,
-  type WeightTrend,
-} from "../stores/useWeightStore";
+export type WeightEntry = {
+  id?: string;
+  dateKey: string;
+  weightKg: number;
+  createdAt?: number;
+};
+
+export type GoalProgress = {
+  pct: number;
+  remaining: number;
+  direction: "gain" | "lose" | "maintain";
+  overshot?: boolean;
+};
+
+export type WeightTrend = "gaining" | "losing" | "stable";
+
+export function getMovingAverage(
+  entries: WeightEntry[],
+  window: number = 7,
+): { dateKey: string; value: number }[] {
+  if (entries.length === 0) return [];
+  const result: { dateKey: string; value: number }[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const start = Math.max(0, i - window + 1);
+    const slice = entries.slice(start, i + 1);
+    const avg = slice.reduce((sum, e) => sum + e.weightKg, 0) / slice.length;
+    result.push({
+      dateKey: entries[i].dateKey,
+      value: Math.round(avg * 10) / 10,
+    });
+  }
+  return result;
+}
+
+export function getWeeklyRate(entries: WeightEntry[]): number | null {
+  if (entries.length < 2) return null;
+  const first = entries[0];
+  const last = entries[entries.length - 1];
+  const d1 = new Date(first.dateKey + "T00:00:00");
+  const d2 = new Date(last.dateKey + "T00:00:00");
+  const days = (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24);
+  if (days < 1) return null;
+  return Math.round(((last.weightKg - first.weightKg) / days) * 7 * 10) / 10;
+}
+
+export function getGoalETA(
+  entries: WeightEntry[],
+  targetKg: number | null,
+): number | null {
+  if (!targetKg || entries.length < 7) return null;
+  const rate = getWeeklyRate(entries);
+  if (rate === null || rate === 0) return null;
+  const current = entries[entries.length - 1].weightKg;
+  const remaining = targetKg - current;
+  if ((remaining > 0 && rate <= 0) || (remaining < 0 && rate >= 0)) return null;
+  return Math.round(Math.abs(remaining / rate));
+}
+
+export function getTrend(entries: WeightEntry[]): WeightTrend {
+  const rate = getWeeklyRate(entries);
+  if (rate === null) return "stable";
+  if (rate > 0.2) return "gaining";
+  if (rate < -0.2) return "losing";
+  return "stable";
+}
+
+export function isValidWeight(kg: number): boolean {
+  return kg >= 20 && kg <= 500;
+}

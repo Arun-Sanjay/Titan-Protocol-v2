@@ -93,7 +93,6 @@ function PostHogClientBinder({ children }: { children: React.ReactNode }) {
 import { colors } from "../src/theme";
 import { useAuthStore } from "../src/stores/useAuthStore";
 import { queryClient } from "../src/lib/query-client";
-import { TitanAuthProvider } from "@titan/shared/lib/auth-context";
 import { logError } from "../src/lib/error-log";
 import { SystemNotificationProvider } from "../src/components/ui/SystemNotification";
 import { MotivationalSplash } from "../src/components/ui/MotivationalSplash";
@@ -140,10 +139,9 @@ import { SystemWindowProvider } from "../src/components/ui/SystemWindowProvider"
 import { RootErrorBoundary } from "../src/components/ui/RootErrorBoundary";
 import { OfflineBanner } from "../src/components/ui/OfflineBanner";
 import { OnboardingGate } from "../src/components/OnboardingGate";
-import { MigrationGate } from "../src/components/MigrationGate";
 import { AppResumeSyncMount } from "../src/components/AppResumeSyncMount";
+import { ProfileHydrator } from "../src/components/ProfileHydrator";
 import { RankUpOverlayMount } from "../src/components/RankUpOverlayMount";
-import { startCloudSync } from "../src/lib/cloud-sync";
 // Phase 2.4D: JetBrains Mono via @expo-google-fonts/jetbrains-mono.
 // Loaded once at the root layout; src/theme/typography.ts references the
 // font family by name. Falls back to Menlo/monospace until loaded.
@@ -167,6 +165,7 @@ import { checkIntegrityStatus, loadIntegrity, type IntegrityStatus } from "../sr
 import type { TransmissionContext } from "../src/lib/transmissions";
 
 import "../src/db/database";
+import { runMigrations } from "../src/db/sqlite/migrator";
 
 // Map day numbers to cinematic components
 const DAY_CINEMATICS: Record<number, React.ComponentType<{ onComplete: () => void }>> = {
@@ -201,6 +200,28 @@ export default function RootLayout() {
     JetBrainsMono_800ExtraBold,
   });
 
+  // Local-first migration — Phase 0: open SQLite and apply pending
+  // migrations before any hook fires a query. Render-blocking: we stay
+  // on the native splash until the DB is ready, same pattern as fonts.
+  const [dbReady, setDbReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    runMigrations()
+      .then(() => {
+        if (!cancelled) setDbReady(true);
+      })
+      .catch((e) => {
+        logError("sqlite.runMigrations", e);
+        // Still flip ready to true so the app boots; individual queries
+        // will surface their own errors. A "reset local DB" dev tool is
+        // planned (see docs/MIGRATION_LOCAL_FIRST.md §7).
+        if (!cancelled) setDbReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Phase 3.2: Auth bootstrap. Initialize reads the persisted session from
   // AsyncStorage and subscribes to onAuthStateChange. isLoading stays true
   // until that first read completes so we don't flash the auth screen for
@@ -211,17 +232,6 @@ export default function RootLayout() {
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
-
-  // Phase 6: Start the cloud sync engine once we have an authenticated
-  // user. The engine subscribes to the legacy MMKV stores and mirrors
-  // writes to Supabase via the new Phase 4 service layer. The cleanup
-  // unsubscribes on sign-out so we don't double-subscribe on the next
-  // sign-in.
-  useEffect(() => {
-    if (!authUser) return;
-    const stop = startCloudSync();
-    return () => stop();
-  }, [authUser]);
 
   // Phase 7.2: PostHog identify on auth + reset on sign-out. Also wire
   // a Sentry user context with the same id so crashes get attributed.
@@ -281,13 +291,24 @@ export default function RootLayout() {
   // never re-checked even if getDayNumber() would now return a new day.
   const [currentDate, setCurrentDate] = useState(getTodayKey);
   useEffect(() => {
+    // Poll the wall clock every 30s so a device-clock change (tester
+    // skipping days, traveller crossing midnight without backgrounding)
+    // triggers the cinematic / briefing flow without waiting for an
+    // AppState transition.
+    const tick = setInterval(() => {
+      const today = getTodayKey();
+      setCurrentDate((prev) => (prev !== today ? today : prev));
+    }, 30_000);
     const sub = AppState.addEventListener("change", (next) => {
       if (next === "active") {
         const today = getTodayKey();
         setCurrentDate((prev) => (prev !== today ? today : prev));
       }
     });
-    return () => sub.remove();
+    return () => {
+      clearInterval(tick);
+      sub.remove();
+    };
   }, []);
   // Integrity overlays
   const [showStreakBreak, setShowStreakBreak] = useState<{
@@ -320,6 +341,7 @@ export default function RootLayout() {
   const walkthroughCompleted = useWalkthroughStore((s) => s.completed);
   const archetype = useIdentityStore((s) => s.archetype);
   const getCinematicForDay = useStoryStore((s) => s.getCinematicForDay);
+  const markCinematicPlayed = useStoryStore((s) => s.markCinematicPlayed);
   const storyFlags = useStoryStore((s) => s.storyFlags);
   const userName = useStoryStore((s) => s.userName);
   // Phase 4.1: read streak directly from MMKV — root layout is above
@@ -474,7 +496,16 @@ export default function RootLayout() {
   };
 
   const handleDayCinematicComplete = () => {
+    // Belt-and-suspenders: each Day[N]Cinematic's Accept button calls
+    // markCinematicPlayed(N) internally, but if the component unmounts
+    // via any other path (error, force-close) the flag never lands. Mark
+    // here against the ACTIVE day so the gate above doesn't re-fire the
+    // same cinematic every time the effect re-runs.
+    const activeDay = showDayCinematic;
     setShowDayCinematic(null);
+    if (activeDay != null) {
+      markCinematicPlayed(activeDay);
+    }
     // Day cinematics already show the OperationBriefing with tasks,
     // so mark briefing as seen to prevent showing it again
     markBriefingSeen();
@@ -578,6 +609,11 @@ export default function RootLayout() {
     return null;
   }
 
+  // Local-first migration: hold render until SQLite migrations have run.
+  if (!dbReady) {
+    return null;
+  }
+
   // Phase 3.2: Auth gate. Block app render until the auth store has
   // finished hydrating from AsyncStorage so we don't flash the auth
   // screen for already-signed-in users. The splash screen (configured
@@ -607,7 +643,6 @@ export default function RootLayout() {
   if (!authUser) {
     return (
       <QueryClientProvider client={queryClient}>
-        <TitanAuthProvider userId={null}>
         <MaybePostHogProvider>
         <GestureHandlerRootView style={styles.root}>
           <RootErrorBoundary>
@@ -624,22 +659,20 @@ export default function RootLayout() {
           </RootErrorBoundary>
         </GestureHandlerRootView>
         </MaybePostHogProvider>
-        </TitanAuthProvider>
       </QueryClientProvider>
     );
   }
 
   return (
     <QueryClientProvider client={queryClient}>
-    <TitanAuthProvider userId={authUser.id}>
     <MaybePostHogProvider>
     <GestureHandlerRootView style={styles.root}>
       <RootErrorBoundary>
       <SystemWindowProvider>
       <SystemNotificationProvider>
-      <MigrationGate>
       <OnboardingGate>
       <AppResumeSyncMount />
+      <ProfileHydrator />
       <StatusBar style="light" backgroundColor={colors.bg} />
       <Stack
         screenOptions={{
@@ -764,13 +797,11 @@ export default function RootLayout() {
       )}
       {showWarning && <IntegrityWarningOverlay onDismiss={handleWarningDismiss} />}
       </OnboardingGate>
-      </MigrationGate>
       </SystemNotificationProvider>
       </SystemWindowProvider>
       </RootErrorBoundary>
     </GestureHandlerRootView>
     </MaybePostHogProvider>
-    </TitanAuthProvider>
     </QueryClientProvider>
   );
 }

@@ -24,7 +24,9 @@ import { habitsKeys } from "../../../hooks/queries/useHabits";
 import { useQueryClient } from "@tanstack/react-query";
 import { logError } from "../../../lib/error-log";
 import { Panel } from "../../ui/Panel";
-import { supabase, requireUserId } from "../../../lib/supabase";
+import { requireUserId } from "../../../lib/supabase";
+import { sqliteUpsertMany, newId } from "../../../db/sqlite/service-helpers";
+import type { Tables } from "../../../types/supabase";
 // Phase 3.6: dual-write removed — operation engine now reads from
 // Supabase via cloud hooks. MMKV mirror no longer needed.
 import type { EngineKey } from "../../../db/schema";
@@ -363,64 +365,64 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
 
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // -- Confirm --------------------------------------------------------------
 
   const handleConfirm = useCallback(async () => {
     if (saving) return;
     setSaving(true);
+    setSaveError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Phase 4.3: batch inserts instead of individual mutations. The old
-    // code fired N × mutateAsync (one per task/habit), each calling
-    // requireUserId() → getUser() — a separate network roundtrip. With
-    // 8 tasks + 6 habits that's 28+ calls to Supabase, which hangs or
-    // times out on slower connections. Now: 1 getUser + 2 batch inserts.
-    //
-    // Errors throw so the outer catch can retry or surface feedback.
-    // Habit engine "all" is mapped to the user's top-priority engine so
-    // the Supabase enum constraint isn't violated.
     const doSave = async () => {
       const userId = await requireUserId();
 
       const checkedTasks = tasks.filter((t) => t.checked);
       const checkedHabits = habits.filter((h) => h.checked);
 
-      // Batch insert all tasks in one call.
       if (checkedTasks.length > 0) {
-        const taskRows = checkedTasks.map((t) => ({
+        const taskRows: Tables<"tasks">[] = checkedTasks.map((t) => ({
+          id: newId(),
           user_id: userId,
           engine: t.engine,
           title: t.title,
           kind: t.kind,
           days_per_week: 7,
           is_active: true,
+          legacy_local_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         }));
-        const { error } = await supabase.from("tasks").insert(taskRows);
-        if (error) throw error;
+        await sqliteUpsertMany("tasks", taskRows);
       }
 
-      // Batch insert all habits in one call.
       if (checkedHabits.length > 0) {
-        // Map engine "all" → first engine in priority list so the
-        // Supabase enum constraint is satisfied.
         const fallbackEngine = engines[0] ?? "body";
-        const habitRows = checkedHabits.map((h) => ({
+        const habitRows: Tables<"habits">[] = checkedHabits.map((h) => ({
+          id: newId(),
           user_id: userId,
           title: h.title,
           icon: h.icon,
           engine: h.engine === "all" ? fallbackEngine : h.engine,
           current_chain: 0,
           best_chain: 0,
+          frequency: null,
+          trigger_text: null,
+          duration_text: null,
+          last_broken_date: null,
+          legacy_local_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         }));
-        const { error } = await supabase.from("habits").insert(habitRows);
-        if (error) throw error;
+        await sqliteUpsertMany("habits", habitRows);
       }
     };
 
-    // Race the save against a 10-second timeout. On failure or timeout,
-    // retry once before giving up. The user still advances even if both
-    // attempts fail — partial setup is better than blocking onboarding.
+    // Race against a 10s timeout, one retry. On final failure, block
+    // the user here with an error+retry UI — silently advancing meant
+    // users landed on an empty dashboard with no idea what went wrong.
+    let lastError: unknown = null;
     let saved = false;
     for (let attempt = 0; attempt < 2 && !saved; attempt++) {
       try {
@@ -432,16 +434,25 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
         ]);
         saved = true;
       } catch (e) {
+        lastError = e;
         logError(`BeatSetup.confirm.attempt${attempt}`, e);
       }
     }
 
-    // Invalidate caches so the dashboard picks up the newly created items.
+    if (!saved) {
+      setSaving(false);
+      const message =
+        lastError instanceof Error ? lastError.message : "Something went wrong";
+      setSaveError(message);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
     queryClient.invalidateQueries({ queryKey: tasksKeys.all });
     queryClient.invalidateQueries({ queryKey: habitsKeys.all });
 
     onComplete();
-  }, [tasks, habits, onComplete, saving, queryClient]);
+  }, [tasks, habits, onComplete, saving, queryClient, engines]);
 
   const canConfirm = hasMinOneMainPerEngine(tasks, engines);
 
@@ -681,9 +692,14 @@ export function BeatSetup({ archetype, engines, onComplete }: Props) {
             {saving ? "SAVING..." : "CONFIRM SETUP"}
           </Text>
         </Pressable>
-        {!canConfirm && (
+        {!canConfirm && !saveError && (
           <Text style={styles.hintText}>
             Select at least 1 mission per engine
+          </Text>
+        )}
+        {saveError && (
+          <Text style={styles.errorText}>
+            Couldn't save — {saveError}. Tap CONFIRM SETUP to retry.
           </Text>
         )}
       </Animated.View>
@@ -1012,5 +1028,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: "center",
     marginTop: spacing.sm,
+  },
+  errorText: {
+    ...fonts.mono,
+    fontSize: 11,
+    color: "#F87171",
+    textAlign: "center",
+    marginTop: spacing.sm,
+    lineHeight: 16,
   },
 });

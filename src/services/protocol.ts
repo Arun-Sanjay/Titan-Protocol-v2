@@ -1,4 +1,10 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteGet,
+  sqliteList,
+  sqliteUpsert,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 import type { Json } from "../types/supabase";
 
@@ -11,40 +17,47 @@ export type ProtocolSession = Tables<"protocol_sessions">;
 export async function getProtocolSession(
   dateKey: string,
 ): Promise<ProtocolSession | null> {
-  const { data, error } = await supabase
-    .from("protocol_sessions")
-    .select("*")
-    .eq("date_key", dateKey)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const [existing] = await sqliteList<ProtocolSession>("protocol_sessions", {
+    where: "date_key = ?",
+    params: [dateKey],
+    limit: 1,
+  });
+  return existing ?? null;
 }
 
 /**
  * Save the morning protocol session.
- * Uses upsert on (user_id, date_key) — safe to call multiple times.
+ * Upserts on (user_id, date_key) — safe to call multiple times.
  */
 export async function saveMorningSession(params: {
   dateKey: string;
   intention: string;
 }): Promise<ProtocolSession> {
   const userId = await requireUserId();
+  const now = new Date().toISOString();
+  const existing = await findByDate(params.dateKey);
 
-  const { data, error } = await supabase
-    .from("protocol_sessions")
-    .upsert(
-      {
-        user_id: userId,
-        date_key: params.dateKey,
-        morning_intention: params.intention,
-        morning_completed_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,date_key" },
-    )
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const base: ProtocolSession = existing ?? {
+    id: newId(),
+    user_id: userId,
+    date_key: params.dateKey,
+    morning_intention: null,
+    morning_completed_at: null,
+    evening_reflection: null,
+    evening_completed_at: null,
+    titan_score: null,
+    identity_at_completion: null,
+    habit_checks: {} as Json,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const merged: ProtocolSession = {
+    ...base,
+    morning_intention: params.intention,
+    morning_completed_at: now,
+  };
+  return sqliteUpsert("protocol_sessions", merged);
 }
 
 /**
@@ -60,24 +73,43 @@ export async function saveEveningSession(params: {
   habitChecks?: Json;
 }): Promise<ProtocolSession> {
   const userId = await requireUserId();
+  const now = new Date().toISOString();
+  const existing = await findByDate(params.dateKey);
 
-  const payload: Record<string, unknown> = {
+  const base: ProtocolSession = existing ?? {
+    id: newId(),
     user_id: userId,
     date_key: params.dateKey,
-    evening_reflection: params.reflection,
-    evening_completed_at: new Date().toISOString(),
+    morning_intention: null,
+    morning_completed_at: null,
+    evening_reflection: null,
+    evening_completed_at: null,
+    titan_score: null,
+    identity_at_completion: null,
+    habit_checks: {} as Json,
+    created_at: now,
+    updated_at: now,
   };
-  if (params.titanScore !== undefined) payload.titan_score = params.titanScore;
-  if (params.identityVote !== undefined)
-    payload.identity_at_completion = params.identityVote;
-  if (params.habitChecks !== undefined)
-    payload.habit_checks = params.habitChecks;
 
-  const { data, error } = await supabase
-    .from("protocol_sessions")
-    .upsert(payload, { onConflict: "user_id,date_key" })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const merged: ProtocolSession = {
+    ...base,
+    evening_reflection: params.reflection,
+    evening_completed_at: now,
+    ...(params.titanScore !== undefined && { titan_score: params.titanScore }),
+    ...(params.identityVote !== undefined && {
+      identity_at_completion:
+        params.identityVote as ProtocolSession["identity_at_completion"],
+    }),
+    ...(params.habitChecks !== undefined && { habit_checks: params.habitChecks }),
+  };
+  return sqliteUpsert("protocol_sessions", merged);
+}
+
+async function findByDate(dateKey: string): Promise<ProtocolSession | null> {
+  const [row] = await sqliteList<ProtocolSession>("protocol_sessions", {
+    where: "date_key = ?",
+    params: [dateKey],
+    limit: 1,
+  });
+  return row ?? null;
 }

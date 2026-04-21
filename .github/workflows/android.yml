@@ -6,7 +6,9 @@ name: Android CI
 #   - workflow_dispatch: manual trigger from the Actions tab
 on:
   push:
-    branches: [main]
+    # `local-first` is the long-lived migration branch — builds here
+    # produce test APKs before we merge to main and tag v2.0.
+    branches: [main, local-first]
   pull_request:
     branches: [main]
   workflow_dispatch:

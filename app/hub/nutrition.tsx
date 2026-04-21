@@ -22,9 +22,7 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey } from "../../src/lib/date";
-// Phase 4.1: all nutrition types/helpers/store from barrel — no direct store import.
 import {
-  useNutritionData,
   computeTDEE,
   computeDayMacros,
   type NutritionProfile as LegacyNutritionProfile,
@@ -38,6 +36,11 @@ import {
   useMealLogs,
   useCreateMealLog,
   useDeleteMealLog,
+  useQuickMeals,
+  useCreateQuickMeal,
+  useDeleteQuickMeal,
+  useWaterLog,
+  useAdjustWater,
 } from "../../src/hooks/queries/useNutrition";
 import type { NutritionProfile as CloudNutritionProfile, MealLog } from "../../src/services/nutrition";
 
@@ -428,15 +431,9 @@ export default function NutritionScreen() {
   }, [weightLogs]);
 
   // Quick meals and water remain on MMKV
-  const quickMeals = useNutritionData((s) => s.quickMeals);
-  const waterLog = useNutritionData((s) => s.waterLog);
-  const waterTarget = useNutritionData((s) => s.waterTarget);
-  const loadQuickMeals = useNutritionData((s) => s.loadQuickMeals);
-  const addQuickMeal = useNutritionData((s) => s.addQuickMeal);
-  const deleteQuickMeal = useNutritionData((s) => s.deleteQuickMeal);
-  const loadWater = useNutritionData((s) => s.loadWater);
-  const addWaterFn = useNutritionData((s) => s.addWater);
-  const removeWaterFn = useNutritionData((s) => s.removeWater);
+  const { data: quickMeals = [] } = useQuickMeals();
+  const createQuickMealMutation = useCreateQuickMeal();
+  const deleteQuickMealMutation = useDeleteQuickMeal();
 
   const [showMealForm, setShowMealForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -448,11 +445,10 @@ export default function NutritionScreen() {
   const [mealCarbs, setMealCarbs] = useState("");
   const [mealFat, setMealFat] = useState("");
 
-  // Load MMKV-backed data (quick meals, water)
-  useEffect(() => {
-    loadQuickMeals();
-    loadWater(todayKey);
-  }, [todayKey, loadQuickMeals, loadWater]);
+  const { data: waterRow } = useWaterLog(todayKey);
+  const adjustWaterMutation = useAdjustWater();
+  const todayWater = waterRow?.glasses ?? 0;
+  const waterTarget = 8;
 
   // Check if weight tracker has a newer weight than the profile
   useEffect(() => {
@@ -462,10 +458,9 @@ export default function NutritionScreen() {
     }
   }, [profile, latestWeight]);
 
-  // Adapt cloud meal logs to legacy Meal shape for computeDayMacros
   const todayMeals: Meal[] = useMemo(
     () => cloudMealLogs.map((log) => ({
-      id: log.id as unknown as number, // Meal type expects number id
+      id: log.id,
       name: log.name,
       calories: log.calories,
       protein_g: log.protein_g,
@@ -475,7 +470,6 @@ export default function NutritionScreen() {
     [cloudMealLogs],
   );
   const dayMacros = useMemo(() => computeDayMacros(todayMeals), [todayMeals]);
-  const todayWater = waterLog[todayKey] ?? 0;
 
   const calPct = profile && profile.calorie_target > 0 && dayMacros.calories >= 0
     ? Math.min(dayMacros.calories / profile.calorie_target, 1)
@@ -527,7 +521,7 @@ export default function NutritionScreen() {
 
     // Save as quick meal if toggled
     if (saveAsQuick) {
-      addQuickMeal(mealData);
+      createQuickMealMutation.mutate(mealData);
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -538,7 +532,7 @@ export default function NutritionScreen() {
     setMealFat("");
     setSaveAsQuick(false);
     setShowMealForm(false);
-  }, [mealName, mealCalories, mealProtein, mealCarbs, mealFat, todayKey, createMealMut, saveAsQuick, addQuickMeal]);
+  }, [mealName, mealCalories, mealProtein, mealCarbs, mealFat, todayKey, createMealMut, saveAsQuick, createQuickMealMutation]);
 
   const handleUseQuickMeal = useCallback(
     (qm: QuickMeal) => {
@@ -763,8 +757,8 @@ export default function NutritionScreen() {
                 <WaterRing
                   glasses={todayWater}
                   target={waterTarget}
-                  onAdd={() => addWaterFn(todayKey)}
-                  onRemove={() => removeWaterFn(todayKey)}
+                  onAdd={() => adjustWaterMutation.mutate({ dateKey: todayKey, delta: 1 })}
+                  onRemove={() => adjustWaterMutation.mutate({ dateKey: todayKey, delta: -1 })}
                 />
               </Panel>
 
@@ -783,7 +777,7 @@ export default function NutritionScreen() {
                         key={qm.id}
                         meal={qm}
                         onUse={() => handleUseQuickMeal(qm)}
-                        onDelete={() => deleteQuickMeal(qm.id)}
+                        onDelete={() => deleteQuickMealMutation.mutate(qm.id)}
                       />
                     ))}
                   </ScrollView>

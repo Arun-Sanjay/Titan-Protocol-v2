@@ -1,24 +1,28 @@
+import { QueryClient } from "@tanstack/react-query";
+
 /**
- * Mobile React Query client — uses shared factory + AsyncStorage persister.
+ * React Query client.
  *
- * The shared createTitanQueryClient() provides consistent config (staleTime,
- * gcTime, retry). Mobile adds AsyncStorage-based persistence so the cache
- * survives app restarts (max age: 7 days).
+ * Since the local-first migration, SQLite is the source of truth; the
+ * React Query cache is just an in-memory de-dup layer so two
+ * components requesting the same query don't both hit SQLite in the
+ * same tick. AsyncStorage persistence (persistQueryClient) was dropped
+ * in Phase 5 — the SQLite database already survives app restarts, and
+ * the cache refills on demand from SQLite (fast, no network) once
+ * hooks run.
+ *
+ * staleTime = 0 so a freshly-read cache entry is re-fetched on the
+ * next mount. SQLite reads are cheap (~1ms), so paying the query on
+ * every mount beats handing the UI stale data during a sync push or
+ * background pull.
  */
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
-import { persistQueryClient } from "@tanstack/react-query-persist-client";
-import { createTitanQueryClient } from "@titan/shared/lib/query-client";
-
-export const queryClient = createTitanQueryClient();
-
-const asyncStoragePersister = createAsyncStoragePersister({
-  storage: AsyncStorage,
-  key: "titan-rq-cache",
-});
-
-persistQueryClient({
-  queryClient,
-  persister: asyncStoragePersister,
-  maxAge: 1000 * 60 * 60 * 24 * 7,
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 0,
+      gcTime: 1000 * 60 * 60, // 1h — plenty for navigation back to a recent screen
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
 });

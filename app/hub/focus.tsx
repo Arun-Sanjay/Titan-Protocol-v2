@@ -28,9 +28,6 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { getTodayKey, addDays, getDayOfWeek } from "../../src/lib/date";
-// Phase 4.1: legacy focus store removed — settings from MMKV directly,
-// sessions from cloud hooks.
-import { getJSON, setJSON } from "../../src/db/storage";
 import { type FocusSettings } from "../../src/lib/focus-helpers";
 import {
   useFocusSettings as useCloudFocusSettings,
@@ -38,9 +35,6 @@ import {
   useRecordFocusSession,
   useFocusSessions,
 } from "../../src/hooks/queries/useFocus";
-
-const FOCUS_SETTINGS_KEY = "focus_settings";
-function focusDailyKey(dk: string) { return `focus_daily:${dk}`; }
 const DEFAULT_SETTINGS: FocusSettings = {
   focusMinutes: 25,
   breakMinutes: 5,
@@ -87,24 +81,15 @@ const CIRCUMFERENCE = 2 * Math.PI * RING_R;
 
 const WeekSessionChart = React.memo(function WeekSessionChart({
   getSessions,
-  loadDaily,
   todayKey,
   target,
   revision,
 }: {
   getSessions: (dk: string) => number;
-  loadDaily: (dk: string) => void;
   todayKey: string;
   target: number;
   revision: number; // bust memo when sessions change
 }) {
-  // Load 7 days on mount
-  useEffect(() => {
-    for (let i = 0; i < 7; i++) {
-      loadDaily(addDays(todayKey, -i));
-    }
-  }, [todayKey, loadDaily]);
-
   const days = useMemo(() => {
     const result: { key: string; label: string; sessions: number }[] = [];
     for (let i = 6; i >= 0; i--) {
@@ -346,43 +331,65 @@ export default function FocusTimerScreen() {
   }, []);
   const dateKey = useMemo(() => getTodayKey(), [appActive]);
 
-  // Phase 4.1: settings from MMKV directly, sessions from cloud.
-  const [settings, setSettings] = useState<FocusSettings>(
-    () => getJSON<FocusSettings>(FOCUS_SETTINGS_KEY, DEFAULT_SETTINGS),
-  );
-  const updateSettings = useCallback((partial: Partial<FocusSettings>) => {
-    const merged = { ...settings, ...partial };
-    if (merged.focusMinutes < 1 || merged.breakMinutes < 1 || merged.longBreakMinutes < 1
-        || merged.longBreakAfter < 1 || merged.dailyTarget < 1) return;
-    setJSON(FOCUS_SETTINGS_KEY, merged);
-    setSettings(merged);
-  }, [settings]);
-  // Daily session tracking via MMKV
-  const [dailySessions, setDailySessions] = useState<Record<string, number>>({});
-  const loadDaily = useCallback((dk: string) => {
-    const d = getJSON<{ sessionsCompleted: number }>(focusDailyKey(dk), { sessionsCompleted: 0 });
-    setDailySessions((prev) => ({ ...prev, [dk]: d.sessionsCompleted }));
-  }, []);
-  const completeSession = useCallback((dk: string) => {
-    const current = dailySessions[dk] ?? 0;
-    const updated = current + 1;
-    setJSON(focusDailyKey(dk), { sessionsCompleted: updated });
-    setDailySessions((prev) => ({ ...prev, [dk]: updated }));
-  }, [dailySessions]);
-  const getSessions = useCallback((dk: string) => {
-    // Read from state if available, else fall back to MMKV
-    if (dailySessions[dk] !== undefined) return dailySessions[dk];
-    return getJSON<{ sessionsCompleted: number }>(focusDailyKey(dk), { sessionsCompleted: 0 }).sessionsCompleted;
-  }, [dailySessions]);
-  const sessions = dailySessions[dateKey] ?? 0;
-  const awardXPMutation = useAwardXP();
-  const enqueueRankUpMutation = useEnqueueRankUp();
-
-  // Cloud hooks for settings and session recording
+  // Cloud is the sole source of truth for settings and sessions.
   const { data: cloudSettings } = useCloudFocusSettings();
   const upsertSettingsMut = useUpsertFocusSettings();
   const recordSessionMut = useRecordFocusSession();
   const { data: cloudFocusSessions = [] } = useFocusSessions();
+  const awardXPMutation = useAwardXP();
+  const enqueueRankUpMutation = useEnqueueRankUp();
+
+  const settings: FocusSettings = useMemo(
+    () => ({
+      focusMinutes: cloudSettings?.pomodoro_minutes ?? DEFAULT_SETTINGS.focusMinutes,
+      breakMinutes: cloudSettings?.break_minutes ?? DEFAULT_SETTINGS.breakMinutes,
+      longBreakMinutes:
+        cloudSettings?.long_break_minutes ?? DEFAULT_SETTINGS.longBreakMinutes,
+      longBreakAfter:
+        cloudSettings?.long_break_after ?? DEFAULT_SETTINGS.longBreakAfter,
+      dailyTarget:
+        cloudSettings?.daily_target_sessions ?? DEFAULT_SETTINGS.dailyTarget,
+    }),
+    [cloudSettings],
+  );
+  const updateSettings = useCallback(
+    (partial: Partial<FocusSettings>) => {
+      const merged = { ...settings, ...partial };
+      if (
+        merged.focusMinutes < 1 ||
+        merged.breakMinutes < 1 ||
+        merged.longBreakMinutes < 1 ||
+        merged.longBreakAfter < 1 ||
+        merged.dailyTarget < 1
+      )
+        return;
+      upsertSettingsMut.mutate({
+        pomodoro_minutes: merged.focusMinutes,
+        break_minutes: merged.breakMinutes,
+        long_break_minutes: merged.longBreakMinutes,
+        long_break_after: merged.longBreakAfter,
+        daily_target_sessions: merged.dailyTarget,
+      });
+    },
+    [settings, upsertSettingsMut],
+  );
+
+  const getSessions = useCallback(
+    (dk: string) =>
+      cloudFocusSessions.filter((s) => s.date_key === dk && s.completed).length,
+    [cloudFocusSessions],
+  );
+  const sessions = useMemo(() => getSessions(dateKey), [getSessions, dateKey]);
+  const completeSession = useCallback(
+    (dk: string) => {
+      recordSessionMut.mutate({
+        date_key: dk,
+        duration_minutes: settings.focusMinutes,
+        completed: true,
+      });
+    },
+    [recordSessionMut, settings.focusMinutes],
+  );
 
   const [phase, setPhase] = useState<Phase>("focus");
   const [running, setRunning] = useState(false);
@@ -401,9 +408,7 @@ export default function FocusTimerScreen() {
   cycleCountRef.current = cycleCount;
   dateKeyRef.current = dateKey;
 
-  useEffect(() => {
-    loadDaily(dateKey);
-  }, [dateKey, loadDaily]);
+  // Cloud useFocusSessions hook already handles hydration; no explicit load needed.
 
   const getPhaseDuration = useCallback(
     (p: Phase) => {
@@ -764,7 +769,6 @@ export default function FocusTimerScreen() {
         <Panel delay={200}>
           <WeekSessionChart
             getSessions={getSessions}
-            loadDaily={loadDaily}
             todayKey={dateKey}
             target={settings.dailyTarget}
             revision={sessions}

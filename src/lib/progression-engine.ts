@@ -146,6 +146,6 @@ export function weeklyProgressionCheck(): PhaseAdvancementResult | null {
   // Only check on Monday (1) or first app open of the week
   if (dayOfWeek !== 1) return null;
 
-  // This is a convenience wrapper — the actual check is done via useProgressionStore.checkWeekAdvancement()
+  // This is a convenience wrapper — the actual check runs via the safety handler calling upsertProgression.
   return null;
 }

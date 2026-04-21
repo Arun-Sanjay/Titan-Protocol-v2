@@ -1,16 +1,15 @@
 import { useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "../lib/supabase";
 
 /**
- * Phase 3.4c: App resume sync hook.
+ * App resume hook — invalidates every React Query cache on foreground
+ * entry so screens with stale data refetch from SQLite. SQLite reads
+ * are cheap (~1ms) so this is low-cost, and it keeps the UI in sync
+ * with any writes that happened while the app was backgrounded.
  *
- * When the app returns to the foreground:
- * 1. Refreshes the Supabase auth token (throttled: max once per 30s)
- * 2. Invalidates all React Query caches so screens refetch fresh data
- *
- * Must be mounted inside the QueryClientProvider tree.
+ * Throttled to once per 30s so a rapid-fire background/foreground
+ * transition doesn't thrash every active query.
  */
 export function useAppResumeSync() {
   const qc = useQueryClient();
@@ -19,17 +18,9 @@ export function useAppResumeSync() {
   useEffect(() => {
     const handle = (next: AppStateStatus) => {
       if (next !== "active") return;
-
       const now = Date.now();
       if (now - lastRefresh.current < 30_000) return;
       lastRefresh.current = now;
-
-      // Refresh auth token
-      supabase.auth.getSession().catch(() => {
-        // Silently ignore — offline is fine
-      });
-
-      // Invalidate all queries so screens refetch
       qc.invalidateQueries();
     };
 

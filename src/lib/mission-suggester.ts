@@ -3,7 +3,7 @@
  */
 
 import templates from "../data/mission-templates.json";
-import type { Phase } from "../stores/useProgressionStore";
+import type { Phase } from "../types/progression-ui";
 
 export type SuggestedHabit = {
   title: string;

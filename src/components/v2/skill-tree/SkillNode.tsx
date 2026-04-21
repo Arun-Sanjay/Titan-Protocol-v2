@@ -12,7 +12,7 @@ import Animated, {
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { colors, spacing } from "../../../theme";
-import type { SkillNodeStatus } from "../../../stores/useSkillTreeStore";
+import type { SkillNodeStatus } from "../../../types/skill-tree-ui";
 
 type Props = {
   status: SkillNodeStatus;

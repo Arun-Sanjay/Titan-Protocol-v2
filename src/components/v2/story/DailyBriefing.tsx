@@ -13,8 +13,8 @@ import { useOnboardingStore } from "../../../stores/useOnboardingStore";
 import { useIdentityStore, IDENTITIES } from "../../../stores/useIdentityStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 import { useEngineStore, ENGINES, selectAllTasksForDate } from "../../../stores/useEngineStore";
-import { useProfileStore } from "../../../stores/useProfileStore";
-import { useHabitStore } from "../../../stores/useHabitStore";
+import { useProfile } from "../../../hooks/queries/useProfile";
+import { useHabits } from "../../../hooks/queries/useHabits";
 import { getDailyRank } from "../../../db/gamification";
 import { getTodayKey } from "../../../lib/date";
 import { getCurrentChapter, getDayNumber } from "../../../data/chapters";
@@ -22,7 +22,6 @@ import { getLatestNarrative, getStoryForDay } from "../../../lib/narrative-engin
 import { generateDailyOperation } from "../../../lib/operation-engine";
 import { useAllTasks, useRecentCompletionMap } from "../../../hooks/queries/useTasks";
 import { useStoryStore } from "../../../stores/useStoryStore";
-import { useProtocolStore } from "../../../stores/useProtocolStore";
 import { checkIntegrityStatus, getIntegrityColor } from "../../../lib/protocol-integrity";
 import {
   playSequence,
@@ -57,13 +56,11 @@ export function markBriefingSeen(): void {
 export function DailyBriefing({ onEnter }: Props) {
   const identity = useOnboardingStore((s) => s.identity);
   const archetype = useIdentityStore((s) => s.archetype);
-  const profile = useProfileStore((s) => s.profile);
   const tasks = useEngineStore((s) => s.tasks);
   const completions = useEngineStore((s) => s.completions);
   const scores = useEngineStore((s) => s.scores);
-  const habits = useHabitStore((s) => s.habits);
+  const { data: cloudHabits = [] } = useHabits();
   const loadAllEngines = useEngineStore((s) => s.loadAllEngines);
-  const loadProfile = useProfileStore((s) => s.load);
 
   const today = getTodayKey();
   const firstActiveDate = getJSON<string | null>("first_active_date", null);
@@ -72,10 +69,9 @@ export function DailyBriefing({ onEnter }: Props) {
   const isTitan = (archetype ?? identity) === "titan";
   const accentColor = isTitan ? titanColors.accent : colors.primary;
 
-  // Load data on mount
+  // Load engine scores on mount. Profile + habits come from React Query.
   useEffect(() => {
     loadAllEngines(today);
-    loadProfile();
   }, []);
 
   // Yesterday's data
@@ -126,7 +122,8 @@ export function DailyBriefing({ onEnter }: Props) {
   // instead of profile.streak (requires async loadProfile, defaults to 0 on first render)
   const userName = useStoryStore((s) => s.userName) || "Recruit";
   const storyAct = useStoryStore((s) => s.currentAct);
-  const protocolStreak = useProtocolStore((s) => s.streakCurrent);
+  const { data: cloudProfile } = useProfile();
+  const protocolStreak = cloudProfile?.streak_current ?? 0;
   // Phase 3.6: cloud task data for operation engine
   const { data: cloudTasks = [] } = useAllTasks();
   const { data: completionMap = {} } = useRecentCompletionMap();
@@ -293,7 +290,7 @@ export function DailyBriefing({ onEnter }: Props) {
       <Animated.View entering={FadeInDown.delay(operation ? 1800 : 1400).duration(400)} style={styles.section}>
         <Text style={styles.previewLabel}>TODAY</Text>
         <Text style={styles.previewText}>
-          {todayTasks.length} missions loaded {"\u00B7"} {habits.length} habits active
+          {todayTasks.length} missions loaded {"\u00B7"} {cloudHabits.length} habits active
         </Text>
 
         {/* Engine dots */}

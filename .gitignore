@@ -1,6 +1,66 @@
+# Dependencies
 node_modules/
 .expo/
-android/.gradle/
+dist-test/
+
+# Voice line source files (large binaries, not used at runtime — live on disk only)
+titan-voice-lines/
+
+# Python bytecode (from legacy FastAPI archive)
+__pycache__/
+*.pyc
+
+# Build outputs (Android is tracked - see note below)
+android/build/
 android/app/build/
-*.jks
+android/app/.cxx/
+android/.gradle/
+android/.kotlin/
+android/app/release/
+android/local.properties
+ios/
+*.apk
+*.aab
+
+# Signing credentials (NEVER commit)
+*.keystore
+titan-release.jks
+titan-release.jks.b64
+google-service-account.json
+
+# Environment
 .env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Claude Code
+.claude/worktrees/
+.claude/settings.local.json
+
+# TypeScript incremental
+*.tsbuildinfo
+
+# Expo
+expo-env.d.ts
+
+# Legacy (frozen web/Tauri app — don't lint or build)
+legacy/**/node_modules/
+legacy/**/.next/
+legacy/**/out/
+legacy/**/dist/
+legacy/**/target/
+legacy/**/tsconfig.tsbuildinfo
+legacy/**/.expo/
+
+# Misc
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -4,8 +4,7 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { colors, spacing, fonts, radius } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
-import { useProfileStore } from "../../../stores/useProfileStore";
-import { useProtocolStore } from "../../../stores/useProtocolStore";
+import { useProfile } from "../../../hooks/queries/useProfile";
 import { useEngineStore, selectTotalScore, ENGINES } from "../../../stores/useEngineStore";
 import { ProtocolTerminal, ProtocolNarration, type TerminalLine, type NarrationLine } from "./ProtocolTerminal";
 import { getTodayKey, addDays } from "../../../lib/date";
@@ -19,8 +18,9 @@ export function Day14Cinematic({ onComplete }: Props) {
   const markPlayed = useStoryStore((s) => s.markCinematicPlayed);
   const scores = useEngineStore((s) => s.scores);
   const loadDateRange = useEngineStore((s) => s.loadDateRange);
-  const streakCurrent = useProtocolStore((s) => s.streakCurrent);
-  const xp = useProfileStore((s) => s.profile.xp);
+  const { data: profile } = useProfile();
+  const streakCurrent = profile?.streak_current ?? 0;
+  const xp = profile?.xp ?? 0;
 
   const [phase, setPhase] = useState<Phase>("stats");
 

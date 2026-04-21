@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, fonts } from "../../../theme";
-import type { BossChallenge } from "../../../stores/useQuestStore";
+import type { BossChallenge } from "../../../types/boss-ui";
 
 type Props = {
   challenge: BossChallenge;

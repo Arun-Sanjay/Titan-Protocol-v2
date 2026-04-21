@@ -5,21 +5,30 @@
  * Called from protocol-completion after each protocol session.
  */
 
-import { useProtocolStore } from "../stores/useProtocolStore";
-import { useMindTrainingStore } from "../stores/useMindTrainingStore";
-import { useSkillTreeStore } from "../stores/useSkillTreeStore";
 import { getJSON, storage } from "../db/storage";
 import { getTodayKey, addDays } from "./date";
 import skillTreeData from "../data/skill-trees.json";
-// Phase 3.5f: cloud cache read for checkHabitStreak. The legacy
-// useProtocolStore.streakCurrent becomes stale after Phase 3.5b
-// because the protocol screen writes streak to profiles.streak_current
-// (cloud). We read the cloud value via the shared queryClient
-// singleton and fall back to the legacy store if the cache isn't
-// primed yet.
 import { queryClient } from "./query-client";
 import { profileQueryKey } from "../hooks/queries/useProfile";
+import { skillTreeKeys } from "../hooks/queries/useSkillTree";
+import { setSkillNodeReady, type SkillProgress } from "../services/skill-tree";
 import type { Profile } from "../services/profile";
+import { cachedStreakCurrent, cachedMindTrainingResults } from "./cached-cloud";
+import { logError } from "./error-log";
+import type { Enums } from "../types/supabase";
+
+type CloudSkillRow = SkillProgress;
+
+function cachedSkillProgressForEngine(engine: string): CloudSkillRow[] {
+  const rows = queryClient.getQueryData<CloudSkillRow[]>(skillTreeKeys.all) ?? [];
+  return rows.filter((r) => r.engine === engine);
+}
+
+function cachedSkillStatus(engine: string, nodeId: string): "locked" | "ready" | "claimed" {
+  const rows = cachedSkillProgressForEngine(engine);
+  const found = rows.find((r) => r.node_id === nodeId);
+  return (found?.state as "locked" | "ready" | "claimed" | undefined) ?? "locked";
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -57,29 +66,26 @@ export function evaluateSkillTree(engine: string): { nodeId: string; name: strin
   const engineData = TREE_DATA[engine];
   if (!engineData) return [];
 
-  const store = useSkillTreeStore.getState();
-  const progress = store.progress[engine] ?? [];
+  const rows = cachedSkillProgressForEngine(engine);
+  const rowByNodeId = new Map(rows.map((r) => [r.node_id, r]));
   const newlyEligible: { nodeId: string; name: string; branch: string; level: number }[] = [];
 
   for (const branch of engineData.branches) {
     for (const levelDef of branch.levels) {
-      // Find current node progress
-      const nodeProgress = progress.find((n) => n.nodeId === levelDef.nodeId);
+      const row = rowByNodeId.get(levelDef.nodeId);
 
       // Skip already claimed or ready nodes
-      if (nodeProgress && (nodeProgress.status === "claimed" || nodeProgress.status === "ready")) continue;
+      if (row && (row.state === "claimed" || row.state === "ready")) continue;
 
       // Check prerequisite: previous level must be claimed
       if (levelDef.level > 1) {
-        const prevNode = progress.find(
-          (n) => n.branch === branch.id && n.level === levelDef.level - 1,
-        );
-        if (!prevNode || prevNode.status !== "claimed") continue;
+        const prevLevel = branch.levels.find((l) => l.level === levelDef.level - 1);
+        if (!prevLevel) continue;
+        const prevRow = rowByNodeId.get(prevLevel.nodeId);
+        if (!prevRow || prevRow.state !== "claimed") continue;
       }
 
-      // Check if requirement is met
-      const met = checkRequirement(levelDef);
-      if (met) {
+      if (checkRequirement(levelDef)) {
         newlyEligible.push({
           nodeId: levelDef.nodeId,
           name: levelDef.name,
@@ -94,55 +100,47 @@ export function evaluateSkillTree(engine: string): { nodeId: string; name: strin
 }
 
 /**
- * Initialize skill tree nodes for an engine from JSON definitions.
+ * No-op under Supabase-first. Tree structure is static (skill-trees.json)
+ * and progress is derived from skill_tree_progress rows + defs. Kept as
+ * exports so legacy callers don't break.
  */
-export function initializeEngineTree(engine: string): void {
-  const engineData = TREE_DATA[engine];
-  if (!engineData) return;
-
-  const nodes = engineData.branches.flatMap((branch) =>
-    branch.levels.map((level) => ({
-      nodeId: level.nodeId,
-      engine,
-      branch: branch.id,
-      level: level.level,
-      name: level.name,
-    })),
-  );
-
-  useSkillTreeStore.getState().initializeTree(engine, nodes);
+export function initializeEngineTree(_engine: string): void {
+  // Nothing to do — cloud is the source of truth.
 }
 
-/**
- * Initialize all 4 engine skill trees.
- */
 export function initializeAllTrees(): void {
-  for (const engine of ["body", "mind", "money", "charisma"]) {
-    initializeEngineTree(engine);
-  }
+  // Nothing to do.
 }
 
 /**
- * Run evaluation across all engines. Returns all newly unlocked nodes.
- * Auto-initializes trees if they haven't been initialized yet.
+ * Run evaluation across all engines. For each newly eligible node,
+ * write state='ready' to Supabase so the UI shows the claim button.
+ * Invalidates the skill tree query cache when any writes happen.
  */
 export function evaluateAllTrees(): { nodeId: string; name: string; branch: string; level: number; engine: string }[] {
   const results: { nodeId: string; name: string; branch: string; level: number; engine: string }[] = [];
+  let anyWritten = false;
 
   for (const engine of ["body", "mind", "money", "charisma"]) {
-    // Auto-initialize tree if progress is empty for this engine
-    const progress = useSkillTreeStore.getState().progress[engine];
-    if (!progress || progress.length === 0) {
-      initializeEngineTree(engine);
-    }
-
     const eligible = evaluateSkillTree(engine);
     for (const node of eligible) {
-      // Unlock the node (sets to "ready" — user must claim it)
-      useSkillTreeStore.getState().unlockNode(engine, node.nodeId);
+      setSkillNodeReady({
+        node_id: node.nodeId,
+        engine: engine as Enums<"engine_key">,
+      })
+        .then(() => {
+          anyWritten = true;
+        })
+        .catch((e) => logError("evaluateAllTrees.setReady", e, { engine, node: node.nodeId }));
       results.push({ ...node, engine });
     }
   }
+
+  if (results.length > 0) {
+    // Fire-and-forget invalidation — the awaits above are staggered promises
+    queryClient.invalidateQueries({ queryKey: skillTreeKeys.all });
+  }
+  void anyWritten;
 
   return results;
 }
@@ -275,13 +273,13 @@ function checkEngineAvgWeeks(engine: string, weeks: number, threshold: number): 
 }
 
 function checkExerciseCount(tag: string, target: number): boolean {
-  const history = useMindTrainingStore.getState().exerciseHistory;
+  const history = cachedMindTrainingResults();
   const count = history.filter((r) => r.type === tag || tag === "").length;
   return count >= target;
 }
 
 function checkExerciseAccuracy(tag: string, minCount: number, threshold: number): boolean {
-  const history = useMindTrainingStore.getState().exerciseHistory;
+  const history = cachedMindTrainingResults();
   const filtered = history.filter((r) => r.type === tag || tag === "");
   if (filtered.length < minCount) return false;
   const correct = filtered.filter((r) => r.correct).length;
@@ -290,18 +288,16 @@ function checkExerciseAccuracy(tag: string, minCount: number, threshold: number)
 }
 
 function checkExerciseCategories(tag: string, targetCategories: number): boolean {
-  const history = useMindTrainingStore.getState().exerciseHistory;
+  const history = cachedMindTrainingResults();
   const filtered = history.filter((r) => r.type === tag && r.correct);
   const categories = new Set(filtered.map((r) => r.category));
   return categories.size >= targetCategories;
 }
 
 function checkAllCategories(tag: string): boolean {
-  // Check if user completed at least one correct exercise in each available category for this type
-  const history = useMindTrainingStore.getState().exerciseHistory;
+  const history = cachedMindTrainingResults();
   const filtered = history.filter((r) => r.type === tag && r.correct);
   const completedCategories = new Set(filtered.map((r) => r.category));
-  // Need at least 5 different categories to consider "all" (rough heuristic)
   return completedCategories.size >= 5;
 }
 
@@ -358,7 +354,7 @@ function checkHabitStreak(target: number): boolean {
   // the pre-migration case where the cache hasn't hydrated yet.
   const cloudProfile = queryClient.getQueryData<Profile | null>(profileQueryKey);
   const streak =
-    cloudProfile?.streak_current ?? useProtocolStore.getState().streakCurrent;
+    cloudProfile?.streak_current ?? cachedStreakCurrent();
   return streak >= target;
 }
 
@@ -394,14 +390,23 @@ function checkWeeklyConsistency(targetWeeks: number): boolean {
 }
 
 function checkBranchLevelCheck(engine: string, minLevel: number): boolean {
-  const progress = useSkillTreeStore.getState().progress[engine] ?? [];
+  const rows = cachedSkillProgressForEngine(engine);
   const engineData = TREE_DATA[engine];
   if (!engineData) return false;
 
-  // Check that ALL branches have at least one node at minLevel completed
+  const nodeMeta = new Map<string, { branchId: string; level: number }>();
   for (const branch of engineData.branches) {
-    const branchNodes = progress.filter((n) => n.branch === branch.id);
-    const hasLevel = branchNodes.some((n) => n.level >= minLevel && n.status === "claimed");
+    for (const lv of branch.levels) {
+      nodeMeta.set(lv.nodeId, { branchId: branch.id, level: lv.level });
+    }
+  }
+
+  for (const branch of engineData.branches) {
+    const hasLevel = rows.some((r) => {
+      if (r.state !== "claimed") return false;
+      const meta = nodeMeta.get(r.node_id);
+      return Boolean(meta && meta.branchId === branch.id && meta.level >= minLevel);
+    });
     if (!hasLevel) return false;
   }
   return true;
@@ -447,22 +452,11 @@ function checkSleepAvgWeeks(weeks: number, minHours: number): boolean {
   return rate >= (minHours > 0 ? 50 : 30);
 }
 
-function checkSRSRecallAccuracy(minDaysOld: number, threshold: number): boolean {
-  const cards = useMindTrainingStore.getState().srsCards;
-  // Check if there are cards with intervals >= minDaysOld and good accuracy
-  const oldCards = cards.filter((c) => c.interval >= minDaysOld);
-  if (oldCards.length < 5) return false; // Need at least 5 mature cards
-
-  const history = useMindTrainingStore.getState().exerciseHistory;
-  let correct = 0;
-  let total = 0;
-  for (const card of oldCards) {
-    const results = history.filter((r) => r.exerciseId === card.exerciseId);
-    for (const r of results) {
-      total++;
-      if (r.correct) correct++;
-    }
-  }
-  if (total === 0) return false;
-  return Math.round((correct / total) * 100) >= threshold;
+function checkSRSRecallAccuracy(_minDaysOld: number, _threshold: number): boolean {
+  // SRS card state lives in the srs_cards Supabase table but isn't
+  // currently read by any React Query hook. Until we wire that up,
+  // this recall-accuracy check is effectively disabled — previously
+  // it read from a local mind-training store that held both history
+  // and cards in MMKV.
+  return false;
 }

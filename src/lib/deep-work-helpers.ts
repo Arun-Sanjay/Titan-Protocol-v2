@@ -1,9 +1,17 @@
 /**
- * Phase 4.1: Re-export pure deep work types so screens can import
- * them without pulling in the Zustand store file.
+ * Pure deep work types. Cloud state comes from useDeepWork hook.
  */
 
-export {
-  type DeepWorkCategory,
-  type DeepWorkTask,
-} from "../stores/useDeepWorkStore";
+export type DeepWorkCategory =
+  | "Main Job / College"
+  | "Side Hustle"
+  | "Freelance"
+  | "Investments"
+  | "Other";
+
+export type DeepWorkTask = {
+  id: number;
+  taskName: string;
+  category: DeepWorkCategory;
+  createdAt: number;
+};

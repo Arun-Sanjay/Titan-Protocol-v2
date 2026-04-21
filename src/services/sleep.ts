@@ -1,4 +1,10 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteDelete,
+  sqliteList,
+  sqliteUpsert,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 
 // ─── Re-exported Types ─────────────────────────────────────────────────────
@@ -8,12 +14,7 @@ export type SleepLog = Tables<"sleep_logs">;
 // ─── Service Functions ─────────────────────────────────────────────────────
 
 export async function listSleepLogs(): Promise<SleepLog[]> {
-  const { data, error } = await supabase
-    .from("sleep_logs")
-    .select("*")
-    .order("date_key", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<SleepLog>("sleep_logs", { order: "date_key DESC" });
 }
 
 export async function upsertSleepLog(log: {
@@ -23,44 +24,34 @@ export async function upsertSleepLog(log: {
   notes?: string;
 }): Promise<SleepLog> {
   const userId = await requireUserId();
-
-  const { data: existing } = await supabase
-    .from("sleep_logs")
-    .select("id")
-    .eq("date_key", log.date_key)
-    .maybeSingle();
+  const [existing] = await sqliteList<SleepLog>("sleep_logs", {
+    where: "date_key = ?",
+    params: [log.date_key],
+    limit: 1,
+  });
 
   if (existing) {
-    const { data, error } = await supabase
-      .from("sleep_logs")
-      .update({
-        hours_slept: log.hours_slept,
-        quality: log.quality,
-        notes: log.notes,
-      })
-      .eq("id", existing.id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  } else {
-    const { data, error } = await supabase
-      .from("sleep_logs")
-      .insert({
-        user_id: userId,
-        date_key: log.date_key,
-        hours_slept: log.hours_slept ?? null,
-        quality: log.quality ?? null,
-        notes: log.notes ?? null,
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    const merged: SleepLog = {
+      ...existing,
+      hours_slept: log.hours_slept ?? existing.hours_slept,
+      quality: log.quality ?? existing.quality,
+      notes: log.notes ?? existing.notes,
+    };
+    return sqliteUpsert("sleep_logs", merged);
   }
+
+  const row: SleepLog = {
+    id: newId(),
+    user_id: userId,
+    date_key: log.date_key,
+    hours_slept: log.hours_slept ?? null,
+    quality: log.quality ?? null,
+    notes: log.notes ?? null,
+    created_at: new Date().toISOString(),
+  };
+  return sqliteUpsert("sleep_logs", row);
 }
 
 export async function deleteSleepLog(logId: string): Promise<void> {
-  const { error } = await supabase.from("sleep_logs").delete().eq("id", logId);
-  if (error) throw error;
+  await sqliteDelete("sleep_logs", { id: logId });
 }

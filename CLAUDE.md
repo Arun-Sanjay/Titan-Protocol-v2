@@ -2,28 +2,39 @@
 
 > Mobile-first gamified "personal OS" app. Expo SDK 55, RN 0.83, React 19, Hermes + New Architecture. Ship target: Google Play (freemium, solo dev).
 >
-> **Architecture: Supabase-first, single data layer.** Every screen reads from React Query hooks, writes through typed service functions. No MMKV stores for user data.
+> **Architecture: Local-only. Cloud is a manual opt-in backup, nothing more.**
+> Every screen reads and writes SQLite. The UI never touches the network for normal operation. A "Backup to Cloud" / "Restore from Cloud" pair in the Profile tab lets the user snapshot to Supabase and pull back on another device.
 
 ---
 
-## 1. Architecture — Single Stack
+## 1. Architecture — Local-only, manual cloud
 
-**Every piece of user data lives in Supabase.** There is ONE read path (React Query hook) and ONE write path (service function → Supabase client). No dual-stack, no migration gate, no cloud-sync bridge.
+SQLite is the only store the app reads and writes during normal use.
+There is no background sync. There is no automatic push after a mutation.
+There is no automatic pull on sign-in or app resume.
 
 ```
-Component → useXxx() hook → xxxService.ts → supabase client → Supabase DB
-    ↑                                                              |
-    └──── React Query cache (optimistic updates) ←─────────────────┘
+Component → useXxx() hook → xxxService.ts → SQLite  (the whole story)
 ```
 
-**MMKV is ONLY for device-local preferences:**
+Manual cloud operations:
+
+```
+Profile tab "Backup to Cloud"  → backupToCloud()  → Supabase (upsert all rows)
+Profile tab "Restore from Cloud" → restoreFromCloud() → wipe local + pull all rows
+```
+
+**MMKV is for device-local preferences:**
 - Sound/voice toggle
 - Dev flags (dev_day_offset)
 - Story flags (cinematic played state)
 - UI mode (titan/focus)
 - Theme preferences
+- Last-backup timestamp (display only)
 
-**If a value should sync across devices, it goes in Supabase. Period.**
+**SQLite is for user data** (42 tables — tasks, habits, completions, profile, everything).
+
+**Supabase is for auth + the manual backup/restore target**. No calls from the critical path.
 
 ---
 
@@ -36,107 +47,87 @@ Component → useXxx() hook → xxxService.ts → supabase client → Supabase D
 | | `react` | `19.2.0` |
 | Routing | `expo-router` | `~55.0.11` |
 | Language | `typescript` | `5.9` strict |
-| Cloud state | `@tanstack/react-query` | `^5.96.2` |
-| DB client | `@supabase/supabase-js` | `^2.101` |
-| Local prefs | `react-native-mmkv` | `^4.3` (device-local only) |
+| Local DB | `expo-sqlite` | `~55.0.15` |
+| Query cache | `@tanstack/react-query` | `^5.96.2` (in-memory de-dup only) |
+| Cloud client | `@supabase/supabase-js` | `^2.101` (auth + manual backup only) |
+| Local prefs | `react-native-mmkv` | `^4.3` |
 | Session store | `@react-native-async-storage/async-storage` | `2.2` |
 | Animation | `react-native-reanimated` | `4.2.1` |
 | Gestures | `react-native-gesture-handler` | `~2.30` |
 | Canvas | `@shopify/react-native-skia` | `2.4.18` |
-| 3D | `@react-three/fiber` `^9.5` + `three` `^0.183` |
 | Lists | `@shopify/flash-list` | `2.0.2` |
 | Validation | `zod` | `^4.3` |
-| Audio | `expo-av` `^16.0.8` + `expo-speech` `~55` |
-| Fonts | `@expo-google-fonts/jetbrains-mono` |
-| Tests | `jest` + `jest-expo` (pure logic only) |
+| Tests | `jest` + `jest-expo`, `better-sqlite3` (in-memory SQLite for tests) |
 
-No NativeWind, no styled-components, no Redux, no SWR, no Zustand for user data.
+No NativeWind, no styled-components, no Redux, no SWR, no query-client persister, no sync engine.
 
 ---
 
-## 3. @titan/shared Package
+## 3. Data stores
 
-The data layer lives in a shared package at `../shared` (`@titan/shared`), linked in `package.json` via `"file:../shared"`. It is the **single source of truth** for: services, React Query hooks, types, scoring logic, date utilities, and gamification constants.
+**Local (SQLite) — `titan.db`, 42 tables, schema in `src/db/sqlite/migrations/001_initial.sql`.**
+Every table carries `_deleted` (soft-delete tombstone) and `_dirty` (legacy column, ignored in local-only mode). Once the cloud sync tombstone model matures we can wire `_dirty` back in; until then writes just clear both to 0.
 
-### What shared owns
+**Supabase — `rmvodrpgaffxeultskst` (region `ap-south-1`).**
+Schema matches SQLite 1:1 minus the housekeeping columns. Only touched by:
+- Auth (`supabase.auth.signIn*` / `signOut` / `getSession`)
+- Manual backup (`src/sync/backup.ts`)
+- Manual restore (`src/sync/restore.ts`)
+- Account deletion (`src/services/account.ts`)
 
-- `services/` — all Supabase service functions (tasks, habits, profile, protocol, etc.)
-- `hooks/queries/` — all React Query hooks
-- `lib/` — `supabase.ts` (client init), `query-client.ts`, `auth-context.tsx`, `scoring-v2.ts`, `date.ts`
-- `types/` — `supabase.ts` (generated), `game.ts` (domain types)
-- `db/` — `gamification.ts` (ranks, XP, daily grades)
-
-### Initialization (mobile side)
-
-Mobile's `src/lib/supabase.ts` delegates to shared:
-```typescript
-import { initSupabase } from "@titan/shared/lib/supabase";
-initSupabase({ url, anonKey, storage: AsyncStorage });
-```
-
-Mobile's `src/lib/query-client.ts` delegates to shared:
-```typescript
-import { createTitanQueryClient } from "@titan/shared/lib/query-client";
-```
-
-`TitanAuthProvider` from `@titan/shared/lib/auth-context` wraps the root layout, receiving `userId` from mobile's `useAuthStore`:
-```typescript
-<TitanAuthProvider userId={userId}>
-  {children}
-</TitanAuthProvider>
-```
-
-Mobile can use `useAuth` from shared alongside its own hooks.
-
-### Metro config
-
-`metro.config.js` adds `../shared` to `watchFolders` so HMR picks up changes in the shared package during development.
-
-### Rules
-
-- **New Supabase table/feature?** Create the service + hook in `shared/`, not in `mobile/src/`.
-- **Mobile keeps platform-specific files only:** Zustand/MMKV stores, React Native components, theme, assets, animations, audio, haptics, notifications.
-- **Never duplicate** service or hook logic in mobile that already exists in shared.
+Schema changes: apply migration to Supabase via MCP, mirror the DDL in a new file under `src/db/sqlite/migrations/NNN_*.sql`, add it to `migrations/index.ts`. Don't edit an already-shipped migration.
 
 ---
 
-## 4. Supabase
-
-**Project ref:** `rmvodrpgaffxeultskst` (region `ap-south-1`)
-
-The database has 27 tables with RLS policies on every one. All tables follow:
-- `user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE`
-- `id uuid PRIMARY KEY DEFAULT gen_random_uuid()`
-- `created_at timestamptz NOT NULL DEFAULT now()`
-- RLS enabled + 4 policies (SELECT/INSERT/UPDATE/DELETE) scoped to `auth.uid() = user_id`
-
-**Key tables:** `profiles`, `tasks`, `completions`, `habits`, `habit_logs`, `protocol_sessions`, `rank_up_events`, `budgets`, `weight_logs`, `sleep_logs`, `money_transactions`, `journal_entries`, `achievements`, `titan_mode`, `progression`, `field_ops`, `skill_progress`, `narrative_logs`
-
-Use the Supabase MCP tools for all schema work. See the skill file for the workflow.
-
----
-
-## 5. Data Layer Pattern (for every new feature)
+## 4. Data Layer Pattern (for every new feature)
 
 ### Service (`src/services/xxx.ts`)
 ```typescript
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteList,
+  sqliteGet,
+  sqliteUpsert,
+  sqliteDelete,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 
 export type Xxx = Tables<"xxx">;
 
 export async function listXxx(): Promise<Xxx[]> {
-  const { data, error } = await supabase.from("xxx").select("*");
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<Xxx>("xxx", { order: "created_at ASC" });
 }
+
+export async function createXxx(input: { title: string }): Promise<Xxx> {
+  const userId = await requireUserId();
+  return sqliteUpsert("xxx", {
+    id: newId(),
+    user_id: userId,
+    title: input.title,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export async function deleteXxx(id: string): Promise<void> {
+  await sqliteDelete("xxx", { id });
+}
+```
+
+### Partial update pattern
+`sqliteUpsert` writes full rows. Partial updates read-merge-write:
+```typescript
+const existing = await sqliteGet<Xxx>("xxx", { id });
+if (!existing) throw new Error("Not found");
+return sqliteUpsert("xxx", { ...existing, title: "new title" });
 ```
 
 ### Hook (`src/hooks/queries/useXxx.ts`)
 ```typescript
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "../stores/useAuthStore";
-import { listXxx } from "../services/xxx";
+import { useQuery } from "@tanstack/react-query";
+import { useAuthStore } from "../../stores/useAuthStore";
+import { listXxx } from "../../services/xxx";
 
 export const xxxKeys = { all: ["xxx"] as const };
 
@@ -151,80 +142,81 @@ export function useXxx() {
 ```
 
 ### Rules
-- Services **throw** on error. Hooks catch via `onError`.
-- Mutations are **optimistic**: `onMutate → snapshot → setQueryData → onError rollback → onSettled invalidate`
-- Query keys are **tuple-typed** with `as const`
-- All reads have `enabled: Boolean(userId)` to prevent 401s before auth hydrates
-- **Never** read from or write to MMKV for user data
+- Services **throw** on error (SQLite errors propagate cleanly).
+- Writes are SQLite only. There is no enqueue, no push, no background side-effect. The function returns when SQLite has the row.
+- Query keys are **tuple-typed** with `as const`.
+- **Never** read or write MMKV for user data.
+- New table? It must appear in `COLUMN_TYPES` (`src/db/sqlite/column-types.ts`) and `PRIMARY_KEYS` (`src/sync/tables.ts`). Backup/restore iterate those maps.
 
 ---
 
-## 6. Golden Rules
+## 5. Golden Rules
 
-1. **One data layer.** Supabase + React Query. No MMKV stores for user data. No Zustand stores for cloud-bound data.
-2. **Services throw, hooks catch.** Service functions throw on Supabase error. Hooks handle via mutation callbacks.
-3. **Optimistic mutations.** Every write follows `onMutate → snapshot → apply → onError rollback → onSettled invalidate`.
-4. **`enabled: Boolean(userId)`** on every query. Prevents 401s during auth hydration.
+1. **SQLite is authoritative.** The only places that may import `supabase.from(...)` are:
+   `src/sync/backup.ts`, `src/sync/restore.ts`, `src/services/account.ts` (server cascade delete).
+2. **Auth is the only other network activity.** `src/lib/supabase.ts`, `src/stores/useAuthStore.ts`, and login screens may call `supabase.auth.*`.
+3. **Mutations are synchronous to the user.** `sqliteUpsert` completes at SQLite latency (~1ms). No side-effects after the return.
+4. **`enabled: Boolean(userId)`** on every query hook.
 5. **Every `withRepeat(-1)` has `cancelAnimation()` in cleanup.** Prevents Reanimated OOM on Android.
-6. **Android shadows only via `theme/shadows.ts`.** Caps elevation to prevent GPU compositor OOM.
+6. **Android shadows only via `theme/shadows.ts`.**
 7. **No inline hex/rgba.** Use `colors.*` from `theme/colors.ts`.
 8. **Dates via `lib/date.ts`.** Never `.toISOString().slice(0,10)` — not DST-safe.
-9. **Batch inserts for onboarding.** Use `supabase.from("x").insert([...array])`, not N individual mutations.
-10. **Auth store is the single auth source.** Login screens update it directly via `useAuthStore.setState()` for instant redirect.
+9. **Batch inserts** via `sqliteUpsertMany` not N individual `sqliteUpsert` calls.
+10. **Auth store is the single auth source.** Login screens update it directly via `useAuthStore.setState()`.
 
 ---
 
-## 7. File Structure
+## 6. File Structure
 
 ```
 titan-android/
 ├── app/                     Expo Router screens
-│   ├── _layout.tsx          Root layout + overlay orchestration
+│   ├── _layout.tsx          Root — fonts, DB migration, auth gate, overlays
 │   ├── (auth)/              Login, signup, verify, email-login
 │   ├── (tabs)/              HQ, engines, track, hub, profile
 │   ├── (modals)/            add-task modal
-│   ├── hub/                 Sub-trackers (workout, sleep, budget, etc.)
+│   ├── hub/                 Sub-trackers
 │   ├── engine/[id].tsx      Per-engine mission detail
 │   └── protocol.tsx         Morning/evening session
 ├── src/
 │   ├── components/
-│   │   ├── ui/              46 primitives (Panel, MissionRow, XPBar, etc.)
-│   │   └── v2/              Onboarding, story cinematics, celebrations
-│   ├── services/            Supabase service functions (TO BUILD)
-│   ├── hooks/queries/       React Query hooks (TO BUILD)
+│   │   ├── ui/              46 primitives
+│   │   ├── v2/              Onboarding, story cinematics, celebrations
+│   │   ├── CloudBackupSection.tsx   Backup/Restore buttons (Profile tab)
+│   │   └── SyncingScreen.tsx        Modal overlay for backup/restore progress
+│   ├── services/            SQLite-first service functions (25 files)
+│   ├── hooks/queries/       React Query hooks (one per service)
+│   ├── db/sqlite/           client.ts, migrator.ts, coerce.ts,
+│   │                          service-helpers.ts, column-types.ts, migrations/
+│   ├── sync/
+│   │   ├── backup.ts        Manual upload to Supabase
+│   │   ├── restore.ts       Manual pull + wipe-and-replace
+│   │   └── tables.ts        SYNCED_TABLES + PRIMARY_KEYS
 │   ├── lib/                 Pure business logic (scoring, ranks, dates, audio)
-│   ├── db/                  gamification.ts (pure), schema.ts (types)
-│   ├── data/                Static JSON (achievements, bosses, quests, titles)
+│   ├── db/                  gamification.ts, schema.ts, storage.ts (MMKV)
+│   ├── data/                Static JSON
 │   ├── theme/               colors, typography, spacing, shadows
-│   └── types/               supabase.ts (auto-generated)
+│   ├── types/               supabase.ts
+│   └── __tests__/           Jest tests (pure + service integration)
 ├── assets/audio/protocol/   138 voice-line MP3s
-├── android/                 Native Android project (tracked)
+├── android/                 Native Android project
 └── .claude/                 Claude Code config, skills
 ```
 
 ---
 
-## 8. What Needs Building (Phase 1)
-
-The UI, cinematics, theme, and game logic are complete. What's missing is the data layer wiring:
-
-1. **`src/lib/supabase.ts`** — Supabase client with AsyncStorage persistence
-2. **`src/lib/query-client.ts`** — React Query client with MMKV persister
-3. **`src/types/supabase.ts`** — Regenerated from the existing schema
-4. **`src/stores/useAuthStore.ts`** — Auth state (Zustand, minimal)
-5. **Services + hooks** for every domain (tasks, habits, profile, protocol, etc.)
-6. **Rewire every screen** to read from hooks instead of dead store imports
-
----
-
-## 9. Commands
+## 7. Commands
 
 ```bash
 npm run start              # expo start
 npm run android            # expo run:android
-npm test                   # jest (pure logic tests)
+npm test                   # jest (service + coerce tests)
 npx tsc --noEmit           # typecheck
 ```
 
 **Supabase project ref:** `rmvodrpgaffxeultskst`
 **Signing key:** `titan-release.jks` — do NOT regenerate.
+
+**Archive of the pre-migration Supabase-first architecture:**
+- Git tag `archive/supabase-first-v1` on GitHub
+- Local directory `~/Documents/Projects/titan-android-archive-supabase-2026-04-18/`

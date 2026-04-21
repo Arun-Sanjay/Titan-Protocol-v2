@@ -170,6 +170,51 @@ export type Database = {
           },
         ]
       }
+      deep_work_logs: {
+        Row: {
+          completed: boolean
+          created_at: string
+          date_key: string
+          earnings_today: number
+          id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          date_key: string
+          earnings_today?: number
+          id?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          date_key?: string
+          earnings_today?: number
+          id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deep_work_logs_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "deep_work_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deep_work_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deep_work_sessions: {
         Row: {
           category: string | null
@@ -207,6 +252,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "deep_work_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deep_work_tasks: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          task_name: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          task_name: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          task_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deep_work_tasks_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -326,6 +403,8 @@ export type Database = {
         Row: {
           break_minutes: number
           daily_target_sessions: number
+          long_break_after: number
+          long_break_minutes: number
           pomodoro_minutes: number
           sound_enabled: boolean
           updated_at: string
@@ -334,6 +413,8 @@ export type Database = {
         Insert: {
           break_minutes?: number
           daily_target_sessions?: number
+          long_break_after?: number
+          long_break_minutes?: number
           pomodoro_minutes?: number
           sound_enabled?: boolean
           updated_at?: string
@@ -342,6 +423,8 @@ export type Database = {
         Update: {
           break_minutes?: number
           daily_target_sessions?: number
+          long_break_after?: number
+          long_break_minutes?: number
           pomodoro_minutes?: number
           sound_enabled?: boolean
           updated_at?: string
@@ -842,6 +925,62 @@ export type Database = {
           },
         ]
       }
+      money_loans: {
+        Row: {
+          amount: number
+          created_at: string
+          date_iso: string
+          due_iso: string | null
+          id: string
+          interest_rate: number | null
+          lender: string
+          monthly_payment: number | null
+          name: string | null
+          paid: number
+          start_date: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          date_iso: string
+          due_iso?: string | null
+          id?: string
+          interest_rate?: number | null
+          lender: string
+          monthly_payment?: number | null
+          name?: string | null
+          paid?: number
+          start_date?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date_iso?: string
+          due_iso?: string | null
+          id?: string
+          interest_rate?: number | null
+          lender?: string
+          monthly_payment?: number | null
+          name?: string | null
+          paid?: number
+          start_date?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_loans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       money_transactions: {
         Row: {
           amount: number
@@ -1237,6 +1376,47 @@ export type Database = {
           },
         ]
       }
+      quick_meals: {
+        Row: {
+          calories: number
+          carbs_g: number
+          created_at: string
+          fat_g: number
+          id: string
+          name: string
+          protein_g: number
+          user_id: string
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          name: string
+          protein_g?: number
+          user_id: string
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          created_at?: string
+          fat_g?: number
+          id?: string
+          name?: string
+          protein_g?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_meals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rank_up_events: {
         Row: {
           created_at: string
@@ -1571,6 +1751,38 @@ export type Database = {
           },
         ]
       }
+      water_logs: {
+        Row: {
+          date_key: string
+          glasses: number
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          date_key: string
+          glasses?: number
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          date_key?: string
+          glasses?: number
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "water_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weight_logs: {
         Row: {
           created_at: string
@@ -1807,3 +2019,4 @@ export const Constants = {
     },
   },
 } as const
+

@@ -8,8 +8,13 @@
 
 import * as Notifications from "expo-notifications";
 import { useIdentityStore, selectIdentityMeta } from "../stores/useIdentityStore";
-import { useProtocolStore } from "../stores/useProtocolStore";
-import { useQuestStore, selectActiveQuests } from "../stores/useQuestStore";
+import { selectActiveQuests } from "../types/quest-ui";
+import {
+  cachedStreakCurrent,
+  cachedTodayCompleted,
+  cachedActiveQuests,
+  cachedActiveBossChallenge,
+} from "./cached-cloud";
 import { getTodayKey } from "./date";
 
 // ─── Notification IDs (for canceling specific ones) ─────────────────────────
@@ -86,10 +91,9 @@ export async function scheduleStreakWarning(): Promise<void> {
     await cancelNotificationById(NOTIF_IDS.STREAK_WARNING);
 
     // Only schedule if protocol not done today
-    const todayCompleted = useProtocolStore.getState().todayCompleted;
-    if (todayCompleted) return;
+    if (cachedTodayCompleted(getTodayKey())) return;
 
-    const streak = useProtocolStore.getState().streakCurrent;
+    const streak = cachedStreakCurrent();
     if (streak === 0) return; // No streak to protect
 
     await Notifications.scheduleNotificationAsync({
@@ -122,7 +126,7 @@ export async function scheduleQuestDeadline(): Promise<void> {
 
     await cancelNotificationById(NOTIF_IDS.QUEST_DEADLINE);
 
-    const quests = useQuestStore.getState().weeklyQuests;
+    const quests = cachedActiveQuests();
     const active = selectActiveQuests(quests);
     const completed = quests.filter((q) => q.status === "completed").length;
 
@@ -159,7 +163,7 @@ export async function scheduleBossReminder(): Promise<void> {
 
     await cancelNotificationById(NOTIF_IDS.BOSS_REMINDER);
 
-    const boss = useQuestStore.getState().bossChallenge;
+    const boss = cachedActiveBossChallenge();
     if (!boss || !boss.active) return;
 
     await Notifications.scheduleNotificationAsync({

@@ -2,7 +2,8 @@ import React from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { colors, spacing, fonts } from "../../../theme";
 import { SkillBranch } from "./SkillBranch";
-import { useSkillTreeStore, type SkillNodeProgress } from "../../../stores/useSkillTreeStore";
+import { useSkillProgress } from "../../../hooks/queries/useSkillTree";
+import { buildSkillProgress, type SkillNodeProgress } from "../../../types/skill-tree-ui";
 import { TitanProgress } from "../../ui/TitanProgress";
 
 const ENGINE_COLORS: Record<string, string> = {
@@ -23,10 +24,9 @@ type Props = {
   engine: string;
 };
 
-const EMPTY_PROGRESS: SkillNodeProgress[] = [];
-
 export function SkillTreeView({ engine }: Props) {
-  const allProgress: SkillNodeProgress[] = useSkillTreeStore((s) => s.progress[engine] ?? EMPTY_PROGRESS);
+  const { data: cloudRows = [] } = useSkillProgress();
+  const allProgress: SkillNodeProgress[] = buildSkillProgress(engine, cloudRows);
   const engineColor = ENGINE_COLORS[engine] ?? colors.primary;
 
   // Group nodes by branch

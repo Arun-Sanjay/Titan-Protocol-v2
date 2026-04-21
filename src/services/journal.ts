@@ -1,4 +1,10 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { requireUserId } from "../lib/supabase";
+import {
+  newId,
+  sqliteDelete,
+  sqliteList,
+  sqliteUpsert,
+} from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
 
 // ─── Re-exported Types ─────────────────────────────────────────────────────
@@ -8,24 +14,20 @@ export type JournalEntry = Tables<"journal_entries">;
 // ─── Service Functions ─────────────────────────────────────────────────────
 
 export async function listJournalEntries(): Promise<JournalEntry[]> {
-  const { data, error } = await supabase
-    .from("journal_entries")
-    .select("*")
-    .order("date_key", { ascending: false });
-  if (error) throw error;
-  return data ?? [];
+  return sqliteList<JournalEntry>("journal_entries", {
+    order: "date_key DESC",
+  });
 }
 
 export async function getJournalEntry(
   dateKey: string,
 ): Promise<JournalEntry | null> {
-  const { data, error } = await supabase
-    .from("journal_entries")
-    .select("*")
-    .eq("date_key", dateKey)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
+  const [existing] = await sqliteList<JournalEntry>("journal_entries", {
+    where: "date_key = ?",
+    params: [dateKey],
+    limit: 1,
+  });
+  return existing ?? null;
 }
 
 export async function upsertJournalEntry(entry: {
@@ -33,42 +35,30 @@ export async function upsertJournalEntry(entry: {
   content: string;
 }): Promise<JournalEntry> {
   const userId = await requireUserId();
+  const now = new Date().toISOString();
 
-  // Check if entry exists for this date
-  const { data: existing } = await supabase
-    .from("journal_entries")
-    .select("id")
-    .eq("date_key", entry.date_key)
-    .maybeSingle();
+  const existing = await getJournalEntry(entry.date_key);
 
   if (existing) {
-    const { data, error } = await supabase
-      .from("journal_entries")
-      .update({ content: entry.content, updated_at: new Date().toISOString() })
-      .eq("id", existing.id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  } else {
-    const { data, error } = await supabase
-      .from("journal_entries")
-      .insert({
-        user_id: userId,
-        date_key: entry.date_key,
-        content: entry.content,
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
+    const merged: JournalEntry = {
+      ...existing,
+      content: entry.content,
+      updated_at: now,
+    };
+    return sqliteUpsert("journal_entries", merged);
   }
+
+  const row: JournalEntry = {
+    id: newId(),
+    user_id: userId,
+    date_key: entry.date_key,
+    content: entry.content,
+    created_at: now,
+    updated_at: now,
+  };
+  return sqliteUpsert("journal_entries", row);
 }
 
 export async function deleteJournalEntry(entryId: string): Promise<void> {
-  const { error } = await supabase
-    .from("journal_entries")
-    .delete()
-    .eq("id", entryId);
-  if (error) throw error;
+  await sqliteDelete("journal_entries", { id: entryId });
 }

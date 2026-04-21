@@ -5,14 +5,17 @@
  * Returns list of newly unlocked achievement IDs.
  */
 
-import { useProtocolStore } from "../stores/useProtocolStore";
+import { cachedStreakCurrent, cachedTodayCompleted, cachedMindTrainingResults } from "./cached-cloud";
 import { useIdentityStore } from "../stores/useIdentityStore";
-import { useMindTrainingStore } from "../stores/useMindTrainingStore";
-import { useSkillTreeStore } from "../stores/useSkillTreeStore";
-import { useTitanModeStore } from "../stores/useTitanModeStore";
-import { useProgressionStore } from "../stores/useProgressionStore";
+import { skillTreeKeys } from "../hooks/queries/useSkillTree";
+import type { SkillProgress } from "../services/skill-tree";
+import skillTreeData from "../data/skill-trees.json";
+import { cachedTitanModeUnlocked } from "./cached-cloud";
+import { cachedCurrentPhase } from "./cached-cloud";
 import { useAchievementStore, type AchievementDef } from "../stores/useAchievementStore";
-import { useHabitStore } from "../stores/useHabitStore";
+import { queryClient } from "./query-client";
+import { habitsKeys } from "../hooks/queries/useHabits";
+import type { Habit } from "../services/habits";
 import { getJSON } from "../db/storage";
 import { getTodayKey, addDays } from "./date";
 import achievementDefs from "../data/achievements.json";
@@ -50,27 +53,26 @@ export type AppState = {
  * Check all achievements against current state.
  * Returns array of newly unlocked achievement IDs.
  *
- * Phase 1.5 fix: previously this called `unlockAchievement()` inside the
- * iteration loop, which mutated the store mid-pass. The local
- * `unlockedIds` snapshot was taken at the top of the function and never
- * refreshed, so any meta-achievement that depended on another
- * achievement being unlocked would silently fail to fire in the same
- * pass. Also: a `defs` array was being built but never read (the loop
- * iterated `ALL_DEFS` directly).
+ * `alreadyUnlocked` is the authoritative set of IDs the user already
+ * holds — the caller (runAchievementCheck) reads it from SQLite so the
+ * check has the real truth, not whatever happens to be in the React
+ * Query cache at the moment. Before this parameter existed, we pulled
+ * from queryClient, which was often empty — every tap then thought the
+ * first-task achievement was new and fired the celebration toast on
+ * every tap.
  *
- * Now we keep a live `Set` of unlocked IDs (snapshot + in-flight
- * unlocks) and apply the actual store mutations after the loop has
- * finished.
+ * Multiple passes so meta-achievements (those that depend on another
+ * achievement being unlocked) fire in the same `checkAllAchievements`
+ * call. Each pass that adds new unlocks triggers another pass; loop
+ * count bounded to prevent infinite cycles.
  */
-export function checkAllAchievements(appState: AppState): string[] {
-  const initial = new Set(useAchievementStore.getState().unlockedIds);
-  const liveUnlocked = new Set(initial);
+export function checkAllAchievements(
+  appState: AppState,
+  alreadyUnlocked: Set<string>,
+): string[] {
+  const liveUnlocked = new Set(alreadyUnlocked);
   const pending: { id: string; def: AchievementDef }[] = [];
 
-  // Multiple passes so meta-achievements (those that depend on another
-  // achievement being unlocked) fire in the same `checkAllAchievements`
-  // call. Each pass that adds new unlocks triggers another pass; we
-  // bound the loop count to prevent infinite cycles.
   let changed = true;
   let safety = 8;
   while (changed && safety-- > 0) {
@@ -93,11 +95,11 @@ export function checkAllAchievements(appState: AppState): string[] {
     }
   }
 
-  // Apply all unlocks AFTER iteration so the store update doesn't
-  // race with the loop.
+  // Push each unlock onto the UI celebration queue. Server-side
+  // persistence is handled by the caller (achievement-integration).
   const store = useAchievementStore.getState();
-  for (const { id, def } of pending) {
-    store.unlockAchievement(id, def);
+  for (const { def } of pending) {
+    store.pushCelebration(def);
   }
 
   return pending.map((p) => p.id);
@@ -142,8 +144,7 @@ function evaluateCondition(
       return useIdentityStore.getState().totalVotes >= val;
 
     case "phase_completed": {
-      const phase = useProgressionStore.getState().currentPhase;
-      // "building" means Foundation is complete
+      const phase = cachedCurrentPhase();
       const phaseOrder = ["foundation", "building", "intensify", "sustain"];
       const currentIdx = phaseOrder.indexOf(phase);
       const requiredIdx = phaseOrder.indexOf(strVal);
@@ -154,12 +155,11 @@ function evaluateCondition(
       return checkQuestsCompleted(val);
 
     case "mind_exercises_total":
-      return useMindTrainingStore.getState().stats.totalCompleted >= val;
+      return cachedMindTrainingResults().length >= val;
 
     case "mind_exercises_type": {
       const tag = def.conditionTag ?? "";
-      const history = useMindTrainingStore.getState().exerciseHistory;
-      return history.filter((r) => r.type === tag).length >= val;
+      return cachedMindTrainingResults().filter((r) => r.type === tag).length >= val;
     }
 
     case "habit_chain_days":
@@ -179,8 +179,7 @@ function evaluateCondition(
 
     case "mind_accuracy_over_n": {
       const tag = def.conditionTag ?? "";
-      const history = useMindTrainingStore.getState().exerciseHistory;
-      const filtered = history.filter((r) => tag === "" || r.type === tag);
+      const filtered = cachedMindTrainingResults().filter((r) => tag === "" || r.type === tag);
       if (filtered.length < val) return false;
       const correct = filtered.filter((r) => r.correct).length;
       return Math.round((correct / filtered.length) * 100) >= (def.conditionThreshold ?? 80);
@@ -188,8 +187,7 @@ function evaluateCondition(
 
     case "mind_accuracy_consecutive": {
       const tag = def.conditionTag ?? "";
-      const history = useMindTrainingStore.getState().exerciseHistory;
-      const filtered = history.filter((r) => tag === "" || r.type === tag);
+      const filtered = cachedMindTrainingResults().filter((r) => tag === "" || r.type === tag);
       let consecutive = 0;
       for (let i = filtered.length - 1; i >= 0; i--) {
         if (filtered[i].correct) consecutive++;
@@ -217,7 +215,7 @@ function evaluateCondition(
       return checkSkillBranchComplete();
 
     case "titan_mode_unlocked":
-      return useTitanModeStore.getState().unlocked;
+      return cachedTitanModeUnlocked();
 
     case "boss_completed":
       return checkBossCompleted(strVal);
@@ -233,17 +231,16 @@ function evaluateCondition(
 // ─── Individual checkers ────────────────────────────────────────────────────
 
 function checkTasksCompleted(target: number): boolean {
-  // Check if protocol was completed today (for "first task" achievements)
-  // or if streak indicates sustained task completion
-  const store = useProtocolStore.getState();
-  if (target === 1) return store.todayCompleted || store.streakCurrent >= 1;
-  return store.streakCurrent >= target;
+  const streak = cachedStreakCurrent();
+  const today = getTodayKey();
+  if (target === 1) return cachedTodayCompleted(today) || streak >= 1;
+  return streak >= target;
 }
 
 function checkProtocolCompleted(target: number): boolean {
-  const store = useProtocolStore.getState();
-  if (target === 1) return store.todayCompleted;
-  return store.streakCurrent >= target;
+  const today = getTodayKey();
+  if (target === 1) return cachedTodayCompleted(today);
+  return cachedStreakCurrent() >= target;
 }
 
 function checkAllEnginesConsecutive(days: number): boolean {
@@ -277,28 +274,24 @@ function checkQuestsCompleted(target: number): boolean {
   return total >= target;
 }
 
+function cachedHabits(): Habit[] {
+  return queryClient.getQueryData<Habit[]>(habitsKeys.all) ?? [];
+}
+
 function checkHabitChain(days: number): boolean {
-  const habits = useHabitStore.getState().habits;
+  const habits = cachedHabits();
   if (habits.length === 0) return false;
-  // Check if any habit has a chain >= days
   for (const h of habits) {
-    const stats = useHabitStore.getState().getHabitStats(h.id!, days + 5);
-    if (stats.currentChain >= days) return true;
+    if ((h.current_chain ?? 0) >= days) return true;
   }
   return false;
 }
 
 function checkAllHabitsConsecutive(days: number): boolean {
-  const habits = useHabitStore.getState().habits;
+  const habits = cachedHabits();
   if (habits.length === 0) return false;
-  const today = getTodayKey();
-  for (let i = 0; i < days; i++) {
-    const dk = addDays(today, -i);
-    const logs = getJSON<number[]>(`habit_logs:${dk}`, []);
-    const allDone = habits.every((h) => logs.includes(h.id!));
-    if (!allDone) return false;
-  }
-  return true;
+  // Every habit must have a current_chain of at least `days`.
+  return habits.every((h) => (h.current_chain ?? 0) >= days);
 }
 
 function checkEnginesWithinRange(scores: Record<string, number>, range: number): boolean {
@@ -312,7 +305,7 @@ function checkEnginesWithinRange(scores: Record<string, number>, range: number):
 }
 
 function checkStreakWithAvg(days: number, threshold: number): boolean {
-  const streak = useProtocolStore.getState().streakCurrent;
+  const streak = cachedStreakCurrent();
   if (streak < days) return false;
   // Check average over the streak period
   const today = getTodayKey();
@@ -355,18 +348,18 @@ function checkJournalEntries(target: number): boolean {
 }
 
 function checkSkillBranchComplete(): boolean {
-  const progress = useSkillTreeStore.getState().progress;
+  const rows = queryClient.getQueryData<SkillProgress[]>(skillTreeKeys.all) ?? [];
+  const trees = skillTreeData as Record<string, { branches: { id: string; levels: { nodeId: string }[] }[] }>;
   for (const engine of ["body", "mind", "money", "charisma"]) {
-    const nodes = progress[engine] ?? [];
-    const branchMap = new Map<string, { total: number; completed: number }>();
-    for (const n of nodes) {
-      if (!branchMap.has(n.branch)) branchMap.set(n.branch, { total: 0, completed: 0 });
-      const b = branchMap.get(n.branch)!;
-      b.total++;
-      if (n.status === "claimed") b.completed++;
-    }
-    for (const b of branchMap.values()) {
-      if (b.total > 0 && b.completed === b.total) return true;
+    const engineDef = trees[engine];
+    if (!engineDef) continue;
+    const claimedIds = new Set(
+      rows.filter((r) => r.engine === engine && r.state === "claimed").map((r) => r.node_id),
+    );
+    for (const branch of engineDef.branches) {
+      if (branch.levels.length === 0) continue;
+      const allClaimed = branch.levels.every((l) => claimedIds.has(l.nodeId));
+      if (allClaimed) return true;
     }
   }
   return false;

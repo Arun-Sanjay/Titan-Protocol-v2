@@ -1,25 +1,16 @@
 /**
  * Metro bundler configuration for Titan Protocol.
  *
- * Extends Expo's default config to resolve the @titan/shared package
- * from the parent directory. This lets Metro follow the `file:../shared`
- * symlink and bundle shared TypeScript files alongside the mobile app.
+ * Uses the Expo default config via `expo/metro-config`, which handles
+ * asset extensions, TypeScript, SVG, source maps, and environment
+ * variable inlining (EXPO_PUBLIC_*) out of the box.
+ *
+ * This file exists so Metro has a project-local config instead of
+ * inferring defaults. Keep the config minimal — only wrap it if you
+ * need to add custom transformers or asset extensions.
  */
 const { getDefaultConfig } = require("expo/metro-config");
-const path = require("path");
 
 const config = getDefaultConfig(__dirname);
-
-// Tell Metro where to find @titan/shared (symlinked via file: dependency)
-const sharedRoot = path.resolve(__dirname, "../shared");
-
-// Watch the shared package for changes during development
-config.watchFolders = [sharedRoot];
-
-// Resolve modules from both mobile's node_modules and shared's node_modules
-config.resolver.nodeModulesPaths = [
-  path.resolve(__dirname, "node_modules"),
-  path.resolve(sharedRoot, "node_modules"),
-];
 
 module.exports = config;

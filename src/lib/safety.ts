@@ -6,11 +6,20 @@
  */
 
 import { getJSON, setJSON } from "../db/storage";
-import { getTodayKey } from "./date";
-import { useProtocolStore } from "../stores/useProtocolStore";
-import { useProgressionStore } from "../stores/useProgressionStore";
-import { useQuestStore } from "../stores/useQuestStore";
 import { useIdentityStore } from "../stores/useIdentityStore";
+import {
+  cachedActiveQuests,
+  cachedCurrentPhase,
+  cachedCurrentWeek,
+} from "./cached-cloud";
+import { generateWeeklyQuests } from "./quest-generator";
+import { insertWeeklyQuests } from "../services/quests";
+import { upsertProgression } from "../services/progression";
+import { phaseFromWeek } from "../types/progression-ui";
+import { queryClient } from "./query-client";
+import { questsKeys } from "../hooks/queries/useQuests";
+import { progressionKeys } from "../hooks/queries/useProgression";
+import { logError } from "./error-log";
 
 // ─── MMKV Safe Read ─────────────────────────────────────────────────────────
 
@@ -38,50 +47,50 @@ export function safeGetJSON<T>(key: string, fallback: T): T {
  * Handle app open after a gap (especially crossing Monday).
  * - Generates weekly quests if Monday and none exist
  * - Checks phase advancement
- * - Handles missed streak resets
+ *
+ * Protocol today-status no longer needs refresh — it's now derived
+ * from the useProtocolSession(today) React Query cache.
  */
 export function handleAppOpenAfterGap(): void {
-  const today = getTodayKey();
+  const today = new Date().toISOString().slice(0, 10);
   const dayOfWeek = new Date(today + "T00:00:00").getDay();
 
   // Check if quests need generation (Monday = 1)
   if (dayOfWeek === 1) {
-    const questStore = useQuestStore.getState();
-    if (questStore.weeklyQuests.length === 0) {
-      const phase = useProgressionStore.getState().currentPhase;
+    const active = cachedActiveQuests();
+    if (active.length === 0) {
+      const phase = cachedCurrentPhase();
       const identity = useIdentityStore.getState().archetype ?? "operator";
-      questStore.generateWeeklyQuests(phase, identity);
+      const quests = generateWeeklyQuests(phase, identity);
+      insertWeeklyQuests(quests)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: questsKeys.active });
+        })
+        .catch((e) => logError("safety.insertWeeklyQuests", e));
     }
   }
 
-  // Check phase advancement
-  useProgressionStore.getState().checkWeekAdvancement();
-
-  // Refresh protocol status for today
-  useProtocolStore.getState().checkTodayStatus();
+  // Phase advancement from cached week number.
+  const week = cachedCurrentWeek();
+  const derivedPhase = phaseFromWeek(week);
+  if (derivedPhase !== cachedCurrentPhase()) {
+    upsertProgression({ current_phase: derivedPhase })
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: progressionKeys.all });
+      })
+      .catch((e) => logError("safety.upsertProgression", e));
+  }
 }
 
 // ─── Protocol Interruption ──────────────────────────────────────────────────
 
 /**
- * Check if a protocol was interrupted (started but not finished).
- * Returns true if there's an active protocol that should be resumed or restarted.
+ * Legacy interruption check. The `isActive`/`startedAt` flags this
+ * relied on were only ever MMKV state and never set to true, so this
+ * function was always a no-op. Kept as an export to avoid breaking
+ * callers; always returns { interrupted: false, canResume: false }.
  */
 export function checkProtocolInterruption(): { interrupted: boolean; canResume: boolean } {
-  const store = useProtocolStore.getState();
-  const today = getTodayKey();
-
-  if (store.isActive && store.startedAt === today) {
-    // Active protocol from today — can resume
-    return { interrupted: true, canResume: true };
-  }
-
-  if (store.isActive && store.startedAt !== today) {
-    // Active protocol from a previous day — can't resume, reset
-    store.resetDaily();
-    return { interrupted: true, canResume: false };
-  }
-
   return { interrupted: false, canResume: false };
 }
 

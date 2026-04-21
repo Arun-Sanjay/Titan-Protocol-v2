@@ -19,7 +19,8 @@ import {
   ENGINES,
   type TaskWithStatus,
 } from "../../../stores/useEngineStore";
-import { useProfileStore, XP_REWARDS } from "../../../stores/useProfileStore";
+import { XP_REWARDS } from "../../../lib/xp-rewards";
+import { useAwardXP } from "../../../hooks/queries/useProfile";
 import { getTodayKey } from "../../../lib/date";
 import { getCurrentChapter, getDayNumber } from "../../../data/chapters";
 import { getJSON } from "../../../db/storage";
@@ -27,7 +28,10 @@ import { getJSON } from "../../../db/storage";
 // Skill tree evaluation runs at protocol completion instead.
 import { HUDBackground } from "../../ui/AnimatedBackground";
 import { MissionBoard } from "../../ui/MissionBoard";
-import { useQuestStore } from "../../../stores/useQuestStore";
+import { useActiveQuests } from "../../../hooks/queries/useQuests";
+import { useActiveBossChallenges } from "../../../hooks/queries/useBossChallenges";
+import { mapCloudQuest } from "../../../types/quest-ui";
+import { mapCloudBossChallenge } from "../../../types/boss-ui";
 import { playRandomTaskAck, stopCurrentAudio } from "../../../lib/protocol-audio";
 import { trackOperationCompletion } from "../../../lib/operation-engine";
 
@@ -81,15 +85,16 @@ export function WarRoom() {
   const tasks = useEngineStore((s) => s.tasks);
   const completions = useEngineStore((s) => s.completions);
   const toggleTask = useEngineStore((s) => s.toggleTask);
-  const awardXP = useProfileStore((s) => s.awardXP);
+  const awardXPMutation = useAwardXP();
+  const { data: cloudQuests = [] } = useActiveQuests();
+  const { data: cloudBosses = [] } = useActiveBossChallenges();
 
   const [justCompleted, setJustCompleted] = useState<Set<number>>(new Set());
 
-  /* Load engines on mount */
+  /* Load engines on mount. Profile is loaded via React Query elsewhere. */
   useEffect(() => {
     const load = useEngineStore.getState().loadEngine;
     for (const e of ENGINES) load(e, dateKey);
-    useProfileStore.getState().load();
   }, [dateKey]);
 
   /* Stop audio on unmount */
@@ -132,7 +137,7 @@ export function WarRoom() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       toggleTask(task.engine, task.id!, dateKey);
       const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
-      awardXP(dateKey, `task:${task.id}`, xp);
+      awardXPMutation.mutate(xp);
       // NOTE: evaluateAllTrees() removed from here — it's O(n²) expensive
       // (scans 365 days × getAllKeys per engine per node). Runs at protocol
       // completion instead (protocol-completion.ts step 13).
@@ -163,7 +168,7 @@ export function WarRoom() {
         // Silently ignore tracking errors — don't crash on task completion
       }
     },
-    [dateKey, toggleTask, awardXP]
+    [dateKey, toggleTask, awardXPMutation]
   );
 
   return (
@@ -449,8 +454,8 @@ export function WarRoom() {
 
           {/* ══════════════ WEEKLY MISSION BOARD ══════════════ */}
           {(() => {
-            const weeklyQuests = useQuestStore.getState().weeklyQuests;
-            const boss = useQuestStore.getState().bossChallenge;
+            const weeklyQuests = cloudQuests.map(mapCloudQuest);
+            const boss = cloudBosses.length > 0 ? mapCloudBossChallenge(cloudBosses[0]) : null;
             const quests = weeklyQuests.map((q) => ({
               id: q.id,
               title: q.title,

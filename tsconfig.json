@@ -5,17 +5,12 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ],
-      "@titan/shared/*": [
-        "../shared/*"
       ]
     }
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx",
-    "../shared/**/*.ts",
-    "../shared/**/*.tsx"
+    "**/*.tsx"
   ],
   "exclude": [
     "node_modules",

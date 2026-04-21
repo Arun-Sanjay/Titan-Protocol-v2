@@ -41,6 +41,7 @@ import { useHabits, useHabitLogsForDate } from "../../src/hooks/queries/useHabit
 import { useActiveFieldOp, useFieldOpHistory } from "../../src/hooks/queries/useFieldOps";
 import { useSkillProgress } from "../../src/hooks/queries/useSkillTree";
 import { useProgression } from "../../src/hooks/queries/useProgression";
+import { useNarrativeLog } from "../../src/hooks/queries/useNarrative";
 import { getMomentum, getMomentumColor } from "../../src/lib/momentum";
 import { loadIntegrity, getIntegrityColor } from "../../src/lib/protocol-integrity";
 import { useModeStore, IDENTITY_LABELS } from "../../src/stores/useModeStore";
@@ -242,12 +243,12 @@ export default function HQScreen() {
     return { done: habitCompletedIds.size, total: habits.length };
   }, [habits, habitCompletedIds]);
 
-  // Narrative (latest entry) — TODO: replace with useNarrativeLog()
-  // For now we keep the MMKV read as a low-priority v1.1 target
+  // Narrative — cloud-backed via useNarrativeLog.
+  const { data: narrativeRows = [] } = useNarrativeLog(1);
   const latestNarrative = useMemo(() => {
-    const entries = getJSON<{ date: string; text: string }[]>("narrative_entries", []);
-    return entries.length > 0 ? entries[entries.length - 1] : null;
-  }, [appActive]);
+    const row = narrativeRows[0];
+    return row ? { date: row.date_key, text: row.text } : null;
+  }, [narrativeRows]);
 
   // Refresh — React Query handles its own refetching via invalidation.
   // No more legacy store.load() calls needed.
