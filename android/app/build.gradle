@@ -112,15 +112,40 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        // Release signing config. Credentials are read from gradle properties
+        // or environment variables — they never land in the repo. Set these in
+        // ~/.gradle/gradle.properties locally or in CI secrets:
+        //   TITAN_KEYSTORE_PASSWORD
+        //   TITAN_KEY_ALIAS           (defaults to "titan")
+        //   TITAN_KEY_PASSWORD        (defaults to TITAN_KEYSTORE_PASSWORD)
+        // The keystore file lives at mobile/titan-release.jks (one level up
+        // from mobile/android/).
+        release {
+            def releaseKeystore = file("${rootDir}/../titan-release.jks")
+            if (releaseKeystore.exists()) {
+                storeFile releaseKeystore
+                def storePw = findProperty('TITAN_KEYSTORE_PASSWORD') ?: System.getenv('TITAN_KEYSTORE_PASSWORD') ?: ''
+                def alias   = findProperty('TITAN_KEY_ALIAS') ?: System.getenv('TITAN_KEY_ALIAS') ?: 'titan'
+                def keyPw   = findProperty('TITAN_KEY_PASSWORD') ?: System.getenv('TITAN_KEY_PASSWORD') ?: storePw
+                storePassword storePw
+                keyAlias alias
+                keyPassword keyPw
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Use release signing only when the keystore exists AND a password
+            // was supplied. Otherwise fall back to debug so local release
+            // builds still succeed (useful for `expo run:android --variant release`).
+            def releaseReady = signingConfigs.release.storeFile != null && signingConfigs.release.storePassword
+            signingConfig releaseReady ? signingConfigs.release : signingConfigs.debug
+            if (!releaseReady) {
+                logger.warn("Titan: release build is using the DEBUG keystore — set TITAN_KEYSTORE_PASSWORD to enable production signing")
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
