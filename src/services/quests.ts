@@ -7,6 +7,7 @@ import {
 import type { Tables } from "../types/supabase";
 import type { Quest as QuestUI } from "../types/quest-ui";
 import type { Json } from "../types/supabase";
+import { getTodayKey } from "../lib/date";
 
 // ─── Re-exported Types ─────────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ export async function listActiveQuests(): Promise<Quest[]> {
 export async function insertWeeklyQuests(quests: QuestUI[]): Promise<void> {
   if (quests.length === 0) return;
   const userId = await requireUserId();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayKey();
   const now = new Date().toISOString();
 
   const rows: Quest[] = quests.map((q) => ({

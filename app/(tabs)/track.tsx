@@ -441,7 +441,7 @@ type JournalView = "list" | "write";
 function JournalTab({ dateKey, refreshControl }: { dateKey: string; refreshControl: React.ReactElement<RefreshControlProps> }) {
   // Phase 3.5e: cloud-backed journal. All reads/writes go through
   // React Query hooks — journal store is no longer imported.
-  const { data: recentEntries = [] } = useJournalEntries(90);
+  const { data: recentEntries = [] } = useJournalEntries();
   const { data: todayEntryCloud } = useJournalEntry(dateKey);
   const upsertMutation = useUpsertJournalEntry();
   const deleteMutation = useDeleteJournalEntry();

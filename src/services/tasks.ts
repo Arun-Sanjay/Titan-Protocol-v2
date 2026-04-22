@@ -6,6 +6,7 @@ import {
   sqliteUpsert,
 } from "../db/sqlite/service-helpers";
 import type { Tables, Enums } from "../types/supabase";
+import { toLocalDateKey } from "../lib/date";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ export async function listCompletionsByEngine(
 export async function listRecentCompletions(days: number): Promise<Completion[]> {
   const since = new Date();
   since.setDate(since.getDate() - days);
-  const sinceKey = since.toISOString().slice(0, 10);
+  const sinceKey = toLocalDateKey(since);
   return sqliteList<Completion>("completions", {
     where: "date_key >= ?",
     params: [sinceKey],

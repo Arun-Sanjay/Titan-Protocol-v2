@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Platform } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -116,11 +116,15 @@ export function SkillNode({
               backgroundColor: engineColor + "4D",
               borderColor: engineColor,
               borderWidth: 2,
-              shadowColor: engineColor,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.3,
-              shadowRadius: 6,
-              elevation: 4,
+              ...Platform.select({
+                ios: {
+                  shadowColor: engineColor,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 6,
+                },
+                default: {},
+              }),
             },
           ]}
         >

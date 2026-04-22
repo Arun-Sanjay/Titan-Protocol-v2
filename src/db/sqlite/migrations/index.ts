@@ -1,4 +1,5 @@
 import { SQL as SQL_001 } from "./001_initial";
+import { SQL as SQL_002 } from "./002_drop_legacy_sync_tables";
 
 export interface Migration {
   id: string;
@@ -11,4 +12,5 @@ export interface Migration {
 // migration, once shipped, must never be edited — add a new one instead.
 export const migrations: Migration[] = [
   { id: "001_initial", sql: SQL_001 },
+  { id: "002_drop_legacy_sync_tables", sql: SQL_002 },
 ];

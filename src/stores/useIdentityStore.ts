@@ -3,6 +3,7 @@ import { upsertProfile } from "../services/profile";
 import { queryClient } from "../lib/query-client";
 import { profileQueryKey } from "../hooks/queries/useProfile";
 import { logError } from "../lib/error-log";
+import { getTodayKey } from "../lib/date";
 
 export type Archetype =
   | "titan"
@@ -89,8 +90,7 @@ export const useIdentityStore = create<IdentityState>((set, get) => ({
   },
 
   changeIdentity: (archetype) => {
-    const today = new Date().toISOString().slice(0, 10);
-    set({ archetype, selectedDate: today, totalVotes: 0 });
+    set({ archetype, selectedDate: getTodayKey(), totalVotes: 0 });
     persistArchetype(archetype);
   },
 }));

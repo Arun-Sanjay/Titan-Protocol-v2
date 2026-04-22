@@ -8,6 +8,7 @@ import {
 } from "../../services/protocol";
 import type { Json } from "../../types/supabase";
 import { runAchievementCheck } from "../../lib/achievement-integration";
+import { getTodayKey } from "../../lib/date";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ export const protocolKeys = {
 
 export function useProtocolSession(dateKey?: string) {
   const userId = useAuthStore((s) => s.user?.id);
-  const key = dateKey ?? new Date().toISOString().slice(0, 10);
+  const key = dateKey ?? getTodayKey();
 
   return useQuery({
     queryKey: protocolKeys.session(key),

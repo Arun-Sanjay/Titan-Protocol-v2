@@ -63,7 +63,7 @@ import {
   MUSCLE_GROUPS,
   EQUIPMENT_LIST,
 } from "../../src/lib/gym-helpers";
-import { getTodayKey } from "../../src/lib/date";
+import { getTodayKey, toLocalDateKey } from "../../src/lib/date";
 // Phase 3.5d: XP writes go through the cloud mutation.
 import { useAwardXP } from "../../src/hooks/queries/useProfile";
 import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
@@ -1041,7 +1041,7 @@ export default function WorkoutsScreen() {
         count++;
         const d = new Date(expected + "T12:00:00");
         d.setDate(d.getDate() - 1);
-        expected = d.toISOString().slice(0, 10);
+        expected = toLocalDateKey(d);
       } else if (dk < expected) {
         break;
       }

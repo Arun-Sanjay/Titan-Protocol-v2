@@ -4,30 +4,33 @@
  *
  *   jest.mock("../../db/sqlite/client", () => require("../setup/sqlite-fake"));
  *
- * The initial migration (001_initial.sql) is applied once so all 42
- * tables + pending_mutations + sync_meta are present exactly as in
- * production. WAL-mode pragmas are omitted — in-memory databases don't
- * support WAL and we don't need write concurrency in tests.
+ * Every migration in `migrations/index.ts` is applied in order, matching
+ * production exactly (42 user tables after 001, legacy `pending_mutations`
+ * / `sync_meta` dropped by 002). WAL-mode pragmas are omitted — in-memory
+ * databases don't support WAL and we don't need write concurrency in tests.
  */
 
 import Database from "better-sqlite3";
-import { SQL as SQL_001 } from "../../db/sqlite/migrations/001_initial";
+import { migrations } from "../../db/sqlite/migrations";
 
 let db: Database.Database = openFresh();
 
 function openFresh(): Database.Database {
   const d = new Database(":memory:");
   d.pragma("foreign_keys = OFF");
-  d.exec(SQL_001);
   d.exec(
     `CREATE TABLE IF NOT EXISTS schema_migrations (
        id TEXT PRIMARY KEY,
        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
      )`,
   );
-  d.prepare(
+  const mark = d.prepare(
     `INSERT OR IGNORE INTO schema_migrations (id) VALUES (?)`,
-  ).run("001_initial");
+  );
+  for (const m of migrations) {
+    d.exec(m.sql);
+    mark.run(m.id);
+  }
   return d;
 }
 

@@ -20,6 +20,7 @@ import { queryClient } from "./query-client";
 import { questsKeys } from "../hooks/queries/useQuests";
 import { progressionKeys } from "../hooks/queries/useProgression";
 import { logError } from "./error-log";
+import { getTodayKey } from "./date";
 
 // ─── MMKV Safe Read ─────────────────────────────────────────────────────────
 
@@ -52,7 +53,7 @@ export function safeGetJSON<T>(key: string, fallback: T): T {
  * from the useProtocolSession(today) React Query cache.
  */
 export function handleAppOpenAfterGap(): void {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayKey();
   const dayOfWeek = new Date(today + "T00:00:00").getDay();
 
   // Check if quests need generation (Monday = 1)

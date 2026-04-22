@@ -17,13 +17,7 @@ export const journalKeys = {
 
 // ─── Hooks ──────────────────────────────────────────────────────────────────
 
-/**
- * Screens call useJournalEntries() or useJournalEntries(90).
- * The `days` param is accepted but the underlying service already
- * returns all entries (filtered by RLS); we keep the param for
- * forward-compatibility and simply pass through.
- */
-export function useJournalEntries(_days?: number) {
+export function useJournalEntries() {
   const userId = useAuthStore((s) => s.user?.id);
   return useQuery({
     queryKey: journalKeys.all,

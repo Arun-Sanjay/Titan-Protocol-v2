@@ -7,6 +7,7 @@ import {
   sqliteUpsert,
 } from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
+import { toLocalDateKey } from "../lib/date";
 
 export type Habit = Tables<"habits">;
 export type HabitLog = Tables<"habit_logs">;
@@ -153,5 +154,5 @@ async function recalculateChain(
 function subtractDays(dateKey: string, days: number): string {
   const d = new Date(dateKey + "T12:00:00");
   d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return toLocalDateKey(d);
 }

@@ -7,6 +7,7 @@ import { Panel } from "../../ui/Panel";
 import type { Exercise, ExerciseOption } from "../../../types/mind-training-ui";
 import type { SRSCard } from "../../../lib/srs";
 import { calculateNextReview, qualityFromResult } from "../../../lib/srs";
+import { getTodayKey } from "../../../lib/date";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -40,7 +41,7 @@ export function RecallChallenge({ exercise, card, onComplete }: Props) {
       easeFactor: result.easeFactor,
       repetitions: result.repetitions,
       nextReview: result.nextReview,
-      lastReview: new Date().toISOString().slice(0, 10),
+      lastReview: getTodayKey(),
     };
 
     onComplete(selectedId, isCorrect, quality, updatedCard);
