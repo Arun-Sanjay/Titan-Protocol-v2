@@ -47,31 +47,39 @@ export type AppState = {
   protocolCompleteToday: boolean;
   protocolCompletionHour?: number;
   dayNumber: number;
+  /**
+   * Lifetime count of non-deleted rows in `completions`. Used by
+   * `tasks_completed_total`-type conditions (e.g. First Blood). Must be
+   * read from SQLite at `gatherAppState` time — we can't derive it from
+   * the protocol streak (different concept entirely: protocol = daily
+   * ritual, completions = per-task taps).
+   */
+  totalCompletionsCount: number;
 };
 
+export type PendingUnlock = { id: string; def: AchievementDef };
+
 /**
- * Check all achievements against current state.
- * Returns array of newly unlocked achievement IDs.
+ * Evaluate every achievement condition against `appState` and return the
+ * defs for any that newly qualify. **Pure** — does NOT push to the UI
+ * queue and does NOT write to SQLite. The caller (`runAchievementCheck`)
+ * is responsible for persisting the unlock first and THEN pushing to the
+ * celebration queue, so a failed write can't leave a ghost toast behind.
  *
  * `alreadyUnlocked` is the authoritative set of IDs the user already
- * holds — the caller (runAchievementCheck) reads it from SQLite so the
- * check has the real truth, not whatever happens to be in the React
- * Query cache at the moment. Before this parameter existed, we pulled
- * from queryClient, which was often empty — every tap then thought the
- * first-task achievement was new and fired the celebration toast on
- * every tap.
+ * holds — reads from SQLite so the check has the real truth, not
+ * whatever happens to be in the React Query cache at the moment.
  *
  * Multiple passes so meta-achievements (those that depend on another
- * achievement being unlocked) fire in the same `checkAllAchievements`
- * call. Each pass that adds new unlocks triggers another pass; loop
- * count bounded to prevent infinite cycles.
+ * achievement being unlocked) fire in the same call. Bounded loop
+ * count prevents infinite cycles.
  */
 export function checkAllAchievements(
   appState: AppState,
   alreadyUnlocked: Set<string>,
-): string[] {
+): PendingUnlock[] {
   const liveUnlocked = new Set(alreadyUnlocked);
-  const pending: { id: string; def: AchievementDef }[] = [];
+  const pending: PendingUnlock[] = [];
 
   let changed = true;
   let safety = 8;
@@ -95,14 +103,7 @@ export function checkAllAchievements(
     }
   }
 
-  // Push each unlock onto the UI celebration queue. Server-side
-  // persistence is handled by the caller (achievement-integration).
-  const store = useAchievementStore.getState();
-  for (const { def } of pending) {
-    store.pushCelebration(def);
-  }
-
-  return pending.map((p) => p.id);
+  return pending;
 }
 
 // ─── Condition evaluator ────────────────────────────────────────────────────
@@ -126,7 +127,7 @@ function evaluateCondition(
 
   switch (def.conditionType) {
     case "tasks_completed_total":
-      return checkTasksCompleted(val);
+      return checkTasksCompleted(state, val);
 
     case "protocol_completed":
       return checkProtocolCompleted(val);
@@ -230,11 +231,13 @@ function evaluateCondition(
 
 // ─── Individual checkers ────────────────────────────────────────────────────
 
-function checkTasksCompleted(target: number): boolean {
-  const streak = cachedStreakCurrent();
-  const today = getTodayKey();
-  if (target === 1) return cachedTodayCompleted(today) || streak >= 1;
-  return streak >= target;
+function checkTasksCompleted(state: AppState, target: number): boolean {
+  // `tasks_completed_total` means "lifetime count of completion rows" —
+  // First Blood = 1, and larger thresholds ladder up from there. Reading
+  // from SQLite is the only truthful source; the protocol streak is a
+  // different concept (days a protocol was done) and was the source of
+  // the duplicate-toast-every-launch bug.
+  return state.totalCompletionsCount >= target;
 }
 
 function checkProtocolCompleted(target: number): boolean {

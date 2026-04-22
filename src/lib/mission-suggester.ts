@@ -147,16 +147,40 @@ export function getSuggestedMissions(
 
 /**
  * Get missions for the weakest engine (Sustain phase adaptive behavior).
+ *
+ * Returns [] when there's no clear weak engine — equal scores across
+ * staffed engines, or weakest is already strong enough, etc. (See
+ * `selectWeakEngine` in src/lib/engine-scores.ts for the exact rules.)
+ * Callers should fall back to a generic mission set when this is empty.
  */
 export function getWeakestEngineMissions(
   engineScores: Record<string, number>,
   phase: Phase,
+  taskCounts?: Record<string, number>,
 ): SuggestedMission[] {
-  const engines = Object.entries(engineScores);
-  if (engines.length === 0) return [];
+  // Lazy import to keep this module tree-shakable; the selectors don't
+  // have runtime side-effects but we want the dependency explicit here.
+  const {
+    ENGINES,
+    buildEngineSnapshot,
+    selectWeakEngine,
+  } = require("./engine-scores") as typeof import("./engine-scores");
 
-  engines.sort((a, b) => a[1] - b[1]);
-  const weakest = engines[0][0];
+  const scores: Record<string, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
+  const counts: Record<string, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
+  for (const e of ENGINES) {
+    scores[e] = engineScores[e] ?? 0;
+    // When the caller doesn't know task counts, assume every engine has at
+    // least one — this preserves legacy callers while still honoring the
+    // tie / gap / ceiling guards.
+    counts[e] = taskCounts?.[e] ?? (engineScores[e] !== undefined ? 1 : 0);
+  }
+  const snapshot = buildEngineSnapshot({
+    scores: scores as Record<import("./engine-scores").EngineKey, number>,
+    taskCounts: counts as Record<import("./engine-scores").EngineKey, number>,
+  });
+  const weakest = selectWeakEngine(snapshot);
+  if (!weakest) return [];
 
   const phaseMissions = PHASE_MISSIONS[phase] ?? PHASE_MISSIONS.sustain;
   return phaseMissions[weakest] ?? [];

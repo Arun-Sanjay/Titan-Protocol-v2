@@ -11,6 +11,7 @@ import {
   type HabitLog,
 } from "../../services/habits";
 import { runAchievementCheck } from "../../lib/achievement-integration";
+import { evaluateAllTrees } from "../../lib/skill-tree-evaluator";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
 
@@ -153,6 +154,9 @@ export function useToggleHabit() {
       qc.invalidateQueries({ queryKey: habitsKeys.all });
       // Fire-and-forget achievement check after habit toggle settles
       runAchievementCheck(qc).catch(() => {});
+      // Re-evaluate skill tree — habit checks feed into habit_streak and
+      // habit_completion_rate requirements.
+      evaluateAllTrees().catch(() => {});
     },
   });
 }

@@ -13,11 +13,18 @@ import { colors, spacing, fonts, radius } from "../../theme";
 import { getDashboardMessage } from "../../data/protocol-messages";
 import { useStoryStore } from "../../stores/useStoryStore";
 import { useProfile } from "../../hooks/queries/useProfile";
-import { useEngineStore, ENGINES } from "../../stores/useEngineStore";
+import { useAllTasks, useAllCompletionsForDate } from "../../hooks/queries/useTasks";
+import { computeEngineScore } from "../../services/tasks";
 import { getDayNumber } from "../../data/chapters";
 import { getJSON } from "../../db/storage";
 import { getTodayKey } from "../../lib/date";
 import type { EngineKey } from "../../db/schema";
+import {
+  ENGINES,
+  buildEngineSnapshot,
+  selectWeakEngine,
+  selectStrongEngine,
+} from "../../lib/engine-scores";
 
 const ENGINE_LABELS: Record<EngineKey, string> = {
   body: "Body", mind: "Mind", money: "Money", charisma: "Charisma",
@@ -31,55 +38,48 @@ export function SystemVoice({ delay = 0 }: Props) {
   const userName = useStoryStore((s) => s.userName) || "Recruit";
   const storyAct = useStoryStore((s) => s.currentAct);
   const streak = useProfile().data?.streak_current ?? 0;
-  const scores = useEngineStore((s) => s.scores);
 
   const firstActiveDate = getJSON<string | null>("first_active_date", null);
   const dayNumber = getDayNumber(firstActiveDate);
   const today = getTodayKey();
 
-  // Calculate engine scores for today
-  const engineScores = useMemo(() => {
-    const result: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
-    for (const e of ENGINES) {
-      result[e] = scores[`${e}:${today}`] ?? 0;
+  // SQLite-backed task + completion state. `useEngineStore` was the legacy
+  // MMKV scoreboard; it's stale for anyone post-local-first migration, so
+  // we compute scores from the authoritative SQLite store instead.
+  const { data: tasks = [] } = useAllTasks();
+  const { data: completions = [] } = useAllCompletionsForDate(today);
+
+  const snapshot = useMemo(() => {
+    const scores: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
+    const taskCounts: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
+    for (const engine of ENGINES) {
+      const engineTasks = tasks.filter((t) => t.engine === engine && t.is_active);
+      taskCounts[engine] = engineTasks.length;
+      scores[engine] = computeEngineScore(tasks, completions, engine);
     }
-    return result;
-  }, [scores, today]);
+    return buildEngineSnapshot({ scores, taskCounts });
+  }, [tasks, completions]);
 
   const titanScore = useMemo(() => {
-    const vals = Object.values(engineScores);
-    if (vals.every((v) => v === 0)) return 0;
-    return Math.round(vals.reduce((a, b) => a + b, 0) / 4);
-  }, [engineScores]);
+    const staffed = ENGINES.filter((e) => snapshot[e].taskCount > 0);
+    if (staffed.length === 0) return 0;
+    const sum = staffed.reduce((acc, e) => acc + snapshot[e].score, 0);
+    return Math.round(sum / staffed.length);
+  }, [snapshot]);
 
-  // Find weak and strong engines
-  const weakEngine = useMemo(() => {
-    let w: EngineKey = "body";
-    let low = Infinity;
-    for (const e of ENGINES) {
-      if (engineScores[e] < low) { low = engineScores[e]; w = e; }
-    }
-    return w;
-  }, [engineScores]);
+  // Null when there's no meaningful weak/strong — the template gracefully
+  // falls back to "weakest"/"strongest" placeholders when we pass "".
+  const weakEngine = useMemo(() => selectWeakEngine(snapshot), [snapshot]);
+  const strongEngine = useMemo(() => selectStrongEngine(snapshot), [snapshot]);
 
-  const strongEngine = useMemo(() => {
-    let s: EngineKey = "body";
-    let high = -1;
-    for (const e of ENGINES) {
-      if (engineScores[e] > high) { high = engineScores[e]; s = e; }
-    }
-    return s;
-  }, [engineScores]);
-
-  // Determine performance level
   const performance = titanScore >= 70 ? "high" : titanScore >= 40 ? "moderate" : "low";
 
-  // Get message
   const message = useMemo(
     () => getDashboardMessage(
       userName, dayNumber, String(storyAct), performance,
       streak, titanScore,
-      ENGINE_LABELS[weakEngine], ENGINE_LABELS[strongEngine],
+      weakEngine ? ENGINE_LABELS[weakEngine] : "",
+      strongEngine ? ENGINE_LABELS[strongEngine] : "",
     ),
     [userName, dayNumber, storyAct, performance, streak, titanScore, weakEngine, strongEngine],
   );

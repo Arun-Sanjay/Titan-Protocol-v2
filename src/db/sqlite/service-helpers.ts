@@ -27,7 +27,13 @@
 import { randomUUID } from "expo-crypto";
 import { all, get, run, transaction } from "./client";
 import { rowFromSqlite, rowToSqlite, stripSyncColumns } from "./coerce";
+import { COLUMN_TYPES } from "./column-types";
 import { primaryKeyFor } from "../../sync/tables";
+
+function tableHasColumn(table: string, column: string): boolean {
+  const cols = COLUMN_TYPES[table];
+  return Boolean(cols && column in cols);
+}
 
 export interface ListOptions {
   /** Additional WHERE clause (joined with the `_deleted = 0` guard via AND). */
@@ -93,8 +99,15 @@ export async function sqliteCount(
 
 /**
  * Write a full row to SQLite. `updated_at` is refreshed to "now" unless
- * already present; `created_at` defaults to "now" when absent. Returns
- * the final row shape (the one that was persisted).
+ * already present; `created_at` defaults to "now" when absent **and**
+ * the table actually has that column (many of the user-scoped, one-row
+ * tables don't — `skill_tree_progress`, `focus_settings`,
+ * `nutrition_profile`, `progression`, `titan_mode_state`,
+ * `field_op_cooldown`, `srs_cards`, `user_titles`). Auto-adding a
+ * `created_at` to a row destined for one of those tables produces a
+ * "no such column" SQLite error at INSERT time — the exact silent
+ * failure that made `setSkillNodeReady` (and therefore every skill-tree
+ * unlock) a no-op until this fix.
  */
 export async function sqliteUpsert<T extends Record<string, unknown>>(
   table: string,
@@ -102,19 +115,23 @@ export async function sqliteUpsert<T extends Record<string, unknown>>(
 ): Promise<T> {
   const now = new Date().toISOString();
   const finalRow: Record<string, unknown> = { ...row };
-  if (finalRow.created_at == null) finalRow.created_at = now;
+  if (finalRow.created_at == null && tableHasColumn(table, "created_at")) {
+    finalRow.created_at = now;
+  }
 
   const sqliteReady = rowToSqlite(table, {
     ...finalRow,
     _dirty: 0,
     _deleted: 0,
   });
-  if ("updated_at" in sqliteReady) {
+  if (tableHasColumn(table, "updated_at")) {
     finalRow.updated_at = now;
     sqliteReady.updated_at = now;
   }
 
-  const cols = Object.keys(sqliteReady);
+  const cols = Object.keys(sqliteReady).filter(
+    (c) => tableHasColumn(table, c) || c === "_dirty" || c === "_deleted",
+  );
   const placeholders = cols.map(() => "?").join(", ");
 
   await run(
@@ -138,19 +155,23 @@ export async function sqliteUpsertMany<T extends Record<string, unknown>>(
   await transaction(async () => {
     for (const row of rows) {
       const finalRow: Record<string, unknown> = { ...row };
-      if (finalRow.created_at == null) finalRow.created_at = now;
+      if (finalRow.created_at == null && tableHasColumn(table, "created_at")) {
+        finalRow.created_at = now;
+      }
 
       const sqliteReady = rowToSqlite(table, {
         ...finalRow,
         _dirty: 0,
         _deleted: 0,
       });
-      if ("updated_at" in sqliteReady) {
+      if (tableHasColumn(table, "updated_at")) {
         finalRow.updated_at = now;
         sqliteReady.updated_at = now;
       }
 
-      const cols = Object.keys(sqliteReady);
+      const cols = Object.keys(sqliteReady).filter(
+        (c) => tableHasColumn(table, c) || c === "_dirty" || c === "_deleted",
+      );
       const placeholders = cols.map(() => "?").join(", ");
       await run(
         `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders})`,

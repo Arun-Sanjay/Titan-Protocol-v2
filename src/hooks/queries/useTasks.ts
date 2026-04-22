@@ -15,6 +15,7 @@ import {
   type TaskKind,
 } from "../../services/tasks";
 import { runAchievementCheck } from "../../lib/achievement-integration";
+import { evaluateAllTrees } from "../../lib/skill-tree-evaluator";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
 
@@ -122,6 +123,10 @@ export function useToggleCompletion() {
       });
       // Fire-and-forget achievement check after task completion settles
       runAchievementCheck(qc).catch(() => {});
+      // Fire-and-forget skill-tree re-evaluation so level-1 "task_count"
+      // nodes flip to "ready" as the user plays, not only after evening
+      // protocol.
+      evaluateAllTrees().catch(() => {});
     },
   });
 }

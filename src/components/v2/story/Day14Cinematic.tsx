@@ -6,9 +6,16 @@ import { colors, spacing, fonts, radius } from "../../../theme";
 import { useStoryStore } from "../../../stores/useStoryStore";
 import { useProfile } from "../../../hooks/queries/useProfile";
 import { useEngineStore, selectTotalScore, ENGINES } from "../../../stores/useEngineStore";
+import { useAllTasks } from "../../../hooks/queries/useTasks";
 import { ProtocolTerminal, ProtocolNarration, type TerminalLine, type NarrationLine } from "./ProtocolTerminal";
 import { getTodayKey, addDays } from "../../../lib/date";
 import { playVoiceLineAsync, stopCurrentAudio } from "../../../lib/protocol-audio";
+import {
+  ENGINES as ENGINE_KEYS,
+  buildEngineSnapshot,
+  selectWeakEngine,
+  type EngineKey,
+} from "../../../lib/engine-scores";
 
 type Props = { onComplete: () => void };
 type Phase = "stats" | "speech";
@@ -19,12 +26,15 @@ export function Day14Cinematic({ onComplete }: Props) {
   const scores = useEngineStore((s) => s.scores);
   const loadDateRange = useEngineStore((s) => s.loadDateRange);
   const { data: profile } = useProfile();
+  const { data: tasks = [] } = useAllTasks();
   const streakCurrent = profile?.streak_current ?? 0;
   const xp = profile?.xp ?? 0;
 
   const [phase, setPhase] = useState<Phase>("stats");
 
-  // Compute average score over 14 days
+  // Compute average score over 14 days and surface a weak engine ONLY if
+  // it's genuinely weak (staffed + clear gap + below the floor). See
+  // src/lib/engine-scores.ts for the full criteria.
   const { averageScore, missionsCompleted, weakEngine } = useMemo(() => {
     const today = getTodayKey();
     const start = addDays(today, -13);
@@ -33,8 +43,12 @@ export function Day14Cinematic({ onComplete }: Props) {
     let total = 0;
     let count = 0;
     let missions = 0;
-    const engineTotals: Record<string, { sum: number; cnt: number }> = {};
-    for (const e of ENGINES) engineTotals[e] = { sum: 0, cnt: 0 };
+    const engineTotals: Record<EngineKey, { sum: number; cnt: number }> = {
+      body: { sum: 0, cnt: 0 },
+      mind: { sum: 0, cnt: 0 },
+      money: { sum: 0, cnt: 0 },
+      charisma: { sum: 0, cnt: 0 },
+    };
 
     for (let i = -13; i <= 0; i++) {
       const dk = addDays(today, i);
@@ -45,27 +59,30 @@ export function Day14Cinematic({ onComplete }: Props) {
 
       for (const e of ENGINES) {
         const eScore = scores[`${e}:${dk}`] ?? 0;
-        engineTotals[e].sum += eScore;
-        engineTotals[e].cnt++;
+        engineTotals[e as EngineKey].sum += eScore;
+        engineTotals[e as EngineKey].cnt++;
       }
     }
 
-    let weakest = "body";
-    let weakestAvg = 999;
-    for (const e of ENGINES) {
-      const avg = engineTotals[e].cnt > 0 ? engineTotals[e].sum / engineTotals[e].cnt : 0;
-      if (avg < weakestAvg) {
-        weakestAvg = avg;
-        weakest = e;
-      }
+    // Task counts from the authoritative SQLite store — an engine with no
+    // tasks is "unstaffed", not "weak", so it shouldn't be surfaced.
+    const taskCounts: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
+    const engineAvgs: Record<EngineKey, number> = { body: 0, mind: 0, money: 0, charisma: 0 };
+    for (const e of ENGINE_KEYS) {
+      taskCounts[e] = tasks.filter((t) => t.engine === e && t.is_active).length;
+      engineAvgs[e] =
+        engineTotals[e].cnt > 0 ? engineTotals[e].sum / engineTotals[e].cnt : 0;
     }
+
+    const snapshot = buildEngineSnapshot({ scores: engineAvgs, taskCounts });
+    const weakest = selectWeakEngine(snapshot);
 
     return {
       averageScore: count > 0 ? Math.round(total / count) : 0,
       missionsCompleted: missions,
-      weakEngine: weakest.toUpperCase(),
+      weakEngine: weakest ? weakest.toUpperCase() : null,
     };
-  }, [scores, loadDateRange]);
+  }, [scores, loadDateRange, tasks]);
 
   // Phase 1: Terminal stats
   const statsLines: TerminalLine[] = useMemo(
@@ -91,11 +108,19 @@ export function Day14Cinematic({ onComplete }: Props) {
       ];
     }
     if (averageScore >= 50) {
-      return [
+      const middleLines: NarrationLine[] = [
         { text: `Two weeks in, ${userName}.`, fontSize: 20, bold: true, delay: 1200 },
         { text: "You're surviving, but surviving isn't thriving.", delay: 800 },
-        { text: `I need more from your ${weakEngine} engine.`, delay: 1000 },
       ];
+      // Only call out a specific engine when one actually lags behind the
+      // others. Otherwise the callout is noise ("your BODY engine" when
+      // every engine is equal, etc.).
+      if (weakEngine) {
+        middleLines.push({ text: `I need more from your ${weakEngine} engine.`, delay: 1000 });
+      } else {
+        middleLines.push({ text: "I need more, across the board.", delay: 1000 });
+      }
+      return middleLines;
     }
     return [
       { text: `${userName}.`, fontSize: 20, bold: true, delay: 1200 },
