@@ -63,6 +63,7 @@ import {
 } from "../../lib/skill-tree-evaluator";
 import type { SkillProgress } from "../../services/skill-tree";
 import type { Enums } from "../../types/supabase";
+import { addDays, getTodayKey } from "../../lib/date";
 
 const TODAY = "2026-04-23";
 
@@ -490,11 +491,12 @@ describe("evaluateAllTrees — integration against SQLite", () => {
     // If anyone reintroduces the MMKV path, this test catches it: we
     // seed SQLite and check that streakDays returns the right number
     // without any MMKV keys existing.
+    // Seed relative to real today — streakDays walks back from
+    // getTodayKey(), so a hardcoded TODAY would drift out of range.
     const db = _testDb();
+    const today = getTodayKey();
     for (let i = 0; i < 3; i++) {
-      const d = new Date(TODAY + "T12:00:00");
-      d.setDate(d.getDate() - i);
-      const dk = d.toISOString().slice(0, 10);
+      const dk = addDays(today, -i);
       db.prepare(
         `INSERT INTO completions (id, user_id, task_id, engine, date_key, created_at) VALUES (?, 'u1', 't1', 'body', ?, ?)`,
       ).run(`c${i}`, dk, dk);
