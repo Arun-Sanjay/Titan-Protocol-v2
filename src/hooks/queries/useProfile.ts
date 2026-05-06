@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/useAuthStore";
-import { getProfile, upsertProfile, type Profile } from "../../services/profile";
+import {
+  getProfile,
+  upsertProfile,
+  awardXP,
+  updateStreak,
+  type Profile,
+} from "../../services/profile";
+import { setJSON } from "../../db/storage";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
 
@@ -49,39 +56,18 @@ export function useProfile() {
 /**
  * Award XP and detect level-up.
  *
- * Level formula: level = floor(xp / 500) + 1
- * Returns { leveledUp, fromLevel, toLevel, xp } so callers can
- * enqueue a rank-up event when leveledUp is true.
+ * Backed by `services/profile.awardXP` which performs the read-modify-
+ * write inside a SQLite transaction so concurrent awards never lose
+ * XP or miss a rank-up event.
  *
- * Optimistic: immediately updates profile cache with new XP/level.
+ * Optimistic cache update is best-effort only — the authoritative
+ * result comes from the service's transactional return value.
  */
 export function useAwardXP() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (
-      xpAmount: number,
-    ): Promise<{
-      leveledUp: boolean;
-      fromLevel: number;
-      toLevel: number;
-      xp: number;
-    }> => {
-      const profile = await getProfile();
-      const oldXP = profile?.xp ?? 0;
-      const oldLevel = profile?.level ?? 1;
-      const newXP = Math.max(0, oldXP + xpAmount);
-      const newLevel = Math.floor(newXP / 500) + 1;
-
-      await upsertProfile({ xp: newXP, level: newLevel });
-
-      return {
-        leveledUp: newLevel > oldLevel,
-        fromLevel: oldLevel,
-        toLevel: newLevel,
-        xp: newXP,
-      };
-    },
+    mutationFn: (xpAmount: number) => awardXP(xpAmount),
     onMutate: async (xpAmount) => {
       await qc.cancelQueries({ queryKey: profileQueryKey });
       const prev = qc.getQueryData<Profile>(profileQueryKey);
@@ -108,7 +94,7 @@ export function useAwardXP() {
 /**
  * Update streak based on the current date.
  *
- * Logic:
+ * Logic (in `services/profile.updateStreak`, atomic via transaction):
  *  - streak_last_date === dateKey → no change
  *  - streak_last_date === yesterday → increment
  *  - else → reset to 1
@@ -117,27 +103,37 @@ export function useUpdateStreak() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (dateKey: string): Promise<{ newStreak: number }> => {
-      const profile = await getProfile();
-      const lastDate = profile?.streak_last_date ?? null;
-      let newStreak = profile?.streak_current ?? 0;
+    mutationFn: (dateKey: string) => updateStreak(dateKey),
+    onSuccess: (result) => {
+      // Mirror the authoritative streak into the MMKV cache used by
+      // `app/_layout.tsx` for the transmission context. The layout
+      // sits above the QueryClientProvider so it can't read this value
+      // via the hook; without this mirror it would stay at 0 forever
+      // (CLAUDE.md §10 "Streak MMKV/SQLite duality" debt).
+      setJSON("protocol_streak", result.newStreak);
+      qc.invalidateQueries({ queryKey: profileQueryKey });
+    },
+  });
+}
 
-      if (lastDate !== dateKey) {
-        const last = new Date(lastDate ?? "1970-01-01");
-        const current = new Date(dateKey);
-        const diffDays = Math.round(
-          (current.getTime() - last.getTime()) / 86_400_000,
-        );
-        newStreak = diffDays === 1 ? newStreak + 1 : 1;
+/**
+ * Persist a Settings mode change to the cloud profile so the next launch
+ * (or a different device) reflects it. Without this hook the Settings
+ * screen only updated the local Zustand mirror; the next sign-in
+ * re-hydrated from the cloud and wiped the change.
+ */
+export function useUpdateProfileMode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (vars: {
+      mode: Profile["mode"];
+      focus_engines?: Profile["focus_engines"];
+    }) => {
+      const updates: Partial<Profile> = { mode: vars.mode };
+      if (vars.focus_engines !== undefined) {
+        updates.focus_engines = vars.focus_engines;
       }
-
-      const newBest = Math.max(newStreak, profile?.streak_best ?? 0);
-      await upsertProfile({
-        streak_current: newStreak,
-        streak_best: newBest,
-        streak_last_date: dateKey,
-      });
-      return { newStreak };
+      await upsertProfile(updates);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: profileQueryKey });

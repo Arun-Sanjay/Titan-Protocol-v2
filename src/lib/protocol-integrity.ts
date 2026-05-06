@@ -54,6 +54,18 @@ export type IntegrityState = {
 // ─── Storage Keys ────────────────────────────────────────────────────────────
 
 const INTEGRITY_KEY = "protocol_integrity";
+/**
+ * Engagement-based day counter. Advances by 1 only on the first
+ * `recordCompletion()` of a new local day, and is monotonic — a streak
+ * BREACH or RESET zeroes the streak but never the progress day. So a
+ * user who reaches Day 7 and disappears for a week comes back to Day 7,
+ * not Day 14 (calendar-based) and not Day 1 (streak-based).
+ *
+ * Read via `getProgressDay()` from `data/chapters.ts`, advanced via
+ * `recordCompletion()` below. The "Reset Progress" button in Settings
+ * is the only thing that walks it back.
+ */
+const PROGRESS_DAY_KEY = "progress_day";
 
 const DEFAULT_STATE: IntegrityState = {
   streak: 0,
@@ -64,6 +76,27 @@ const DEFAULT_STATE: IntegrityState = {
   recoveryDays: 0,
   missedDays: 0,
 };
+
+// ─── Progress Day ────────────────────────────────────────────────────────────
+
+/**
+ * Read the engagement-based day counter. Returns 1 on a fresh install.
+ * Stays put when the user is away — only `recordCompletion()` (called
+ * from task / protocol completion chokepoints) advances it, and only
+ * once per local day.
+ */
+export function getProgressDay(): number {
+  return Math.max(1, getJSON<number>(PROGRESS_DAY_KEY, 1));
+}
+
+/**
+ * Stamp the progress day directly. Used by the "Reset Progress" action
+ * to walk the counter back to 1, and by onboarding to seed it. Normal
+ * advancement happens inside `recordCompletion()`.
+ */
+export function setProgressDay(day: number): void {
+  setJSON(PROGRESS_DAY_KEY, Math.max(1, Math.floor(day)));
+}
 
 // ─── Level Calculation ───────────────────────────────────────────────────────
 
@@ -92,15 +125,37 @@ export function loadIntegrity(): IntegrityState {
 }
 
 /**
- * Called when user completes today's protocol.
+ * Called when the user has their first meaningful engagement of the
+ * day (first task tick, morning protocol save, evening protocol save).
  * Returns the updated integrity state.
+ *
+ * Idempotent same-day: if `lastCompletionDate === today`, this is a
+ * no-op. Cheap enough to call from every engagement chokepoint without
+ * worrying about over-counting.
+ *
+ * Bumps `progress_day` exactly once per new local day. The progress day
+ * is monotonic — a BREACH/RESET reduces the streak but does not touch
+ * progress, so the narrative stays put when the user disappears.
  */
 export function recordCompletion(): IntegrityState {
   const today = getTodayKey();
   const state = loadIntegrity();
 
-  // Already completed today
+  // Already completed today — leave both streak and progress untouched.
   if (state.lastCompletionDate === today) return state;
+
+  // First engagement of a new local day — advance the monotonic
+  // progress counter. Done OUTSIDE the streak/integrity branches below
+  // so progress advances even on a BREACH/RESET return (e.g. user comes
+  // back on calendar-day 14 after a 5-day gap on Day 7 → progress goes
+  // 7 → 8, streak goes to RESET).
+  //
+  // The first-ever call (lastCompletionDate === null) is a special case:
+  // onboarding has already seeded progress_day to 1, and we don't want
+  // the user's first task tick to bump them to Day 2 on the same day.
+  if (state.lastCompletionDate !== null) {
+    setProgressDay(getProgressDay() + 1);
+  }
 
   const yesterday = addDays(today, -1);
   const daysBefore = state.lastCompletionDate
@@ -217,4 +272,51 @@ export function checkIntegrityStatus(): IntegrityState & { warning?: string } {
     missedDays: daysMissed,
     warning: `PROTOCOL RESET: ${daysMissed} days missed. Streak will reset.`,
   };
+}
+
+// ─── Reset ───────────────────────────────────────────────────────────────────
+
+/**
+ * Wipe all narrative-progression state so the user can restart the
+ * journey from Day 1. Called from the Settings "Reset Progress" action.
+ *
+ * Scope is deliberately narrow — this clears day/streak/integrity/story
+ * flags only. Tasks, habits, journal, weight, sleep, etc. are kept; for
+ * a full wipe the user uses "Delete All Data & Sign Out".
+ */
+export function resetProgress(): void {
+  // Integrity + progress counter back to fresh-install defaults.
+  setJSON(INTEGRITY_KEY, DEFAULT_STATE);
+  setJSON(PROGRESS_DAY_KEY, 1);
+
+  // Story / cinematic playback flags. We can't enumerate every key
+  // template (Day cinematics, daily briefings, integrity-cinematic
+  // markers, boss-cinematic markers) without coupling this module to
+  // each producer, so we walk MMKV and prefix-match. These prefixes
+  // are stable parts of the app's storage contract.
+  const PREFIXES = [
+    "cinematic_day_",
+    "briefing_seen_",
+    "integrity_cinematic_",
+    "boss_cinematic_",
+    "comeback_shown_",
+  ];
+  const SINGLE_KEYS = [
+    "first_active_date",
+    "max_day_reached",
+    "protocol_streak",
+    "story_flags",
+    "story_current_act",
+  ];
+
+  // Lazy import so this module stays test-friendly (jest can mock
+  // db/storage cheaply, and we don't want a circular dep at top level).
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { storage } = require("../db/storage") as typeof import("../db/storage");
+  const keys = storage.getAllKeys();
+  for (const key of keys) {
+    if (PREFIXES.some((p) => key.startsWith(p)) || SINGLE_KEYS.includes(key)) {
+      storage.remove(key);
+    }
+  }
 }

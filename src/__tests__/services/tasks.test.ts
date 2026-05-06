@@ -9,7 +9,8 @@
 jest.mock("../../db/sqlite/client", () => require("../setup/sqlite-fake"));
 jest.mock("../../lib/supabase", () => ({
   supabase: {},
-  requireUserId: async () => "u1",
+  requireUserId: async () =>
+    (globalThis as { __testUserId?: string }).__testUserId ?? "u1",
 }));
 jest.mock("../../lib/error-log", () => ({ logError: jest.fn() }));
 
@@ -29,6 +30,7 @@ import {
   listTasksByEngine,
   listCompletionsForDate,
   toggleCompletion,
+  toggleCompletionAndAward,
   computeEngineScore,
 } from "../../services/tasks";
 
@@ -36,6 +38,7 @@ describe("tasks service", () => {
   beforeEach(() => {
     _resetTestDb();
     (globalThis as { __idCounter?: number }).__idCounter = 0;
+    (globalThis as { __testUserId?: string }).__testUserId = "u1";
   });
 
   describe("createTask", () => {
@@ -81,6 +84,24 @@ describe("tasks service", () => {
       const mind = await listTasksByEngine("mind");
       expect(mind).toHaveLength(2);
       expect(mind.map((t) => t.title)).toEqual(["mind-1", "mind-2"]);
+    });
+
+    test("scopes reads and deletes to the current user", async () => {
+      const firstUserTask = await createTask({ title: "u1 task", engine: "mind" });
+
+      (globalThis as { __testUserId?: string }).__testUserId = "u2";
+      const secondUserTask = await createTask({ title: "u2 task", engine: "body" });
+
+      expect((await listTasks()).map((t) => t.id)).toEqual([secondUserTask.id]);
+
+      await deleteTask(firstUserTask.id);
+      const protectedRow = _testDb()
+        .prepare("SELECT _deleted FROM tasks WHERE id = ?")
+        .get(firstUserTask.id) as { _deleted: number };
+      expect(protectedRow._deleted).toBe(0);
+
+      (globalThis as { __testUserId?: string }).__testUserId = "u1";
+      expect((await listTasks()).map((t) => t.id)).toEqual([firstUserTask.id]);
     });
   });
 
@@ -142,6 +163,129 @@ describe("tasks service", () => {
       });
       expect(await listCompletionsForDate("2026-04-18")).toHaveLength(1);
       expect(await listCompletionsForDate("2026-04-19")).toHaveLength(1);
+    });
+  });
+
+  describe("toggleCompletionAndAward — atomic toggle + XP", () => {
+    function readProfile(userId: string) {
+      return _testDb()
+        .prepare("SELECT xp, level FROM profiles WHERE id = ?")
+        .get(userId) as { xp: number; level: number } | undefined;
+    }
+
+    test("first toggle inserts the completion AND credits XP in one tx", async () => {
+      const t = await createTask({ title: "x", engine: "body" });
+      const res = await toggleCompletionAndAward({
+        taskId: t.id,
+        dateKey: "2026-04-23",
+        engine: "body",
+        xpAmount: 20,
+      });
+      expect(res.added).toBe(true);
+      expect(res.xp).toBe(20);
+      expect(readProfile("u1")?.xp).toBe(20);
+      expect(await listCompletionsForDate("2026-04-23")).toHaveLength(1);
+    });
+
+    test("second toggle removes the completion AND debits XP", async () => {
+      const t = await createTask({ title: "x", engine: "body" });
+      await toggleCompletionAndAward({
+        taskId: t.id,
+        dateKey: "2026-04-23",
+        engine: "body",
+        xpAmount: 20,
+      });
+      const res = await toggleCompletionAndAward({
+        taskId: t.id,
+        dateKey: "2026-04-23",
+        engine: "body",
+        xpAmount: 20,
+      });
+      expect(res.added).toBe(false);
+      expect(res.xp).toBe(0);
+      expect(readProfile("u1")?.xp).toBe(0);
+      expect(await listCompletionsForDate("2026-04-23")).toHaveLength(0);
+    });
+
+    test("XP cannot go below zero on un-toggle (clamps at 0)", async () => {
+      // Pre-existing 5 XP in profile (less than the un-toggle subtraction).
+      _testDb()
+        .prepare(
+          "INSERT INTO profiles (id, email, xp, level, focus_engines) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run("u1", null, 5, 1, "[]");
+
+      const t = await createTask({ title: "x", engine: "body" });
+      // Insert a completion directly so the next call is a "remove + debit".
+      _testDb()
+        .prepare(
+          "INSERT INTO completions (id, user_id, task_id, engine, date_key) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run("c1", "u1", t.id, "body", "2026-04-23");
+
+      const res = await toggleCompletionAndAward({
+        taskId: t.id,
+        dateKey: "2026-04-23",
+        engine: "body",
+        xpAmount: 20,
+      });
+      expect(res.added).toBe(false);
+      expect(res.xp).toBe(0); // Math.max(0, 5 - 20)
+      expect(readProfile("u1")?.xp).toBe(0);
+    });
+
+    test("level up is reported when XP crosses a 500-XP threshold", async () => {
+      _testDb()
+        .prepare(
+          "INSERT INTO profiles (id, email, xp, level, focus_engines) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run("u1", null, 490, 1, "[]");
+      const t = await createTask({ title: "x", engine: "body" });
+      const res = await toggleCompletionAndAward({
+        taskId: t.id,
+        dateKey: "2026-04-23",
+        engine: "body",
+        xpAmount: 20,
+      });
+      expect(res.leveledUp).toBe(true);
+      expect(res.fromLevel).toBe(1);
+      expect(res.toLevel).toBe(2);
+      expect(readProfile("u1")?.level).toBe(2);
+    });
+
+    test("toggle on/off/on leaves the unique-index intact (no orphan row)", async () => {
+      const t = await createTask({ title: "x", engine: "body" });
+      // Three sequential calls — the first adds, second removes, third
+      // adds again. The third would fail the
+      // `uq_completions_task_date WHERE _deleted=0` index if the second
+      // had left a stale row behind. (The Promise.all-style race
+      // against expo-sqlite's serialised writer is real in production
+      // but can't be modelled by the in-memory better-sqlite3 fake —
+      // single-threaded, no internal queueing — so we pin the
+      // sequential consistency that the production atomicity rests on.)
+      const a = await toggleCompletionAndAward({
+        taskId: t.id,
+        dateKey: "2026-04-23",
+        engine: "body",
+        xpAmount: 20,
+      });
+      const b = await toggleCompletionAndAward({
+        taskId: t.id,
+        dateKey: "2026-04-23",
+        engine: "body",
+        xpAmount: 20,
+      });
+      const c = await toggleCompletionAndAward({
+        taskId: t.id,
+        dateKey: "2026-04-23",
+        engine: "body",
+        xpAmount: 20,
+      });
+      expect(a.added).toBe(true);
+      expect(b.added).toBe(false);
+      expect(c.added).toBe(true);
+      expect(await listCompletionsForDate("2026-04-23")).toHaveLength(1);
+      expect(readProfile("u1")?.xp).toBe(20);
     });
   });
 

@@ -29,10 +29,27 @@ import { all, get, run, transaction } from "./client";
 import { rowFromSqlite, rowToSqlite, stripSyncColumns } from "./coerce";
 import { COLUMN_TYPES } from "./column-types";
 import { primaryKeyFor } from "../../sync/tables";
+import { requireUserId } from "../../lib/supabase";
 
 function tableHasColumn(table: string, column: string): boolean {
   const cols = COLUMN_TYPES[table];
   return Boolean(cols && column in cols);
+}
+
+function ownerColumnFor(table: string): string | null {
+  if (table === "profiles") return "id";
+  return tableHasColumn(table, "user_id") ? "user_id" : null;
+}
+
+async function ownerScopeFor(table: string): Promise<{
+  clause: string | null;
+  params: unknown[];
+}> {
+  const ownerColumn = ownerColumnFor(table);
+  if (!ownerColumn) return { clause: null, params: [] };
+
+  const userId = await requireUserId();
+  return { clause: `${ownerColumn} = ?`, params: [userId] };
 }
 
 export interface ListOptions {
@@ -51,12 +68,19 @@ export async function sqliteList<T>(
   options: ListOptions = {},
 ): Promise<T[]> {
   const clauses: string[] = ["_deleted = 0"];
+  const params: unknown[] = [];
+  const ownerScope = await ownerScopeFor(table);
+  if (ownerScope.clause) {
+    clauses.push(ownerScope.clause);
+    params.push(...ownerScope.params);
+  }
   if (options.where) clauses.push(`(${options.where})`);
+  params.push(...(options.params ?? []));
   const sql =
     `SELECT * FROM ${table} WHERE ${clauses.join(" AND ")}` +
     (options.order ? ` ORDER BY ${options.order}` : "") +
     (options.limit ? ` LIMIT ${options.limit}` : "");
-  const rows = await all<Record<string, unknown>>(sql, options.params ?? []);
+  const rows = await all<Record<string, unknown>>(sql, params);
   return rows.map(
     (r) => rowFromSqlite<T & Record<string, unknown>>(table, stripSyncColumns(r)),
   ) as T[];
@@ -68,11 +92,19 @@ export async function sqliteGet<T>(
   pk: Record<string, unknown>,
 ): Promise<T | null> {
   const pkCols = primaryKeyFor(table);
-  const whereClause = pkCols.map((c) => `${c} = ?`).join(" AND ");
-  const pkValues = pkCols.map((c) => pk[c]);
+  const clauses: string[] = [
+    "_deleted = 0",
+    pkCols.map((c) => `${c} = ?`).join(" AND "),
+  ];
+  const params = pkCols.map((c) => pk[c]);
+  const ownerScope = await ownerScopeFor(table);
+  if (ownerScope.clause) {
+    clauses.push(ownerScope.clause);
+    params.push(...ownerScope.params);
+  }
   const row = await get<Record<string, unknown>>(
-    `SELECT * FROM ${table} WHERE _deleted = 0 AND ${whereClause}`,
-    pkValues,
+    `SELECT * FROM ${table} WHERE ${clauses.join(" AND ")}`,
+    params,
   );
   if (!row) return null;
   return rowFromSqlite<T & Record<string, unknown>>(
@@ -87,10 +119,17 @@ export async function sqliteCount(
   options: { where?: string; params?: unknown[] } = {},
 ): Promise<number> {
   const clauses: string[] = ["_deleted = 0"];
+  const params: unknown[] = [];
+  const ownerScope = await ownerScopeFor(table);
+  if (ownerScope.clause) {
+    clauses.push(ownerScope.clause);
+    params.push(...ownerScope.params);
+  }
   if (options.where) clauses.push(`(${options.where})`);
+  params.push(...(options.params ?? []));
   const row = await get<{ c: number }>(
     `SELECT COUNT(*) AS c FROM ${table} WHERE ${clauses.join(" AND ")}`,
-    options.params ?? [],
+    params,
   );
   return row?.c ?? 0;
 }
@@ -193,11 +232,16 @@ export async function sqliteDelete(
   pk: Record<string, unknown>,
 ): Promise<void> {
   const pkCols = primaryKeyFor(table);
-  const whereClause = pkCols.map((c) => `${c} = ?`).join(" AND ");
-  const pkValues = pkCols.map((c) => pk[c]);
+  const clauses: string[] = [pkCols.map((c) => `${c} = ?`).join(" AND ")];
+  const params = pkCols.map((c) => pk[c]);
+  const ownerScope = await ownerScopeFor(table);
+  if (ownerScope.clause) {
+    clauses.push(ownerScope.clause);
+    params.push(...ownerScope.params);
+  }
   await run(
-    `UPDATE ${table} SET _deleted = 1 WHERE ${whereClause}`,
-    pkValues,
+    `UPDATE ${table} SET _deleted = 1 WHERE ${clauses.join(" AND ")}`,
+    params,
   );
 }
 

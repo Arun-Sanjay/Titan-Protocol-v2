@@ -29,6 +29,19 @@ export type Feature =
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
+/**
+ * Map the cloud `profiles.mode` (ExperienceMode) onto the legacy in-store
+ * `mode` (AppMode) used by `checkFeatureVisible` and a couple of legacy
+ * UI branches. Keeping the two in sync is mandatory: the Settings screen
+ * writes `experienceMode` only, and before this mapping the AppMode-driven
+ * gates kept showing the OLD experience even after a mode change.
+ */
+export function deriveAppMode(experienceMode: ExperienceMode): AppMode {
+  if (experienceMode === "titan") return "titan";
+  if (experienceMode === "focus") return "focus";
+  return "standard";
+}
+
 export const IDENTITY_LABELS: Record<IdentityArchetype, string> = {
   titan: "The Titan",
   athlete: "The Athlete",
@@ -73,11 +86,21 @@ type ModeState = {
   setExperienceMode: (mode: ExperienceMode) => void;
 };
 
+// On boot, derive the persisted `mode` from `experienceMode` so the two
+// can never come back from a previous session out of sync. (They got
+// out of sync before the deriveAppMode wiring landed, so this also
+// self-heals legacy installs.)
+const _initialExperienceMode = getJSON<ExperienceMode>(
+  "experience_mode",
+  "full_protocol",
+);
+const _initialAppMode = deriveAppMode(_initialExperienceMode);
+
 export const useModeStore = create<ModeState>((set) => ({
-  mode: getJSON<AppMode>("app_mode", "standard"),
+  mode: _initialAppMode,
   identity: getJSON<IdentityArchetype>("identity_archetype", "titan"),
   focusEngines: getJSON<EngineKey[]>("focus_engines", []),
-  experienceMode: getJSON<ExperienceMode>("experience_mode", "full_protocol"),
+  experienceMode: _initialExperienceMode,
 
   setMode: (mode) => {
     setJSON("app_mode", mode);
@@ -92,7 +115,12 @@ export const useModeStore = create<ModeState>((set) => ({
     set({ focusEngines: engines });
   },
   setExperienceMode: (mode) => {
+    // Settings only writes experienceMode, but `checkFeatureVisible`
+    // reads `mode` — keep both in lockstep so feature gates actually
+    // change when the user swaps modes.
+    const derived = deriveAppMode(mode);
     setJSON("experience_mode", mode);
-    set({ experienceMode: mode });
+    setJSON("app_mode", derived);
+    set({ experienceMode: mode, mode: derived });
   },
 }));

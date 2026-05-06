@@ -26,8 +26,11 @@ export interface SupabaseCall {
     orderAsc?: boolean;
     limit?: number;
   };
-  /** For delete: list of [col, val] eq conditions. */
-  delete?: { conditions: Array<[string, unknown]> };
+  /** For delete: list of [col, val] eq conditions and any in() filter. */
+  delete?: {
+    conditions: Array<[string, unknown]>;
+    inFilter?: { col: string; values: unknown[] };
+  };
 }
 
 export interface SupabaseFakeState {
@@ -68,9 +71,14 @@ export function makeSupabaseFake(): {
 
       delete() {
         const conditions: Array<[string, unknown]> = [];
+        let inFilter: { col: string; values: unknown[] } | undefined;
         const q = {
           eq(col: string, val: unknown) {
             conditions.push([col, val]);
+            return q;
+          },
+          in(col: string, values: unknown[]) {
+            inFilter = { col, values };
             return q;
           },
           then<TResult1 = unknown, TResult2 = never>(
@@ -80,7 +88,7 @@ export function makeSupabaseFake(): {
             calls.push({
               method: "delete",
               table,
-              delete: { conditions },
+              delete: { conditions, inFilter },
             });
             const error = deleteErrors.get(table) ?? null;
             return Promise.resolve({ error }).then(onResolve, onReject);
@@ -90,7 +98,10 @@ export function makeSupabaseFake(): {
       },
 
       select() {
-        const captured: NonNullable<SupabaseCall["select"]> = {};
+        const captured: NonNullable<SupabaseCall["select"]> & {
+          rangeStart?: number;
+          rangeEnd?: number;
+        } = {};
         const q = {
           gt(col: string, val: unknown) {
             captured.cursorCol = col;
@@ -106,14 +117,28 @@ export function makeSupabaseFake(): {
             captured.limit = n;
             return q;
           },
+          range(start: number, end: number) {
+            captured.rangeStart = start;
+            captured.rangeEnd = end;
+            return q;
+          },
           then<TResult1 = unknown, TResult2 = never>(
             onResolve?: (value: { data: unknown[] | null; error: unknown | null }) => TResult1 | PromiseLike<TResult1>,
             onReject?: (reason: unknown) => TResult2 | PromiseLike<TResult2>,
           ): Promise<TResult1 | TResult2> {
             calls.push({ method: "select", table, select: { ...captured } });
             const error = selectErrors.get(table) ?? null;
-            const data = error ? null : selectData.get(table) ?? [];
-            return Promise.resolve({ data, error }).then(onResolve, onReject);
+            // Support pagination: when range() is set, slice the seeded
+            // data so the second page returns [] and the loop terminates.
+            const all = selectData.get(table) ?? [];
+            let data: unknown[] = all;
+            if (captured.rangeStart !== undefined && captured.rangeEnd !== undefined) {
+              data = all.slice(captured.rangeStart, captured.rangeEnd + 1);
+            }
+            return Promise.resolve({ data: error ? null : data, error }).then(
+              onResolve,
+              onReject,
+            );
           },
         };
         return q;

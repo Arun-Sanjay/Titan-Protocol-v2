@@ -23,7 +23,7 @@ import {
   useEngineCompletions,
   useCreateTask,
   useDeleteTask,
-  useToggleCompletion,
+  useToggleCompletionWithReward,
 } from "../../src/hooks/queries/useTasks";
 import { useAwardXP, useUpdateStreak } from "../../src/hooks/queries/useProfile";
 import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
@@ -178,7 +178,11 @@ export default function EngineScreen() {
   // MMKV via the persister so the offline experience is unchanged.
   const { data: tasks = [] } = useEngineTasks(engine);
   const { data: completionRows = [] } = useEngineCompletions(engine, dateKey);
-  const toggleCompletion = useToggleCompletion();
+  // Atomic toggle + XP delta. The previous version chained two
+  // mutations (toggle then awardXP); a failure between them left the
+  // user with a completed task and no XP, or — on un-toggle — debited
+  // XP that was never credited.
+  const toggleAndReward = useToggleCompletionWithReward();
   const createTaskMutation = useCreateTask();
   const deleteTaskMutation = useDeleteTask();
   const awardXPMutation = useAwardXP();
@@ -285,24 +289,23 @@ export default function EngineScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const result = await toggleCompletion.mutateAsync({
-        task: { id: task.id, engine: task.engine },
-        dateKey,
-      });
       const xpAmount =
         task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
-      const xpDelta = result.completed ? xpAmount : -xpAmount;
-      const profile = await awardXPMutation.mutateAsync(xpDelta);
+      const result = await toggleAndReward.mutateAsync({
+        task: { id: task.id, engine: task.engine },
+        dateKey,
+        xpAmount,
+      });
 
-      if (result.completed) {
+      if (result.added) {
         // Streak + skill tree only on completion, not un-completion.
         await updateStreakMutation.mutateAsync(dateKey);
         evaluateAllTrees();
       }
-      if (profile.leveledUp) {
+      if (result.leveledUp) {
         await enqueueRankUpMutation.mutateAsync({
-          fromLevel: profile.fromLevel,
-          toLevel: profile.toLevel,
+          fromLevel: result.fromLevel,
+          toLevel: result.toLevel,
         });
       }
     } catch (e) {
@@ -310,7 +313,7 @@ export default function EngineScreen() {
       // The toggle mutation rolls back its optimistic update on error;
       // partial state is recovered automatically.
     }
-  }, [tasks, dateKey, toggleCompletion, awardXPMutation, updateStreakMutation, enqueueRankUpMutation]);
+  }, [tasks, dateKey, toggleAndReward, updateStreakMutation, enqueueRankUpMutation]);
 
   const handleDelete = useCallback((taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);

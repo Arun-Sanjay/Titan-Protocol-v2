@@ -459,15 +459,17 @@ export default function NutritionScreen() {
   }, [profile, latestWeight]);
 
   const todayMeals: Meal[] = useMemo(
-    () => cloudMealLogs.map((log) => ({
-      id: log.id,
-      name: log.name,
-      calories: log.calories,
-      protein_g: log.protein_g,
-      carbs_g: log.carbs_g,
-      fat_g: log.fat_g,
-    })),
-    [cloudMealLogs],
+    () => cloudMealLogs
+      .filter((log) => log.date_key === todayKey)
+      .map((log) => ({
+        id: log.id,
+        name: log.name,
+        calories: log.calories,
+        protein_g: log.protein_g,
+        carbs_g: log.carbs_g,
+        fat_g: log.fat_g,
+      })),
+    [cloudMealLogs, todayKey],
   );
   const dayMacros = useMemo(() => computeDayMacros(todayMeals), [todayMeals]);
 

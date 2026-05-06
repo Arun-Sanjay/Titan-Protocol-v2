@@ -534,7 +534,12 @@ export default function ProtocolScreen() {
     return Math.round(sum / configured.length);
   }, [allTasks, allCompletions]);
 
-  // Auto-detect mode
+  // Auto-detect mode. If both morning and evening are already saved we
+  // render an "all done" state instead of the evening flow — without this,
+  // a user deep-linking back into /protocol after a completed day saw the
+  // evening flow again, and the only thing stopping XP duplication was
+  // the service-layer idempotency guard.
+  const protocolCompleteForToday = morningDone && eveningDone;
   const mode: "morning" | "evening" = !morningDone ? "morning" : "evening";
   const totalPhases = mode === "morning" ? 3 : 4;
 
@@ -566,17 +571,23 @@ export default function ProtocolScreen() {
 
   const handleMorningFinish = useCallback(async () => {
     try {
-      await saveMorningMutation.mutateAsync({
+      const { alreadyCompleted } = await saveMorningMutation.mutateAsync({
         dateKey: today,
         intention: intention.trim(),
       });
-      const xpResult = await awardXPMutation.mutateAsync(15);
-      await updateStreakMutation.mutateAsync(today);
-      if (xpResult.leveledUp) {
-        await enqueueRankUpMutation.mutateAsync({
-          fromLevel: xpResult.fromLevel,
-          toLevel: xpResult.toLevel,
-        });
+      // Idempotency guard: if the session was already completed (deep-link
+      // replay, back-stack revisit, double-submit), the service returned
+      // the existing row untouched. We MUST NOT award XP again — that's
+      // the rank-farming vector this fix closes.
+      if (!alreadyCompleted) {
+        const xpResult = await awardXPMutation.mutateAsync(15);
+        await updateStreakMutation.mutateAsync(today);
+        if (xpResult.leveledUp) {
+          await enqueueRankUpMutation.mutateAsync({
+            fromLevel: xpResult.fromLevel,
+            toLevel: xpResult.toLevel,
+          });
+        }
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
@@ -613,20 +624,23 @@ export default function ProtocolScreen() {
   const handleEveningFinish = useCallback(async () => {
     const reflection = [wentWell.trim(), differently.trim()].filter(Boolean).join("\n\n");
     try {
-      await saveEveningMutation.mutateAsync({
+      const { alreadyCompleted } = await saveEveningMutation.mutateAsync({
         dateKey: today,
         reflection,
         titanScore,
         identityVote: identityVoted ? identity : null,
       });
-      const xpResult = await awardXPMutation.mutateAsync(15);
-      if (xpResult.leveledUp) {
-        await enqueueRankUpMutation.mutateAsync({
-          fromLevel: xpResult.fromLevel,
-          toLevel: xpResult.toLevel,
-        });
+      // Idempotency guard — see handleMorningFinish.
+      if (!alreadyCompleted) {
+        const xpResult = await awardXPMutation.mutateAsync(15);
+        if (xpResult.leveledUp) {
+          await enqueueRankUpMutation.mutateAsync({
+            fromLevel: xpResult.fromLevel,
+            toLevel: xpResult.toLevel,
+          });
+        }
+        evaluateAllTrees();
       }
-      evaluateAllTrees();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (_e) {
@@ -674,8 +688,29 @@ export default function ProtocolScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {protocolCompleteForToday && (
+            <Animated.View
+              entering={FadeInDown.duration(400)}
+              style={{ alignItems: "center", flex: 1, paddingTop: spacing["2xl"] }}
+            >
+              <Text style={phaseStyles.kicker}>PROTOCOL COMPLETE</Text>
+              <Text style={[phaseStyles.title, { textAlign: "center" }]}>
+                {"Today's protocol\nis already logged."}
+              </Text>
+              <Text style={phaseStyles.subtitle}>
+                Come back tomorrow morning to start the next session.
+              </Text>
+              <Pressable
+                style={[phaseStyles.nextBtn, { width: "100%" }]}
+                onPress={() => router.back()}
+              >
+                <Text style={phaseStyles.nextBtnText}>BACK TO HQ</Text>
+              </Pressable>
+            </Animated.View>
+          )}
+
           {/* ─── MORNING ─── */}
-          {mode === "morning" && phaseIdx === 0 && (
+          {!protocolCompleteForToday && mode === "morning" && phaseIdx === 0 && (
             <MorningIntentionPhase
               value={intention}
               onChange={setIntention}
@@ -683,18 +718,18 @@ export default function ProtocolScreen() {
               identity={identity}
             />
           )}
-          {mode === "morning" && phaseIdx === 1 && (
+          {!protocolCompleteForToday && mode === "morning" && phaseIdx === 1 && (
             <MorningMissionPreviewPhase dateKey={today} onNext={goNext} />
           )}
-          {mode === "morning" && phaseIdx === 2 && (
+          {!protocolCompleteForToday && mode === "morning" && phaseIdx === 2 && (
             <MorningMotivationalPhase identity={identity} onFinish={handleMorningFinish} />
           )}
 
           {/* ─── EVENING ─── */}
-          {mode === "evening" && phaseIdx === 0 && (
+          {!protocolCompleteForToday && mode === "evening" && phaseIdx === 0 && (
             <EveningScoreRevealPhase score={titanScore} dateKey={today} onNext={goNext} />
           )}
-          {mode === "evening" && phaseIdx === 1 && (
+          {!protocolCompleteForToday && mode === "evening" && phaseIdx === 1 && (
             <EveningReflectionPhase
               morningIntention={morningIntention}
               wentWell={wentWell}
@@ -704,14 +739,14 @@ export default function ProtocolScreen() {
               onNext={goNext}
             />
           )}
-          {mode === "evening" && phaseIdx === 2 && (
+          {!protocolCompleteForToday && mode === "evening" && phaseIdx === 2 && (
             <EveningIdentityVotePhase
               identity={identity}
               onVoteYes={handleVoteYes}
               onVoteNo={handleVoteNo}
             />
           )}
-          {mode === "evening" && phaseIdx === 3 && (
+          {!protocolCompleteForToday && mode === "evening" && phaseIdx === 3 && (
             <EveningNarrativePhase onFinish={handleEveningFinish} />
           )}
 

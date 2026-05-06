@@ -20,8 +20,11 @@ import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
 import { storage, setJSON } from "../../src/db/storage";
 import { K } from "../../src/db/keys";
+import { all as sqliteAll } from "../../src/db/sqlite/client";
+import { rowFromSqlite, stripSyncColumns } from "../../src/db/sqlite/coerce";
+import { COLUMN_TYPES, SYNCED_TABLES } from "../../src/db/sqlite/column-types";
 import type { UserProfile } from "../../src/db/schema";
-import { useProfile } from "../../src/hooks/queries/useProfile";
+import { useProfile, useUpdateProfileMode } from "../../src/hooks/queries/useProfile";
 // Phase 4.1: legacy engine store removed — React Query auto-fetches engines.
 import { useModeStore, type ExperienceMode } from "../../src/stores/useModeStore";
 import { useIdentityStore, IDENTITIES, selectIdentityMeta, type Archetype } from "../../src/stores/useIdentityStore";
@@ -33,8 +36,11 @@ import { getTodayKey } from "../../src/lib/date";
 import { useAuthStore } from "../../src/stores/useAuthStore";
 import { supabase } from "../../src/lib/supabase";
 import { queryClient } from "../../src/lib/query-client";
-import { deleteAllUserData } from "../../src/services/account";
+import { deleteAllUserData, wipeAllLocalUserData } from "../../src/services/account";
 import { logError } from "../../src/lib/error-log";
+import { resetProgress } from "../../src/lib/protocol-integrity";
+import { upsertProfile } from "../../src/services/profile";
+import { profileQueryKey } from "../../src/hooks/queries/useProfile";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -81,7 +87,11 @@ function getAllStorageKeys(): string[] {
   return storage.getAllKeys();
 }
 
-function exportAllData(): Record<string, unknown> {
+/**
+ * Snapshot every MMKV key into a plain object. Device-local prefs only —
+ * sound/voice toggles, cinematic flags, focus-cache scratchpads.
+ */
+function exportMMKVData(): Record<string, unknown> {
   const keys = getAllStorageKeys();
   const data: Record<string, unknown> = {};
   for (const key of keys) {
@@ -101,6 +111,48 @@ function exportAllData(): Record<string, unknown> {
   }
   return data;
 }
+
+/**
+ * Pull every user-owned row out of every synced SQLite table. Cloud-
+ * shape (booleans coerced back to true/false, JSON parsed) and stripped
+ * of sync housekeeping columns, so the export matches what the user
+ * would see in the cloud.
+ *
+ * Until this fix the export only included MMKV — meaning tasks, habits,
+ * meals, workouts, finance, journal, sleep, weight, etc. were silently
+ * missing. The "backup" was a misnomer.
+ */
+async function exportSQLiteData(
+  userId: string,
+): Promise<Record<string, Record<string, unknown>[]>> {
+  const out: Record<string, Record<string, unknown>[]> = {};
+  for (const table of SYNCED_TABLES) {
+    const ownerCol =
+      table === "profiles"
+        ? "id"
+        : COLUMN_TYPES[table]?.user_id
+          ? "user_id"
+          : null;
+    if (!ownerCol) continue;
+    const rows = await sqliteAll<Record<string, unknown>>(
+      `SELECT * FROM ${table} WHERE _deleted = 0 AND ${ownerCol} = ?`,
+      [userId],
+    );
+    if (rows.length === 0) continue;
+    out[table] = rows.map(
+      (r) => stripSyncColumns(rowFromSqlite(table, r) as Record<string, unknown>),
+    );
+  }
+  return out;
+}
+
+type BackupBundle = {
+  version: 2;
+  exportedAt: string;
+  userId: string | null;
+  mmkv: Record<string, unknown>;
+  sqlite: Record<string, Record<string, unknown>[]>;
+};
 
 // ─── Setting Row Component ───────────────────────────────────────────────────
 
@@ -168,7 +220,7 @@ const SCHEDULE_LABELS: Partial<Record<SchedulePreference, string>> = {
 function V2SettingsSection() {
   const router = useRouter();
   const mode = useModeStore((s) => s.experienceMode);
-  const setMode = useModeStore((s) => s.setExperienceMode);
+  const setLocalMode = useModeStore((s) => s.setExperienceMode);
   const setFocusEngines = useModeStore((s) => s.setFocusEngines);
   const focusEngines = useModeStore((s) => s.focusEngines);
   const archetype = useIdentityStore((s) => s.archetype);
@@ -177,6 +229,19 @@ function V2SettingsSection() {
   const { data: titanState } = useTitanMode();
   const titanUnlocked = titanState?.unlocked ?? false;
   const schedPref = useOnboardingStore((s) => s.schedulePreference);
+  const updateProfileModeMut = useUpdateProfileMode();
+
+  // Persist mode changes to BOTH the local Zustand store and the cloud
+  // profile row. Without the cloud write, ProfileHydrator's next pass
+  // (or a sign-in on a different device) re-hydrated the OLD value and
+  // silently reverted the change.
+  const persistModeChange = useCallback(
+    (next: ExperienceMode) => {
+      setLocalMode(next);
+      updateProfileModeMut.mutate({ mode: next });
+    },
+    [setLocalMode, updateProfileModeMut],
+  );
 
   const handleChangeMode = () => {
     const options: ExperienceMode[] = ["full_protocol", "structured", "tracker", "focus", "zen"];
@@ -195,11 +260,11 @@ function V2SettingsSection() {
                 "You can always re-activate Titan Mode later.",
                 [
                   { text: "Cancel", style: "cancel" as const },
-                  { text: "Switch", onPress: () => setMode(m) },
+                  { text: "Switch", onPress: () => persistModeChange(m) },
                 ],
               );
             } else {
-              setMode(m);
+              persistModeChange(m);
             }
           },
         })),
@@ -327,16 +392,52 @@ export default function SettingsScreen() {
   // Phase 4.1: loadAllEngines removed — React Query auto-refetches.
   const [exporting, setExporting] = useState(false);
 
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+
   const handleExportData = useCallback(async () => {
     setExporting(true);
     try {
-      const data = exportAllData();
-      if (Object.keys(data).length === 0) {
+      // The backup bundle now wraps both stores so re-importing on a
+      // different device or v1.1 build can recover the full state.
+      // Previously this only captured MMKV (device-local prefs), which
+      // meant tasks / habits / meals / workouts / finance — the
+      // entire cloud-backed surface — was silently absent.
+      if (!userId) {
+        Alert.alert("Sign in required", "Sign in before exporting.");
+        setExporting(false);
+        return;
+      }
+
+      const mmkv = exportMMKVData();
+      let sqlite: Record<string, Record<string, unknown>[]> = {};
+      try {
+        sqlite = await exportSQLiteData(userId);
+      } catch (e) {
+        logError("settings.exportSQLiteData", e);
+        Alert.alert(
+          "Partial export",
+          "Couldn't read SQLite data. Sharing prefs only.",
+        );
+      }
+
+      const sqliteRowCount = Object.values(sqlite).reduce(
+        (n, rows) => n + rows.length,
+        0,
+      );
+      if (Object.keys(mmkv).length === 0 && sqliteRowCount === 0) {
         Alert.alert("No Data", "Nothing to export yet.");
         setExporting(false);
         return;
       }
-      const json = JSON.stringify(data);
+
+      const bundle: BackupBundle = {
+        version: 2,
+        exportedAt: new Date().toISOString(),
+        userId,
+        mmkv,
+        sqlite,
+      };
+      const json = JSON.stringify(bundle);
       // Warn if export is very large
       if (json.length > 500000) {
         Alert.alert(
@@ -363,10 +464,11 @@ export default function SettingsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       // User cancelled share — not an error
+      logError("settings.handleExportData", e);
     } finally {
       setExporting(false);
     }
-  }, []);
+  }, [userId]);
 
   const handleClearAllData = useCallback(() => {
     // Phase 4.2: delete ALL data (cloud + local), keep the auth account.
@@ -445,6 +547,49 @@ export default function SettingsScreen() {
     );
   }, []);
 
+  // Reset Progress — narrative-progression wipe. Walks the day counter
+  // back to 1, zeroes streak/integrity, and clears all cinematic /
+  // briefing playback flags so the user's first launch arc plays again.
+  // Tasks, habits, completions, journal, weight, sleep, etc. are KEPT —
+  // the user is asking to restart the story, not delete their data.
+  const handleResetProgress = useCallback(() => {
+    Alert.alert(
+      "Reset Progress",
+      "This rewinds your story to Day 1. Streak, integrity, and cinematic playback all reset. Your tasks, habits, journal, and trackers are kept.\n\nThis cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset to Day 1",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Local: integrity state, progress_day, story flags,
+              // cinematic-played markers, briefing-seen markers.
+              resetProgress();
+              // Cloud: zero the streak fields and clear first_use_date
+              // so HQ shows a fresh start on the next render.
+              await upsertProfile({
+                streak_current: 0,
+                streak_best: 0,
+                streak_last_date: null,
+                first_use_date: null,
+              });
+              queryClient.invalidateQueries({ queryKey: profileQueryKey });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              Alert.alert(
+                "Reset Complete",
+                "You're back on Day 1. Your tasks and trackers are unchanged.",
+              );
+            } catch (e) {
+              logError("settings.resetProgress", e);
+              Alert.alert("Error", "Failed to reset progress. Please try again.");
+            }
+          },
+        },
+      ],
+    );
+  }, []);
+
   const signOut = useAuthStore((s) => s.signOut);
 
   // Phase 4.2: Sign out handler — clears React Query cache so the next
@@ -492,10 +637,16 @@ export default function SettingsScreen() {
                   text: "Yes, Delete All",
                   style: "destructive",
                   onPress: async () => {
-                    storage.clearAll();
-                    queryClient.clear();
-                    await signOut();
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    try {
+                      storage.clearAll();
+                      await wipeAllLocalUserData();
+                      queryClient.clear();
+                      await signOut();
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                    } catch (e) {
+                      logError("settings.deleteAllAndSignOut", e);
+                      Alert.alert("Error", "Failed to delete local data. Please try again.");
+                    }
                   },
                 },
               ],
@@ -561,7 +712,7 @@ export default function SettingsScreen() {
           <SettingRow
             icon="cloud-download-outline"
             label="Export Data"
-            description={`Backup all ${dataPointCount} data points as JSON`}
+            description="Snapshot SQLite tables + device prefs as JSON"
             onPress={handleExportData}
             color={colors.charisma}
           />
@@ -589,6 +740,14 @@ export default function SettingsScreen() {
             description="Your cloud data will be preserved"
             onPress={handleSignOut}
             color={colors.textSecondary}
+          />
+          <View style={styles.settingDivider} />
+          <SettingRow
+            icon="refresh-circle-outline"
+            label="Reset Progress"
+            description="Rewind to Day 1; tasks and trackers kept"
+            onPress={handleResetProgress}
+            color={colors.warning}
           />
           <View style={styles.settingDivider} />
           <SettingRow

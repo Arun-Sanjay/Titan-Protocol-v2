@@ -1,6 +1,15 @@
 import { supabase, requireUserId } from "../lib/supabase";
 import { SYNCED_TABLES } from "../sync/tables";
-import { run } from "../db/sqlite/client";
+import { transaction } from "../db/sqlite/client";
+
+/** Wipe every local user-data table in this app's SQLite database. */
+export async function wipeAllLocalUserData(): Promise<void> {
+  await transaction(async (tx) => {
+    for (const table of SYNCED_TABLES) {
+      await tx.runAsync(`DELETE FROM ${table}`);
+    }
+  });
+}
 
 /**
  * Delete all user data — both cloud (Supabase) and local (SQLite).
@@ -23,9 +32,7 @@ export async function deleteAllUserData(): Promise<void> {
   if (error) throw error;
 
   // Local wipe so we don't upload stale rows on the next backup.
-  for (const table of SYNCED_TABLES) {
-    await run(`DELETE FROM ${table}`);
-  }
+  await wipeAllLocalUserData();
 
   await supabase.auth.signOut();
 }

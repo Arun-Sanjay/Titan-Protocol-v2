@@ -5,10 +5,15 @@ import {
   saveMorningSession,
   saveEveningSession,
   type ProtocolSession,
+  type SaveSessionResult,
 } from "../../services/protocol";
 import type { Json } from "../../types/supabase";
 import { runAchievementCheck } from "../../lib/achievement-integration";
 import { getTodayKey } from "../../lib/date";
+import { recordCompletion } from "../../lib/protocol-integrity";
+
+// Re-export so screens can type the awaited result.
+export type { SaveSessionResult } from "../../services/protocol";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
 
@@ -44,22 +49,30 @@ export function useSaveMorningSession() {
       const key = protocolKeys.session(vars.dateKey);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<ProtocolSession | null>(key);
-      // Optimistic: mark morning as completed
-      qc.setQueryData<ProtocolSession | null>(key, (old) =>
-        old
-          ? {
-              ...old,
-              morning_intention: vars.intention,
-              morning_completed_at: new Date().toISOString(),
-            }
-          : null,
-      );
+      // Optimistic: only mark morning as completed when it's not already.
+      // If it is, leave the cache alone so we don't show a misleading
+      // updated state for an idempotent no-op.
+      if (!prev?.morning_completed_at) {
+        qc.setQueryData<ProtocolSession | null>(key, (old) =>
+          old
+            ? {
+                ...old,
+                morning_intention: vars.intention,
+                morning_completed_at: new Date().toISOString(),
+              }
+            : null,
+        );
+      }
       return { prev };
     },
     onError: (_err, vars, ctx) => {
       if (ctx?.prev !== undefined) {
         qc.setQueryData(protocolKeys.session(vars.dateKey), ctx.prev);
       }
+    },
+    onSuccess: () => {
+      // Morning protocol counts as engagement for the progress day.
+      recordCompletion();
     },
     onSettled: (_data, _err, vars) => {
       qc.invalidateQueries({ queryKey: protocolKeys.session(vars.dateKey) });
@@ -87,22 +100,30 @@ export function useSaveEveningSession() {
       const key = protocolKeys.session(vars.dateKey);
       await qc.cancelQueries({ queryKey: key });
       const prev = qc.getQueryData<ProtocolSession | null>(key);
-      qc.setQueryData<ProtocolSession | null>(key, (old) =>
-        old
-          ? {
-              ...old,
-              evening_reflection: vars.reflection,
-              evening_completed_at: new Date().toISOString(),
-              titan_score: vars.titanScore ?? old.titan_score,
-            }
-          : null,
-      );
+      // Same idempotency as morning: skip optimistic stomp if already done.
+      if (!prev?.evening_completed_at) {
+        qc.setQueryData<ProtocolSession | null>(key, (old) =>
+          old
+            ? {
+                ...old,
+                evening_reflection: vars.reflection,
+                evening_completed_at: new Date().toISOString(),
+                titan_score: vars.titanScore ?? old.titan_score,
+              }
+            : null,
+        );
+      }
       return { prev };
     },
     onError: (_err, vars, ctx) => {
       if (ctx?.prev !== undefined) {
         qc.setQueryData(protocolKeys.session(vars.dateKey), ctx.prev);
       }
+    },
+    onSuccess: () => {
+      // Evening protocol also counts as engagement (covers the case
+      // where a user skips tasks but still does the evening reflection).
+      recordCompletion();
     },
     onSettled: (_data, _err, vars) => {
       qc.invalidateQueries({ queryKey: protocolKeys.session(vars.dateKey) });

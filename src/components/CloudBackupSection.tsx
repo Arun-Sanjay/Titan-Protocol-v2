@@ -66,10 +66,14 @@ export function CloudBackupSection(): React.ReactElement {
     if (res.success) {
       setJSON(LAST_BACKUP_KEY, res.at);
       setLastBackupAt(res.at);
+      const deletedSuffix =
+        res.rowsDeleted > 0
+          ? ` ${res.rowsDeleted.toLocaleString()} deletions propagated.`
+          : "";
       setFlow({
         phase: "done",
         title: "BACKUP COMPLETE",
-        message: `${res.rowsUploaded.toLocaleString()} rows uploaded across ${res.tablesBackedUp} tables.`,
+        message: `${res.rowsUploaded.toLocaleString()} rows uploaded across ${res.tablesBackedUp} tables.${deletedSuffix}`,
       });
     } else {
       setFlow({

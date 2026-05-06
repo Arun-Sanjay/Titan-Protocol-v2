@@ -39,27 +39,34 @@ import {
   type SleepScore,
 } from "../../src/lib/sleep-helpers";
 import { useSleepLogs, useUpsertSleepLog, useDeleteSleepLog } from "../../src/hooks/queries/useSleep";
-import type { SleepLog } from "../../src/services/sleep";
+import type { SleepLogWithSchedule } from "../../src/services/sleep";
 
 // ─── Cloud-to-legacy adapter ────────────────────────────────────────────────
-// Cloud SleepLog stores hours_slept (no bedtime/wakeTime). We synthesize
-// default bedtime from duration for the pure helpers that expect SleepEntry.
+// SleepLogWithSchedule decorates the cloud SleepLog with the parsed
+// bedtime/wakeTime extracted from the JSON-wrapped `notes` column. When
+// those are present we use them directly; otherwise we fall back to the
+// old "synthesise from duration around 07:00 wake" so legacy rows
+// written before the persistence fix still render somewhere reasonable.
 
-function toSleepEntry(log: SleepLog): SleepEntry {
+function toSleepEntry(log: SleepLogWithSchedule): SleepEntry {
   const hours = log.hours_slept ?? 0;
   const durationMinutes = Math.round(hours * 60);
-  // Synthesize bedtime/wakeTime (cloud doesn't store them)
-  const wakeMinutes = 7 * 60; // default 07:00
-  const bedMinutes = ((wakeMinutes - durationMinutes) % 1440 + 1440) % 1440;
-  const bedtime = minutesToTime(bedMinutes);
-  const wakeTime = minutesToTime(wakeMinutes);
+  let bedtime = log.bedtime;
+  let wakeTime = log.wakeTime;
+  if (!bedtime || !wakeTime) {
+    // Legacy fallback for rows logged before bedtime/wakeTime persisted.
+    const wakeMinutes = 7 * 60; // default 07:00
+    const bedMinutes = ((wakeMinutes - durationMinutes) % 1440 + 1440) % 1440;
+    bedtime = minutesToTime(bedMinutes);
+    wakeTime = minutesToTime(wakeMinutes);
+  }
   return {
     dateKey: log.date_key,
     bedtime,
     wakeTime,
     durationMinutes,
     quality: (log.quality ?? 3) as 1 | 2 | 3 | 4 | 5,
-    notes: log.notes ?? "",
+    notes: log.note ?? "",
   };
 }
 
@@ -768,6 +775,8 @@ export default function SleepScreen() {
       date_key: todayKey,
       hours_slept: durationMinutes / 60,
       quality,
+      bedtime,
+      wakeTime,
       notes: notes.trim() || undefined,
     });
 

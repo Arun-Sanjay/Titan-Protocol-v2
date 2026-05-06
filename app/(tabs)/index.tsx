@@ -32,9 +32,9 @@ import { SparklineChart } from "../../src/components/ui/SparklineChart";
 // Wave 1: Full cloud migration — all data reads come from React Query hooks.
 // Stores that STAY: useModeStore (UI mode), useIdentityStore (archetype UI),
 // useStoryStore (cinematic playback state). Everything else → cloud hooks.
-import { useAllTasks, useAllCompletionsForDate, useToggleCompletion, useRecentCompletionMap } from "../../src/hooks/queries/useTasks";
+import { useAllTasks, useAllCompletionsForDate, useToggleCompletionWithReward, useRecentCompletionMap } from "../../src/hooks/queries/useTasks";
 import { computeEngineScore, ENGINES, type EngineKey } from "../../src/services/tasks";
-import { useProfile, useAwardXP, useUpdateStreak } from "../../src/hooks/queries/useProfile";
+import { useProfile, useUpdateStreak } from "../../src/hooks/queries/useProfile";
 import { useEnqueueRankUp } from "../../src/hooks/queries/useRankUps";
 import { useProtocolSession } from "../../src/hooks/queries/useProtocol";
 import { useHabits, useHabitLogsForDate } from "../../src/hooks/queries/useHabits";
@@ -106,8 +106,11 @@ export default function HQScreen() {
   const { data: recentCompletionMap = {} } = useRecentCompletionMap();
   const { data: protocolSession = null } = useProtocolSession(today);
 
-  const toggleCompletion = useToggleCompletion();
-  const awardXPMutation = useAwardXP();
+  // Atomic toggle + XP. The previous version called useToggleCompletion
+  // followed by useAwardXP as separate awaits — a failure between them
+  // left the user with a completed task and no XP (or, on un-toggle,
+  // subtracted XP that was never added). Now both happen in one tx.
+  const toggleAndReward = useToggleCompletionWithReward();
   const updateStreakMutation = useUpdateStreak();
   const enqueueRankUpMutation = useEnqueueRankUp();
 
@@ -294,25 +297,23 @@ export default function HQScreen() {
       const xp = task.kind === "main" ? XP_REWARDS.MAIN_TASK : XP_REWARDS.SIDE_QUEST;
 
       try {
-        const { completed } = await toggleCompletion.mutateAsync({
+        const result = await toggleAndReward.mutateAsync({
           task: { id: task.id, engine: task.engine },
           dateKey: today,
+          xpAmount: xp,
         });
 
-        if (completed) {
+        if (result.added) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setLastCompletedId(taskId);
           setTimeout(() => setLastCompletedId(null), 600);
 
-          const xpResult = await awardXPMutation.mutateAsync(xp);
           await updateStreakMutation.mutateAsync(today);
-          // Wave 1: removed evaluateAllTrees() — skill tree evaluation
-          // now happens via cloud upserts, not MMKV writes.
 
-          if (xpResult.leveledUp) {
+          if (result.leveledUp) {
             await enqueueRankUpMutation.mutateAsync({
-              fromLevel: xpResult.fromLevel,
-              toLevel: xpResult.toLevel,
+              fromLevel: result.fromLevel,
+              toLevel: result.toLevel,
             });
           }
 
@@ -352,7 +353,6 @@ export default function HQScreen() {
           }
         } else {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          await awardXPMutation.mutateAsync(-xp);
         }
       } catch (e) {
         // Phase 4.3: log the error so it's visible in Sentry / error-log.
@@ -366,8 +366,7 @@ export default function HQScreen() {
       allTasks,
       tasks,
       today,
-      toggleCompletion,
-      awardXPMutation,
+      toggleAndReward,
       updateStreakMutation,
       enqueueRankUpMutation,
       notify,
@@ -715,12 +714,16 @@ export default function HQScreen() {
               style={s.bottomNavCard}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/(tabs)/track");
+                router.push("/protocol");
               }}
             >
-              <Text style={s.bottomNavLabel}>JOURNAL</Text>
+              <Text style={s.bottomNavLabel}>PROTOCOL</Text>
               <Text style={s.bottomNavValue}>
-                {protocolCompleted ? "logged" : "pending"}
+                {protocolCompleted
+                  ? "complete"
+                  : morningDone
+                    ? "evening"
+                    : "morning"}
               </Text>
             </Pressable>
 

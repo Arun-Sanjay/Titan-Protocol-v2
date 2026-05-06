@@ -35,6 +35,53 @@ export type ErrorLogEntry = {
 
 const MAX_ENTRIES = 50;
 
+/**
+ * Defence-in-depth: even if a caller forgets to strip secrets, recursively
+ * redact known-sensitive field names before the value reaches the console
+ * or Sentry. Match is case-insensitive against the key, not the value, so
+ * a string that happens to look like a token in an unrelated field passes
+ * through untouched.
+ */
+const SENSITIVE_KEY_PATTERNS = [
+  /access[_-]?token/i,
+  /refresh[_-]?token/i,
+  /id[_-]?token/i,
+  /(^|_)token($|_)/i,
+  /token[_-]?hash/i,
+  /password/i,
+  /secret/i,
+  /api[_-]?key/i,
+  /authorization/i,
+  /cookie/i,
+];
+
+function isSensitiveKey(key: string): boolean {
+  for (const pat of SENSITIVE_KEY_PATTERNS) {
+    if (pat.test(key)) return true;
+  }
+  return false;
+}
+
+function redactSensitive(value: unknown, depth = 0): unknown {
+  if (depth > 4) return "[truncated]";
+  if (value == null) return value;
+  if (Array.isArray(value)) {
+    return value.map((v) => redactSensitive(v, depth + 1));
+  }
+  if (typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (isSensitiveKey(k) && v != null && v !== "") {
+        out[k] = "[redacted]";
+      } else {
+        out[k] = redactSensitive(v, depth + 1);
+      }
+    }
+    return out;
+  }
+  return value;
+}
+
 let buffer: ErrorLogEntry[] = [];
 let idCounter = 0;
 const subscribers = new Set<(entries: readonly ErrorLogEntry[]) => void>();
@@ -49,13 +96,16 @@ export function logError(
   context?: Record<string, unknown>,
 ): void {
   try {
+    const safeContext = context
+      ? (redactSensitive(context) as Record<string, unknown>)
+      : undefined;
     const entry: ErrorLogEntry = {
       id: ++idCounter,
       timestamp: Date.now(),
       source,
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      context,
+      context: safeContext,
     };
 
     // Ring buffer: push new, drop oldest if over capacity
@@ -67,7 +117,7 @@ export function logError(
     // eslint-disable-next-line no-console
     console.error(
       `[${source}] ${entry.message}`,
-      context ? { context } : "",
+      safeContext ? { context: safeContext } : "",
       error instanceof Error && error.stack ? `\n${error.stack}` : "",
     );
 
@@ -78,13 +128,13 @@ export function logError(
       if (error instanceof Error) {
         Sentry.captureException(error, {
           tags: { source },
-          extra: context,
+          extra: safeContext,
         });
       } else {
         Sentry.captureMessage(`[${source}] ${entry.message}`, {
           level: "error",
           tags: { source },
-          extra: { ...context, raw: String(error) },
+          extra: { ...(safeContext ?? {}), raw: String(error) },
         });
       }
     } catch {

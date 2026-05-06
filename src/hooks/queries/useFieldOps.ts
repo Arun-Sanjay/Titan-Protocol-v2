@@ -6,6 +6,7 @@ import {
   getFieldOpCooldown,
   startFieldOp,
   resolveFieldOp,
+  recordFieldOpDay,
 } from "../../services/field-ops";
 import type { FieldOp, FieldOpCooldown } from "../../services/field-ops";
 import type { Json } from "../../types/supabase";
@@ -79,6 +80,23 @@ export function useResolveFieldOp() {
       qc.invalidateQueries({ queryKey: fieldOpsKeys.active });
       qc.invalidateQueries({ queryKey: fieldOpsKeys.history });
       qc.invalidateQueries({ queryKey: fieldOpsKeys.cooldown });
+    },
+  });
+}
+
+/**
+ * Append today's pass/fail to an active field op. The mutation result
+ * tells the caller whether the op was just resolved so the UI can
+ * award XP and show the appropriate haptic.
+ */
+export function useRecordFieldOpDay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; passed: boolean }) =>
+      recordFieldOpDay(vars),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: fieldOpsKeys.active });
+      qc.invalidateQueries({ queryKey: fieldOpsKeys.history });
     },
   });
 }

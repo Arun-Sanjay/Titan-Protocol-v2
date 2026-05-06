@@ -17,6 +17,9 @@ import { useWalkthroughStore } from "../../../stores/useWalkthroughStore";
 import { setJSON } from "../../../db/storage";
 import { getTodayKey } from "../../../lib/date";
 import { narrativeDayOne } from "../../../lib/narrative-engine";
+import { setProgressDay } from "../../../lib/protocol-integrity";
+import { upsertProfile } from "../../../services/profile";
+import { logError } from "../../../lib/error-log";
 import { useIdentityStore } from "../../../stores/useIdentityStore";
 import { IDENTITY_LABELS, type IdentityArchetype } from "../../../stores/useModeStore";
 import { IDENTITIES, type Archetype } from "../../../stores/useIdentityStore";
@@ -91,9 +94,26 @@ export function WalkthroughSummary({ onFinish, onBack }: Props) {
 
   const handleFinish = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // Set first active date for day counting + chapter system
+    // Set first active date for day counting + chapter system. The
+    // MMKV key is the legacy local stamp; the cloud profile field is
+    // what the rest of the app reads (HQ "Day N", phase transitions,
+    // achievements). Without the cloud write, finishing via the
+    // walkthrough left `profile.first_use_date` null, which made HQ
+    // think every user was on Day 1 forever.
     const today = getTodayKey();
     setJSON("first_active_date", today);
+    // Engagement-based day counter starts at 1. The first
+    // `recordCompletion()` of a new day will advance it; today's first
+    // completion no-ops because lastCompletionDate is initialised by
+    // recordCompletion's same-day guard.
+    setProgressDay(1);
+    // Mirror the start anchor into the cloud profile. Fire-and-forget —
+    // failure here would leave the user with the MMKV anchor only,
+    // which is the same state as before this change. Don't block the
+    // onboarding-finish handler on a network/SQLite hiccup.
+    upsertProfile({ first_use_date: today }).catch((e) =>
+      logError("WalkthroughSummary.upsertFirstUseDate", e),
+    );
     // Generate Day 1 narrative entry
     narrativeDayOne(archetype, today);
     onFinish();

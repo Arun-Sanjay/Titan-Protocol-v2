@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
+import React, { useCallback, useEffect, useMemo } from "react";
+import { View, Text, ScrollView, Pressable, StyleSheet, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,12 +14,20 @@ import { useActiveQuests } from "../src/hooks/queries/useQuests";
 import {
   useActiveBossChallenges,
   useStartBossChallenge,
+  useRecordBossDay,
+  useAbandonBossChallenge,
 } from "../src/hooks/queries/useBossChallenges";
 import type { BossChallenge as CloudBoss } from "../src/services/boss-challenges";
 import { useProgression } from "../src/hooks/queries/useProgression";
 import { useIdentityStore } from "../src/stores/useIdentityStore";
 import { useModeStore } from "../src/stores/useModeStore";
 import bossDefinitions from "../src/data/boss-challenges.json";
+import { handleAppOpenAfterGap } from "../src/lib/safety";
+import { logError } from "../src/lib/error-log";
+import { useAwardXP } from "../src/hooks/queries/useProfile";
+import { useEnqueueRankUp } from "../src/hooks/queries/useRankUps";
+import * as Haptics from "expo-haptics";
+import { getTodayKey, toLocalDateKey } from "../src/lib/date";
 
 // Local Quest shape for QuestCard component
 type LocalQuest = {
@@ -67,6 +75,15 @@ function getWeekLabel(): string {
 export default function QuestsScreen() {
   const router = useRouter();
 
+  // Belt-and-suspenders: also fire the safety pass on mount. Covers the
+  // case where the user kept the app foregrounded across Sunday→Monday
+  // (so useAppResumeSync's resume handler never fired). Idempotent.
+  useEffect(() => {
+    handleAppOpenAfterGap().catch((e) =>
+      logError("QuestsScreen.handleAppOpenAfterGap", e),
+    );
+  }, []);
+
   // Phase 4.1: weekly quests from cloud React Query hook
   const { data: cloudQuests = [] } = useActiveQuests();
   // Map cloud Quest (snake_case) → local Quest shape for QuestCard component
@@ -91,6 +108,10 @@ export default function QuestsScreen() {
   // Phase 4.1: boss challenges now cloud-backed via React Query
   const { data: activeBosses = [] } = useActiveBossChallenges();
   const startBossMutation = useStartBossChallenge();
+  const recordBossDayMutation = useRecordBossDay();
+  const abandonBossMutation = useAbandonBossChallenge();
+  const awardXPMutation = useAwardXP();
+  const enqueueRankUpMutation = useEnqueueRankUp();
   // Map cloud boss to the shape BossChallengeCard expects
   const bossChallenge = useMemo(() => {
     const active = activeBosses[0];
@@ -148,6 +169,82 @@ export default function QuestsScreen() {
   const activeQuests = useMemo(() => weeklyQuests.filter((q) => q.status === "active"), [weeklyQuests]);
   const completedQuests = useMemo(() => weeklyQuests.filter((q) => q.status === "completed"), [weeklyQuests]);
 
+  // The active row drives the daily-log gate. If the row's `updated_at`
+  // is in today's local-day window, we've already logged.
+  const activeBossRow = activeBosses.find((b) => b.status === "active");
+  const loggedToday = useMemo(() => {
+    if (!activeBossRow) return false;
+    const dayResults = Array.isArray(activeBossRow.day_results)
+      ? (activeBossRow.day_results as boolean[])
+      : [];
+    if (dayResults.length === 0) return false;
+    const today = getTodayKey();
+    if (typeof activeBossRow.updated_at !== "string") return false;
+    return toLocalDateKey(new Date(activeBossRow.updated_at)) === today;
+  }, [activeBossRow]);
+
+  const handleLogBossDay = useCallback(
+    async (passed: boolean) => {
+      if (!activeBossRow) return;
+      try {
+        const res = await recordBossDayMutation.mutateAsync({
+          id: activeBossRow.id,
+          passed,
+        });
+        if (res.alreadyLoggedToday) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          return;
+        }
+        if (res.resolved === "defeated") {
+          // Award XP at the end of the challenge — single grant, single
+          // rank-up event. The atomic awardXP service handles the level
+          // recompute inside one tx.
+          const def = (bossDefinitions as BossDef[]).find(
+            (d) => d.id === activeBossRow.boss_id,
+          );
+          const reward = def?.xpReward ?? 0;
+          if (reward > 0) {
+            const xp = await awardXPMutation.mutateAsync(reward);
+            if (xp.leveledUp) {
+              await enqueueRankUpMutation.mutateAsync({
+                fromLevel: xp.fromLevel,
+                toLevel: xp.toLevel,
+              });
+            }
+          }
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else if (res.resolved === "failed") {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        } else {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+      } catch (e) {
+        logError("QuestsScreen.recordBossDay", e);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    },
+    [activeBossRow, recordBossDayMutation, awardXPMutation, enqueueRankUpMutation],
+  );
+
+  const handleAbandonBoss = useCallback(() => {
+    if (!activeBossRow) return;
+    Alert.alert(
+      "Abandon boss challenge?",
+      "All progress is lost. You can pick another available boss after this.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Abandon",
+          style: "destructive",
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            abandonBossMutation.mutate(activeBossRow.id);
+          },
+        },
+      ],
+    );
+  }, [activeBossRow, abandonBossMutation]);
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
@@ -198,7 +295,16 @@ export default function QuestsScreen() {
 
         {/* Boss Challenge */}
         <SectionHeader title="BOSS CHALLENGE" />
-        {bossChallenge && (bossChallenge.active || bossChallenge.completed) ? (
+        {bossChallenge && bossChallenge.active ? (
+          <BossChallengeCard
+            challenge={bossChallenge}
+            loggedToday={loggedToday}
+            onLogPass={() => handleLogBossDay(true)}
+            onLogFail={() => handleLogBossDay(false)}
+            onAbandon={handleAbandonBoss}
+            delay={400}
+          />
+        ) : bossChallenge && bossChallenge.completed ? (
           <BossChallengeCard challenge={bossChallenge} delay={400} />
         ) : bossChallenge && bossChallenge.failed ? (
           <BossChallengeCard

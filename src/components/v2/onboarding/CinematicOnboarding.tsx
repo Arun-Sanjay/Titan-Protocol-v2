@@ -25,6 +25,7 @@ import { getJSON, setJSON } from "../../../db/storage";
 import { getTodayKey } from "../../../lib/date";
 import { useCompleteOnboarding } from "../../../hooks/queries/useProfile";
 import { logError } from "../../../lib/error-log";
+import { setProgressDay } from "../../../lib/protocol-integrity";
 import type { Enums } from "../../../types/supabase";
 import type { EngineKey } from "../../../db/schema";
 
@@ -132,6 +133,9 @@ export function CinematicOnboarding({ onComplete }: Props) {
     if (!getJSON("first_active_date", null)) {
       setJSON("first_active_date", getTodayKey());
     }
+    // Seed engagement-based day counter at 1. recordCompletion() will
+    // advance it on the first task tick of each new local day.
+    setProgressDay(1);
 
     stopCurrentAudio();
 

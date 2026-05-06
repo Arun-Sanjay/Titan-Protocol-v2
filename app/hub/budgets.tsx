@@ -125,7 +125,10 @@ const TotalBudgetOverview = React.memo(function TotalBudgetOverview({
 }) {
   const pct = totalBudget > 0 ? totalSpent / totalBudget : 0;
   const pctClamped = Math.min(pct, 1);
-  const status = getBudgetStatus(totalBudget, totalSpent);
+  // getBudgetStatus(spent, limit) — args were swapped here, so a $100
+  // spend against a $1000 budget evaluated as 1000/100 = 10× over and
+  // showed the warning/over-budget colors when the user was 10% in.
+  const status = getBudgetStatus(totalSpent, totalBudget);
   const statusColor = getBudgetStatusColor(status);
   const remaining = totalBudget - totalSpent;
 

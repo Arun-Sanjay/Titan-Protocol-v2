@@ -8,10 +8,28 @@ import type { BossChallenge } from "../../../types/boss-ui";
 type Props = {
   challenge: BossChallenge;
   onAccept?: () => void;
+  /** Record today's result. Only meaningful while `challenge.active`. */
+  onLogPass?: () => void;
+  onLogFail?: () => void;
+  /** Abandon an active boss. Only meaningful while `challenge.active`. */
+  onAbandon?: () => void;
+  /**
+   * When true, today's result has already been logged — the log buttons
+   * become a "logged" status pill so we don't accept a second tap.
+   */
+  loggedToday?: boolean;
   delay?: number;
 };
 
-export function BossChallengeCard({ challenge, onAccept, delay = 0 }: Props) {
+export function BossChallengeCard({
+  challenge,
+  onAccept,
+  onLogPass,
+  onLogFail,
+  onAbandon,
+  loggedToday,
+  delay = 0,
+}: Props) {
   const isActive = challenge.active;
   const isCompleted = challenge.completed;
 
@@ -67,6 +85,38 @@ export function BossChallengeCard({ challenge, onAccept, delay = 0 }: Props) {
           <Pressable style={styles.acceptBtn} onPress={onAccept}>
             <Text style={styles.acceptText}>ACCEPT CHALLENGE</Text>
           </Pressable>
+        )}
+
+        {/* Active — log today's result + abandon. Without this row, accepting
+            a boss left the user with a card that displayed but had no path
+            to actually progress, complete, or fail it. */}
+        {isActive && (onLogPass || onLogFail || onAbandon) && (
+          <View style={styles.actionRow}>
+            {loggedToday ? (
+              <View style={styles.loggedPill}>
+                <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                <Text style={styles.loggedText}>LOGGED TODAY</Text>
+              </View>
+            ) : (
+              <View style={styles.logRow}>
+                {onLogPass && (
+                  <Pressable style={styles.logPassBtn} onPress={onLogPass}>
+                    <Text style={styles.logPassText}>LOG PASS</Text>
+                  </Pressable>
+                )}
+                {onLogFail && (
+                  <Pressable style={styles.logFailBtn} onPress={onLogFail}>
+                    <Text style={styles.logFailText}>LOG FAIL</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
+            {onAbandon && (
+              <Pressable style={styles.abandonBtn} onPress={onAbandon}>
+                <Text style={styles.abandonText}>ABANDON</Text>
+              </Pressable>
+            )}
+          </View>
         )}
 
         {/* Failed — retry available */}
@@ -197,5 +247,68 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.warning,
     letterSpacing: 2,
+  },
+  actionRow: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  logRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  logPassBtn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: 10,
+    backgroundColor: colors.success,
+    alignItems: "center",
+  },
+  logPassText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.bg,
+    letterSpacing: 2,
+  },
+  logFailBtn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    alignItems: "center",
+  },
+  logFailText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.danger,
+    letterSpacing: 2,
+  },
+  loggedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    borderRadius: 10,
+    backgroundColor: "rgba(52, 211, 153, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(52, 211, 153, 0.25)",
+  },
+  loggedText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.success,
+    letterSpacing: 1.5,
+  },
+  abandonBtn: {
+    alignSelf: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+  },
+  abandonText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.textMuted,
+    letterSpacing: 1.5,
   },
 });

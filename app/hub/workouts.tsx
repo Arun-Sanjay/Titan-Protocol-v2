@@ -30,6 +30,7 @@ import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { PageHeader } from "../../src/components/ui/PageHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
+import { logError } from "../../src/lib/error-log";
 // Phase 5: cloud-backed hooks replace local Zustand store.
 import {
   useGymSessions,
@@ -1197,7 +1198,7 @@ export default function WorkoutsScreen() {
     [activeSets, personalRecords, startRestTimer, upsertPRMut],
   );
 
-  const handleFinishWorkout = useCallback(() => {
+  const handleFinishWorkout = useCallback(async () => {
     if (!activeSession) return;
 
     // Check if any sets were completed
@@ -1210,29 +1211,41 @@ export default function WorkoutsScreen() {
       return;
     }
 
-    // Calculate and persist XP: 50 base + 20 per set + 100 per PR
+    // Persist the session first — that's the durable record. Then award
+    // XP and SURFACE failures: previously this was fire-and-forget with
+    // `.catch(() => {})`, so an XP write blocked by RLS / a transient
+    // error left the user with a recorded workout but missing XP and
+    // no rank-up event, completely silently.
     const totalSets = completedSets.length;
     const prCount = sessionPRSetIds.size;
     const totalXP = 50 + totalSets * 20 + prCount * 100;
-    awardXPMutation
-      .mutateAsync(totalXP)
-      .then((result) => {
-        if (result.leveledUp) {
-          return enqueueRankUpMutation.mutateAsync({
-            fromLevel: result.fromLevel,
-            toLevel: result.toLevel,
-          });
-        }
-      })
-      .catch(() => {
-        // Non-fatal; workout is still recorded in Supabase.
-      });
-
-    endSessionMut.mutate(activeSession.id);
-    setSummarySessionId(activeSession.id);
+    const sessionId = activeSession.id;
+    endSessionMut.mutate(sessionId);
+    setSummarySessionId(sessionId);
     setScreenState("summary");
     cancelRestTimer();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    try {
+      const result = await awardXPMutation.mutateAsync(totalXP);
+      if (result.leveledUp) {
+        await enqueueRankUpMutation.mutateAsync({
+          fromLevel: result.fromLevel,
+          toLevel: result.toLevel,
+        });
+      }
+    } catch (e) {
+      logError("workouts.handleFinishWorkout.awardXP", e, {
+        sessionId,
+        totalSets,
+        prCount,
+        totalXP,
+      });
+      Alert.alert(
+        "XP not awarded",
+        "Your workout was saved, but we couldn't credit XP. Pull to refresh on the dashboard or try again from your history.",
+      );
+    }
   }, [activeSession, activeSets, completedSetIds, endSessionMut, cancelRestTimer, sessionPRSetIds, awardXPMutation, enqueueRankUpMutation]);
 
   const handleCancelWorkout = useCallback(() => {

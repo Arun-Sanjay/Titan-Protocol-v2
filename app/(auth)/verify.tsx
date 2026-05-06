@@ -91,7 +91,16 @@ export default function VerifyScreen() {
         setStatus("error");
         setMessage("This sign-in link is missing information. Request a new one.");
       } catch (e) {
-        logError("verify.handleLink", e, { params });
+        // Never include params here — it carries access_token / refresh_token
+        // when supabase-js routes the implicit-flow callback through this
+        // screen, and logError forwards context to console + Sentry.
+        logError("verify.handleLink", e, {
+          flow: params.token_hash ? "pkce" : params.access_token ? "implicit" : "none",
+          type: params.type,
+          hasTokenHash: Boolean(params.token_hash),
+          hasAccessToken: Boolean(params.access_token),
+          hasRefreshToken: Boolean(params.refresh_token),
+        });
         setStatus("error");
         setMessage("Something went wrong verifying your link.");
       }

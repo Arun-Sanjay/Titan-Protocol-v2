@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 import { logError } from "../lib/error-log";
+import { queryClient } from "../lib/query-client";
 import type { Session, User } from "@supabase/supabase-js";
 
 type AuthState = {
@@ -53,13 +54,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!isLoading) return;
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      const nextUser = session?.user ?? null;
+      const prevUserId = get().user?.id ?? null;
+      if (nextUser && prevUserId !== nextUser.id) {
+        queryClient.clear();
+      }
       set((prev) => ({
         session: session ?? prev.session,
-        user: session?.user ?? prev.user,
+        user: nextUser ?? prev.user,
         isLoading: false,
       }));
-      if (session?.user) {
-        scheduleEnsureProfile(session.user.id, session.user.email ?? null);
+      if (nextUser) {
+        scheduleEnsureProfile(nextUser.id, nextUser.email ?? null);
       }
     });
 
@@ -83,6 +89,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED / INITIAL_SESSION(session).
       if (session?.user) {
+        const prevUserId = get().user?.id ?? null;
+        if (prevUserId !== session.user.id) {
+          queryClient.clear();
+        }
         set({ session, user: session.user, isLoading: false });
         if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
           scheduleEnsureProfile(session.user.id, session.user.email ?? null);
@@ -104,6 +114,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (e) {
       logError("useAuthStore.signOut", e);
     } finally {
+      queryClient.clear();
+      // Wipe device-local onboarding flags so a different account
+      // signing in on this device doesn't inherit the previous user's
+      // completed-onboarding state. The OnboardingGate now also gates
+      // on cloud-only state, but this is belt-and-suspenders.
+      try {
+        const { useOnboardingStore } = await import("./useOnboardingStore");
+        useOnboardingStore.getState().clearForSignOut();
+      } catch (e) {
+        logError("useAuthStore.signOut.clearOnboarding", e);
+      }
       set({ session: null, user: null });
       explicitSignOut = false;
       lastEnsuredProfileFor = null;
@@ -144,6 +165,7 @@ function handleSignedOut(
   set: (partial: Partial<AuthState>) => void,
 ) {
   if (explicitSignOut) {
+    queryClient.clear();
     set({ session: null, user: null, isLoading: false });
     explicitSignOut = false;
     lastEnsuredProfileFor = null;
@@ -152,6 +174,7 @@ function handleSignedOut(
 
   const snapshot = get().session;
   if (!snapshot?.refresh_token || !snapshot.access_token) {
+    queryClient.clear();
     set({ session: null, user: null, isLoading: false });
     lastEnsuredProfileFor = null;
     return;
@@ -161,6 +184,7 @@ function handleSignedOut(
   if (recoveryInFlight || now - lastRecoveryAttempt < RECOVERY_COOLDOWN_MS) {
     // Already mid-recovery, or cascade is repeating. Accept the sign-out.
     recoveryInFlight = false;
+    queryClient.clear();
     set({ session: null, user: null, isLoading: false });
     lastEnsuredProfileFor = null;
     return;
@@ -183,6 +207,7 @@ function handleSignedOut(
             "useAuthStore.recovery.failed",
             error ?? new Error("setSession returned no session"),
           );
+          queryClient.clear();
           set({ session: null, user: null, isLoading: false });
           lastEnsuredProfileFor = null;
           return;

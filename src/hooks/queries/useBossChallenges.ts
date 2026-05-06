@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/useAuthStore";
 import {
+  abandonBossChallenge,
   listActiveBossChallenges,
+  recordBossDay,
   startBossChallenge,
   type BossChallenge,
 } from "../../services/boss-challenges";
@@ -55,6 +57,33 @@ export function useStartBossChallenge() {
       if (ctx?.prev)
         qc.setQueryData(bossChallengesKeys.active, ctx.prev);
     },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: bossChallengesKeys.active });
+    },
+  });
+}
+
+/**
+ * Append today's pass/fail to an active boss. The mutation result tells
+ * the caller whether the boss was just resolved so the UI can fire the
+ * defeat/fail cinematic and award XP.
+ */
+export function useRecordBossDay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { id: string; passed: boolean }) =>
+      recordBossDay(vars),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: bossChallengesKeys.active });
+    },
+  });
+}
+
+/** Manually abandon an active boss. */
+export function useAbandonBossChallenge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => abandonBossChallenge(id),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: bossChallengesKeys.active });
     },

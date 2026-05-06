@@ -20,6 +20,12 @@ type OnboardingState = {
   setSchedulePreference: (pref: SchedulePreference) => void;
   completeTutorial: () => void;
   resetTutorial: () => void;
+  /**
+   * Wipe every persisted onboarding flag so the next account signing
+   * in on this device doesn't inherit the previous user's setup.
+   * Called from `useAuthStore.signOut`.
+   */
+  clearForSignOut: () => void;
 };
 
 export const useOnboardingStore = create<OnboardingState>((set) => ({
@@ -62,5 +68,20 @@ export const useOnboardingStore = create<OnboardingState>((set) => ({
   resetTutorial: () => {
     setJSON("tutorial_completed", false);
     set({ tutorialCompleted: false });
+  },
+
+  clearForSignOut: () => {
+    setJSON("onboarding_completed", false);
+    setJSON("onboarding_identity", "");
+    setJSON("onboarding_engine_priority", ["body", "mind", "money", "charisma"]);
+    setJSON("onboarding_goals", []);
+    setJSON("tutorial_completed", false);
+    set({
+      completed: false,
+      identity: "",
+      enginePriority: ["body", "mind", "money", "charisma"],
+      goals: [],
+      tutorialCompleted: false,
+    });
   },
 }));

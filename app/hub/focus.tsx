@@ -27,6 +27,7 @@ import { colors, spacing, radius, fonts } from "../../src/theme";
 import { Panel } from "../../src/components/ui/Panel";
 import { SectionHeader } from "../../src/components/ui/SectionHeader";
 import { MetricValue } from "../../src/components/ui/MetricValue";
+import { logError } from "../../src/lib/error-log";
 import { getTodayKey, addDays, getDayOfWeek } from "../../src/lib/date";
 import { type FocusSettings } from "../../src/lib/focus-helpers";
 import {
@@ -490,6 +491,10 @@ export default function FocusTimerScreen() {
           duration_minutes: settings.focusMinutes,
           completed: true,
         });
+        // Award XP and surface any failure. The previous version
+        // swallowed errors with `.catch(() => {})`, so a transient XP
+        // write failure left the session recorded but the user with
+        // nothing to show for it. Now we log + alert.
         awardXPMutation
           .mutateAsync(XP_REWARDS.MAIN_TASK)
           .then((result) => {
@@ -500,8 +505,15 @@ export default function FocusTimerScreen() {
               });
             }
           })
-          .catch(() => {
-            // Non-fatal; focus session is still recorded locally.
+          .catch((e) => {
+            logError("focus.completeSession.awardXP", e, {
+              dateKey: currentDateKey,
+              minutes: settings.focusMinutes,
+            });
+            Alert.alert(
+              "XP not awarded",
+              "Your focus session was logged, but we couldn't credit XP. Try again from the dashboard.",
+            );
           });
         setShowCompleteFlash(true);
         setTimeout(() => setShowCompleteFlash(false), 2000);

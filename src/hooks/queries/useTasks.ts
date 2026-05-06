@@ -7,6 +7,7 @@ import {
   listCompletionsByEngine,
   listRecentCompletions,
   toggleCompletion,
+  toggleCompletionAndAward,
   createTask,
   deleteTask,
   type Task,
@@ -14,8 +15,10 @@ import {
   type EngineKey,
   type TaskKind,
 } from "../../services/tasks";
+import { profileQueryKey } from "./useProfile";
 import { runAchievementCheck } from "../../lib/achievement-integration";
 import { evaluateAllTrees } from "../../lib/skill-tree-evaluator";
+import { recordCompletion } from "../../lib/protocol-integrity";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
 
@@ -115,6 +118,12 @@ export function useToggleCompletion() {
         qc.setQueryData(tasksKeys.completions(vars.dateKey), ctx.prev);
       }
     },
+    onSuccess: () => {
+      // Stamp the day-engagement marker. Idempotent same-day, so a
+      // tap-storm on multiple tasks doesn't multi-advance the
+      // progress counter.
+      recordCompletion();
+    },
     onSettled: (_data, _err, vars) => {
       qc.invalidateQueries({ queryKey: tasksKeys.completions(vars.dateKey) });
       qc.invalidateQueries({ queryKey: tasksKeys.recentCompletions });
@@ -126,6 +135,85 @@ export function useToggleCompletion() {
       // Fire-and-forget skill-tree re-evaluation so level-1 "task_count"
       // nodes flip to "ready" as the user plays, not only after evening
       // protocol.
+      evaluateAllTrees().catch(() => {});
+    },
+  });
+}
+
+/**
+ * Atomic toggle + XP award. Use this from screens whose toggle is
+ * paired with an XP grant (HQ, Engine detail). The service runs both
+ * the completion mutation and the XP recalculation in one SQLite
+ * transaction so a partial failure can't leave the user with a
+ * completed task and no XP, or vice versa.
+ *
+ * Optimistic cache updates target both the completions list and the
+ * profile so the UI feels instant; the authoritative result returns
+ * { added, leveledUp, fromLevel, toLevel, xp }.
+ */
+export function useToggleCompletionWithReward() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (vars: {
+      task: { id: string; engine: EngineKey };
+      dateKey: string;
+      xpAmount: number;
+    }) =>
+      toggleCompletionAndAward({
+        taskId: vars.task.id,
+        dateKey: vars.dateKey,
+        engine: vars.task.engine,
+        xpAmount: vars.xpAmount,
+      }),
+    onMutate: async (vars) => {
+      const completionsKey = tasksKeys.completions(vars.dateKey);
+      await qc.cancelQueries({ queryKey: completionsKey });
+      await qc.cancelQueries({ queryKey: profileQueryKey });
+      const prevCompletions = qc.getQueryData<Completion[]>(completionsKey);
+      const prevProfile = qc.getQueryData<{
+        xp?: number;
+        level?: number;
+      }>(profileQueryKey);
+      // Optimistic profile XP bump (best-effort; the mutationFn returns
+      // the authoritative numbers and onSettled invalidates).
+      if (prevProfile) {
+        const oldXP = prevProfile.xp ?? 0;
+        const oldLevel = prevProfile.level ?? 1;
+        const tentativeXP = Math.max(0, oldXP + vars.xpAmount);
+        const tentativeLevel = Math.floor(tentativeXP / 500) + 1;
+        qc.setQueryData(profileQueryKey, {
+          ...prevProfile,
+          xp: tentativeXP,
+          level: tentativeLevel,
+        });
+        // Restore on error via the snapshot below.
+        void oldLevel;
+      }
+      return { prevCompletions, prevProfile };
+    },
+    onError: (_err, vars, ctx) => {
+      if (ctx?.prevCompletions) {
+        qc.setQueryData(tasksKeys.completions(vars.dateKey), ctx.prevCompletions);
+      }
+      if (ctx?.prevProfile !== undefined) {
+        qc.setQueryData(profileQueryKey, ctx.prevProfile);
+      }
+    },
+    onSuccess: () => {
+      // Same as useToggleCompletion — stamp the day-engagement marker
+      // so the progress day advances on the first task tick of a new
+      // local day.
+      recordCompletion();
+    },
+    onSettled: (_data, _err, vars) => {
+      qc.invalidateQueries({ queryKey: tasksKeys.completions(vars.dateKey) });
+      qc.invalidateQueries({ queryKey: tasksKeys.recentCompletions });
+      qc.invalidateQueries({
+        queryKey: tasksKeys.engineCompletions(vars.task.engine, vars.dateKey),
+      });
+      qc.invalidateQueries({ queryKey: profileQueryKey });
+      runAchievementCheck(qc).catch(() => {});
       evaluateAllTrees().catch(() => {});
     },
   });

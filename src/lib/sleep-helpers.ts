@@ -71,6 +71,76 @@ export function isValidTime(time: string): boolean {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
 }
 
+// ─── Notes packing ──────────────────────────────────────────────────────────
+//
+// `sleep_logs` only has columns for hours_slept / quality / notes — there
+// is no native bedtime/wakeTime column in the cloud schema. Rather than
+// invent local-only columns (which would break backup compatibility) we
+// stash the schedule into the `notes` TEXT column as a small JSON wrapper
+// so the round-trip preserves the user's actual sleep window.
+//
+// Wrapper shape:  { v: 1, bed: "HH:MM", wake: "HH:MM", note: "..." }
+// Unwrapped str:  "<plain user text>"
+//
+// `unpackSleepNotes` is forgiving — anything that doesn't parse as
+// our v1 wrapper is treated as plain text, so old rows written before
+// this fix continue to display normally.
+
+export type SleepNotesPayload = {
+  bedtime: string | null;
+  wakeTime: string | null;
+  note: string;
+};
+
+const SLEEP_NOTES_VERSION = 1;
+
+export function packSleepNotes(payload: {
+  bedtime?: string | null;
+  wakeTime?: string | null;
+  note?: string | null;
+}): string | null {
+  const bed = payload.bedtime?.trim();
+  const wake = payload.wakeTime?.trim();
+  const note = payload.note?.trim() ?? "";
+  // No schedule data → just store the plain text (or null when empty).
+  if (!bed && !wake) {
+    return note.length > 0 ? note : null;
+  }
+  return JSON.stringify({
+    v: SLEEP_NOTES_VERSION,
+    bed: bed ?? null,
+    wake: wake ?? null,
+    note,
+  });
+}
+
+export function unpackSleepNotes(raw: string | null | undefined): SleepNotesPayload {
+  if (!raw) return { bedtime: null, wakeTime: null, note: "" };
+  // Cheap pre-check: only attempt JSON.parse when it looks like an object.
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{")) {
+    return { bedtime: null, wakeTime: null, note: raw };
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      v?: number;
+      bed?: string | null;
+      wake?: string | null;
+      note?: string;
+    };
+    if (parsed.v !== SLEEP_NOTES_VERSION) {
+      return { bedtime: null, wakeTime: null, note: raw };
+    }
+    return {
+      bedtime: parsed.bed ?? null,
+      wakeTime: parsed.wake ?? null,
+      note: parsed.note ?? "",
+    };
+  } catch {
+    return { bedtime: null, wakeTime: null, note: raw };
+  }
+}
+
 export function isValidQuality(q: number): q is 1 | 2 | 3 | 4 | 5 {
   return q >= 1 && q <= 5 && Number.isInteger(q);
 }

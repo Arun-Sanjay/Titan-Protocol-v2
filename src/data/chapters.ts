@@ -3,7 +3,8 @@
  * After Chapter 6: "Endgame" with harder targets.
  */
 
-import { getJSON, setJSON } from "../db/storage";
+import { getJSON } from "../db/storage";
+import { getProgressDay } from "../lib/protocol-integrity";
 
 export type Chapter = {
   number: number;
@@ -104,27 +105,29 @@ export function getCurrentChapter(dayNumber: number): Chapter {
 }
 
 /**
- * Get day number from first active date (device local time).
- * Includes dev_day_offset for testing (DEV skip-day button).
- * Anti-regression: clamps to never go below the highest day previously reached
- * (prevents device clock manipulation from regressing progress).
+ * Engagement-based day number.
+ *
+ * The number advances by 1 each time the user has their first task /
+ * protocol completion of a new local day (see `recordCompletion()` in
+ * `lib/protocol-integrity.ts`). It's monotonic — a streak BREACH or
+ * RESET reduces the streak but does not roll the day back. So a user
+ * who reaches Day 7 and then disappears for a week comes back to Day 7,
+ * not Day 14, and not Day 1. The "Reset Progress" button in Settings is
+ * the only thing that walks it back.
+ *
+ * Previously this was calendar-based (`floor((now − first_active_date)
+ * / 24h) + 1`), which made the day advance whether or not the user
+ * showed up. The narrative arc desynced from engagement, and the
+ * `max_day_reached` anti-regression clamp had to carry the difference.
+ * The clamp is deleted along with the calendar math.
+ *
+ * The optional `_firstActiveDate` parameter is accepted-and-ignored for
+ * backwards compatibility with call sites that pass it; once those are
+ * cleaned up this signature can drop the argument entirely.
+ *
+ * `dev_day_offset` is preserved for the DEV skip-day button.
  */
-export function getDayNumber(firstActiveDate: string | null): number {
-  if (!firstActiveDate) return 1;
-  const start = new Date(firstActiveDate + "T00:00:00");
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const realDay = Math.max(1, Math.floor((now.getTime() - start.getTime()) / 86_400_000) + 1);
-
-  // Add dev offset for testing (DEV skip-day button)
+export function getDayNumber(_firstActiveDate?: string | null): number {
   const offset = getJSON<number>("dev_day_offset", 0);
-  const calculatedDay = realDay + offset;
-
-  // Anti-regression clamp: never go below highest day reached
-  const maxReached = getJSON<number>("max_day_reached", 0);
-  const finalDay = Math.max(calculatedDay, maxReached);
-  if (finalDay > maxReached) {
-    setJSON("max_day_reached", finalDay);
-  }
-  return finalDay;
+  return Math.max(1, getProgressDay() + offset);
 }

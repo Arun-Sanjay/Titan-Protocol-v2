@@ -7,14 +7,12 @@
 
 import { getJSON, setJSON } from "../db/storage";
 import { useIdentityStore } from "../stores/useIdentityStore";
-import {
-  cachedActiveQuests,
-  cachedCurrentPhase,
-  cachedCurrentWeek,
-} from "./cached-cloud";
 import { generateWeeklyQuests } from "./quest-generator";
-import { insertWeeklyQuests } from "../services/quests";
-import { upsertProgression } from "../services/progression";
+import { insertWeeklyQuests, listActiveQuests } from "../services/quests";
+import {
+  getProgression,
+  upsertProgression,
+} from "../services/progression";
 import { phaseFromWeek } from "../types/progression-ui";
 import { queryClient } from "./query-client";
 import { questsKeys } from "../hooks/queries/useQuests";
@@ -45,41 +43,55 @@ export function safeGetJSON<T>(key: string, fallback: T): T {
 // ─── Monday Gap Handler ─────────────────────────────────────────────────────
 
 /**
- * Handle app open after a gap (especially crossing Monday).
- * - Generates weekly quests if Monday and none exist
- * - Checks phase advancement
+ * Handle app open / foreground / new-day. Reads SQLite directly (not the
+ * React Query cache) so we don't race the cache hydration on cold start.
  *
- * Protocol today-status no longer needs refresh — it's now derived
- * from the useProtocolSession(today) React Query cache.
+ *   - Generates this week's quests if Monday and none active.
+ *   - Advances `progression.current_phase` if the user's week number has
+ *     crossed a phase boundary since the last app open.
+ *
+ * Idempotent: safe to call from app boot AND from app resume — the quest
+ * insert is gated on `listActiveQuests().length === 0`, and the phase
+ * upsert only writes when the derived phase actually differs.
  */
-export function handleAppOpenAfterGap(): void {
+export async function handleAppOpenAfterGap(): Promise<void> {
   const today = getTodayKey();
   const dayOfWeek = new Date(today + "T00:00:00").getDay();
 
-  // Check if quests need generation (Monday = 1)
+  // Quest generation — Monday only. Read live from SQLite (cache may
+  // not be hydrated on cold start, which previously meant we generated
+  // a duplicate set of quests on top of an existing one).
   if (dayOfWeek === 1) {
-    const active = cachedActiveQuests();
-    if (active.length === 0) {
-      const phase = cachedCurrentPhase();
-      const identity = useIdentityStore.getState().archetype ?? "operator";
-      const quests = generateWeeklyQuests(phase, identity);
-      insertWeeklyQuests(quests)
-        .then(() => {
+    try {
+      const active = await listActiveQuests();
+      if (active.length === 0) {
+        const progression = await getProgression();
+        const phase = progression?.current_phase ?? "foundation";
+        const identity = useIdentityStore.getState().archetype ?? "operator";
+        const quests = generateWeeklyQuests(phase, identity);
+        if (quests.length > 0) {
+          await insertWeeklyQuests(quests);
           queryClient.invalidateQueries({ queryKey: questsKeys.active });
-        })
-        .catch((e) => logError("safety.insertWeeklyQuests", e));
+        }
+      }
+    } catch (e) {
+      logError("safety.insertWeeklyQuests", e);
     }
   }
 
-  // Phase advancement from cached week number.
-  const week = cachedCurrentWeek();
-  const derivedPhase = phaseFromWeek(week);
-  if (derivedPhase !== cachedCurrentPhase()) {
-    upsertProgression({ current_phase: derivedPhase })
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: progressionKeys.all });
-      })
-      .catch((e) => logError("safety.upsertProgression", e));
+  // Phase advancement — read live progression so we never derive against
+  // a stale React Query cache.
+  try {
+    const progression = await getProgression();
+    const week = progression?.current_week ?? 1;
+    const currentPhase = progression?.current_phase ?? "foundation";
+    const derivedPhase = phaseFromWeek(week);
+    if (derivedPhase !== currentPhase) {
+      await upsertProgression({ current_phase: derivedPhase });
+      queryClient.invalidateQueries({ queryKey: progressionKeys.all });
+    }
+  } catch (e) {
+    logError("safety.upsertProgression", e);
   }
 }
 

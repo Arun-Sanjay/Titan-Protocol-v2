@@ -710,6 +710,10 @@ export default function RootLayout() {
           options={{ animation: "slide_from_right" }}
         />
         <Stack.Screen
+          name="field-op/[id]"
+          options={{ animation: "slide_from_right" }}
+        />
+        <Stack.Screen
           name="titles"
           options={{ animation: "slide_from_right" }}
         />

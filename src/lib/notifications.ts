@@ -266,7 +266,10 @@ export function setupNotificationHandler(navigate: (route: string) => void): Not
     switch (id) {
       case NOTIF_IDS.DAILY_PROTOCOL:
       case NOTIF_IDS.STREAK_WARNING:
-        navigate("/(tabs)");
+        // Both reminders exist to push the user into a protocol session;
+        // dropping them on /(tabs) was effectively a "do nothing" because
+        // /protocol is the screen that actually completes the day.
+        navigate("/protocol");
         break;
       case NOTIF_IDS.QUEST_DEADLINE:
       case NOTIF_IDS.BOSS_REMINDER:

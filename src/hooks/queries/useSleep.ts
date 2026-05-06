@@ -4,7 +4,7 @@ import {
   listSleepLogs,
   upsertSleepLog,
   deleteSleepLog,
-  type SleepLog,
+  type SleepLogWithSchedule,
 } from "../../services/sleep";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ export function useUpsertSleepLog() {
     mutationFn: upsertSleepLog,
     onMutate: async () => {
       await qc.cancelQueries({ queryKey: sleepKeys.all });
-      const prev = qc.getQueryData<SleepLog[]>(sleepKeys.all);
+      const prev = qc.getQueryData<SleepLogWithSchedule[]>(sleepKeys.all);
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
@@ -52,8 +52,8 @@ export function useDeleteSleepLog() {
     mutationFn: deleteSleepLog,
     onMutate: async (logId) => {
       await qc.cancelQueries({ queryKey: sleepKeys.all });
-      const prev = qc.getQueryData<SleepLog[]>(sleepKeys.all);
-      qc.setQueryData<SleepLog[]>(sleepKeys.all, (old) =>
+      const prev = qc.getQueryData<SleepLogWithSchedule[]>(sleepKeys.all);
+      qc.setQueryData<SleepLogWithSchedule[]>(sleepKeys.all, (old) =>
         old?.filter((l) => l.id !== logId) ?? [],
       );
       return { prev };
