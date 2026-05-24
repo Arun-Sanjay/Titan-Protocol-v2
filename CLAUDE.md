@@ -211,6 +211,7 @@ mobile/
 │   ├── hub/                 analytics, budgets, cashflow, command, deep-work,
 │   │                        focus, nutrition, settings, sleep, weight, workouts
 │   ├── engine/[id].tsx      Per-engine mission detail
+│   ├── field-op/[id].tsx    Per-field-op detail
 │   ├── skill-tree/          index + [engine]
 │   ├── protocol.tsx         Morning/evening session
 │   ├── field-ops.tsx, achievements.tsx, mind-training.tsx, narrative.tsx,
@@ -304,21 +305,13 @@ See `docs/MIGRATION_LOCAL_FIRST.md` for the migration record.
 
 ---
 
-## 10. Known Debt (as of 2026-04-23)
+## 10. Known Debt (open)
 
-Kept here so future sessions don't re-discover these.
+Kept here so future sessions don't re-discover these. Closed items live in git history.
 
-**Open:**
+- **Tombstones don't upload on backup.** `src/sync/backup.ts:75` filters `WHERE _deleted = 0`, so a deletion on Device A never propagates to Device B on restore. Fine for a single-device user; fix before multi-device ships. Recommended: after the upserts, issue `.delete().in('id', deadIds)` per table and then hard-purge locally (web's `sync/backup.ts` already does this — port back).
+- **Streak MMKV/SQLite duality.** `app/_layout.tsx:349` reads streak from MMKV (`protocol_streak`) because the layout sits above `<QueryClientProvider>`. `profiles.streak_current` is the authoritative store. They can drift. Fix when touching streak math.
+- **Hook key convention inconsistency.** ~11 hooks use table-name keys (`["achievements_unlocked"]`, `["rank_ups","pending"]`) while others use short roots (`["habits"]`, `["tasks"]`). Non-functional, but a sweep would standardize.
+- **Stale doc comment in `src/db/storage.ts:14`** — pre-migration text claiming user data belongs in Supabase. Reword next time you're in that file.
 
-- **Tombstones don't upload on backup.** `src/sync/backup.ts:75` filters `WHERE _deleted = 0`, so a deletion on Device A never propagates to Device B on restore. Fine for a single-device user; fix before multi-device ships. Recommended approach: after uploading `_deleted = 0` rows, send a `.delete().in('id', deadIds)` per table for the tombstones, then hard-delete them locally.
-- **Streak MMKV/SQLite duality.** `app/_layout.tsx:349` reads streak from MMKV (`protocol_streak`) because the layout is above `<QueryClientProvider>`. `profiles.streak_current` is the authoritative store. They can drift. Fix when touching streak math — either move `<QueryClientProvider>` up or treat MMKV as a cache stamped from every SQLite write.
-- **Hook key convention inconsistency.** ~11 hooks use table-name keys (`["achievements_unlocked"]`, `["rank_ups","pending"]`, `["titan_mode_state"]`) while others use short roots (`["habits"]`, `["tasks"]`). Non-functional (React Query prefix matching works), but a sweep would standardize.
-- **Stale doc comment in `src/db/storage.ts:14`** — "User data belongs in Supabase. See CLAUDE.md §1." Left over from the Supabase-first era. User data lives in SQLite now; MMKV is preferences only.
-
-**Closed (2026-04-23):**
-
-- ~~`elevation: 4` in `SkillNode.tsx`~~ → iOS-only shadow via `Platform.select`.
-- ~~8 `.toISOString().slice(0, 10)` sites~~ → swept to `getTodayKey()` / `toLocalDateKey()`. Guarded by `src/__tests__/lint/forbidden-patterns.test.ts` (also checks raw `elevation:`).
-- ~~`TABLE_QUERY_KEY_ROOTS` / `queryKeysFor` dead code~~ → deleted from `src/sync/tables.ts`.
-- ~~`pending_mutations` + `sync_meta` dead tables~~ → dropped by migration `002_drop_legacy_sync_tables`.
-- ~~`useJournalEntries(days?)` dead param~~ → removed; call site in `track.tsx` updated.
+Lint guards in `src/__tests__/lint/forbidden-patterns.test.ts` enforce: no `.toISOString().slice(0,10)` (use `lib/date.ts`) and no raw `elevation:` outside `theme/shadows.ts`. Both gate `npm run prebuild`.
