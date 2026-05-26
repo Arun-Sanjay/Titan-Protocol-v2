@@ -1163,6 +1163,7 @@ export type Database = {
           created_at: string
           display_name: string | null
           email: string | null
+          expo_push_token: string | null
           first_task_completed_at: string | null
           first_use_date: string | null
           focus_engines: Database["public"]["Enums"]["engine_key"][]
@@ -1182,6 +1183,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           email?: string | null
+          expo_push_token?: string | null
           first_task_completed_at?: string | null
           first_use_date?: string | null
           focus_engines?: Database["public"]["Enums"]["engine_key"][]
@@ -1201,6 +1203,7 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           email?: string | null
+          expo_push_token?: string | null
           first_task_completed_at?: string | null
           first_use_date?: string | null
           focus_engines?: Database["public"]["Enums"]["engine_key"][]
@@ -2019,4 +2022,3 @@ export const Constants = {
     },
   },
 } as const
-
