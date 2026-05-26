@@ -9,8 +9,18 @@ on:
     # `local-first` is the long-lived migration branch — builds here
     # produce test APKs before we merge to main and tag v2.0.
     branches: [main, local-first]
+    # Skip Classic's CI when only the new mobile-saas/ subfolder or its
+    # dedicated workflow changes — those have their own pipeline at
+    # .github/workflows/mobile-saas-android.yml and Classic's APK is
+    # unaffected.
+    paths-ignore:
+      - 'mobile-saas/**'
+      - '.github/workflows/mobile-saas-android.yml'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'mobile-saas/**'
+      - '.github/workflows/mobile-saas-android.yml'
   workflow_dispatch:
 
 concurrency:

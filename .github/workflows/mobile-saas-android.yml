@@ -14,7 +14,10 @@ name: mobile-saas · Android APK
 
 on:
   push:
-    branches: [mobile-saas-app]
+    branches: [main, mobile-saas-app]
+    paths:
+      - 'mobile-saas/**'
+      - '.github/workflows/mobile-saas-android.yml'
   workflow_dispatch:
 
 defaults:
