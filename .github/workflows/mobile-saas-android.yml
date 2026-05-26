@@ -1,0 +1,141 @@
+name: mobile-saas · Android APK
+
+# Builds an installable Android APK for the new SaaS mobile package
+# that lives under `mobile-saas/` in this repo. Separate from Classic's
+# `android.yml` which builds the standalone APK from the root.
+#
+# Triggers only on the `mobile-saas-app` branch + manual dispatch.
+# `main` and `local-first` stay Classic's territory — pushing there
+# does NOT fire this workflow.
+#
+# Defaults route every step into `mobile-saas/` so the workflow looks
+# like the standalone repo's version. The artifact lands in the run
+# summary → Artifacts section, downloadable as a zip.
+
+on:
+  push:
+    branches: [mobile-saas-app]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: mobile-saas
+
+jobs:
+  # ─── Job 1: TypeScript + Jest gate ─────────────────────────────────────────
+  checks:
+    name: Type-check & tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile-saas/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Jest tests
+        run: npx jest --passWithNoTests
+
+  # ─── Job 2: Gradle Android APK build ───────────────────────────────────────
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: checks
+    if: github.event_name != 'pull_request'
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile-saas/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Provision .env
+        env:
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            {
+              echo "EXPO_PUBLIC_SUPABASE_URL=${SUPABASE_URL}"
+              echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
+            } > .env
+            echo "✓ .env built from CI secrets"
+          elif [ -f .env.example ]; then
+            cp .env.example .env
+            echo "✓ .env copied from .env.example (publishable values)"
+          else
+            echo "⚠ No .env.example and no secrets — build will likely fail at runtime"
+          fi
+
+      - name: Expo prebuild (generates android/ folder)
+        run: npx expo prebuild --platform android --no-install --non-interactive
+
+      - name: Build debug APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Set version string
+        id: version
+        # working-directory above forces `mobile-saas`; resolve the
+        # repo's short SHA from inside that subdir.
+        run: echo "tag=$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Locate the APK
+        id: apk
+        run: |
+          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          # Translate into a repo-root-relative path so upload-artifact
+          # (which doesn't honour the workflow's defaults.run dir) can
+          # resolve it.
+          echo "path=mobile-saas/$APK_PATH" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h "$APK_PATH" | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "✓ APK at $APK_PATH ($(du -h "$APK_PATH" | cut -f1))"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: titan-protocol-mobile-saas-${{ steps.version.outputs.tag }}
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          {
+            echo "## mobile-saas Android Preview APK ready"
+            echo ""
+            echo "**Tag:** ${{ steps.version.outputs.tag }}"
+            echo "**Size:** ${{ steps.apk.outputs.size }}"
+            echo ""
+            echo "**Download:** scroll up to the **Artifacts** section of this run summary →"
+            echo "\`titan-protocol-mobile-saas-${{ steps.version.outputs.tag }}\` → unzip → install on phone."
+            echo ""
+            echo "_Debug-signed; installs as a new app — does not collide with Classic._"
+          } >> "$GITHUB_STEP_SUMMARY"
