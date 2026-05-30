@@ -106,6 +106,16 @@ jobs:
       # That keystore is deterministic, so successive CI builds share a
       # signature and install as updates over each other. No secrets needed.
       - name: Build release APK (standalone, JS embedded)
+        # @sentry/react-native's gradle hook adds a source-map UPLOAD task to
+        # release builds only (createBundleRelease..._SentryUpload). With no
+        # SENTRY_AUTH_TOKEN it invokes sentry-cli, which exits 1 and fails the
+        # build — this is why debug succeeded (no upload task) but release did
+        # not. Disable the auto-upload; we don't have a Sentry project wired
+        # for preview builds. Crash reporting can be turned on later by setting
+        # the Sentry org/project/auth-token secrets and removing this.
+        env:
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
+          SENTRY_ALLOW_FAILURE: "true"
         run: |
           cd android
           ./gradlew assembleRelease --no-daemon
