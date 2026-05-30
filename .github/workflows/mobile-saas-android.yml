@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: checks
     if: github.event_name != 'pull_request'
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -99,10 +99,16 @@ jobs:
       - name: Expo prebuild (generates android/ folder)
         run: npx expo prebuild --platform android --no-install --non-interactive
 
-      - name: Build debug APK
+      # Release variant: Expo's prebuild generates a `release` buildType that
+      # (1) embeds the JS bundle into the APK via the Hermes bundle task, so
+      # the app runs standalone with NO Metro dev server, and (2) signs with
+      # the universal debug keystore that prebuild ships in android/app/.
+      # That keystore is deterministic, so successive CI builds share a
+      # signature and install as updates over each other. No secrets needed.
+      - name: Build release APK (standalone, JS embedded)
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Set version string
         id: version
@@ -113,7 +119,7 @@ jobs:
       - name: Locate the APK
         id: apk
         run: |
-          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
           # Translate into a repo-root-relative path so upload-artifact
           # (which doesn't honour the workflow's defaults.run dir) can
           # resolve it.
@@ -132,7 +138,7 @@ jobs:
       - name: Summary
         run: |
           {
-            echo "## mobile-saas Android Preview APK ready"
+            echo "## mobile-saas Android RELEASE APK ready"
             echo ""
             echo "**Tag:** ${{ steps.version.outputs.tag }}"
             echo "**Size:** ${{ steps.apk.outputs.size }}"
@@ -140,5 +146,6 @@ jobs:
             echo "**Download:** scroll up to the **Artifacts** section of this run summary →"
             echo "\`titan-protocol-mobile-saas-${{ steps.version.outputs.tag }}\` → unzip → install on phone."
             echo ""
-            echo "_Debug-signed; installs as a new app — does not collide with Classic._"
+            echo "_Standalone release build — JS is embedded, so it runs with NO Metro server._"
+            echo "_Signed with Expo's debug keystore; installs as a new app, does not collide with Classic._"
           } >> "$GITHUB_STEP_SUMMARY"
