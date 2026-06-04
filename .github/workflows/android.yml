@@ -15,11 +15,15 @@ on:
     # unaffected.
     paths-ignore:
       - 'mobile-saas/**'
+      - 'web/**'
+      - 'shared/**'
       - '.github/workflows/mobile-saas-android.yml'
   pull_request:
     branches: [main]
     paths-ignore:
       - 'mobile-saas/**'
+      - 'web/**'
+      - 'shared/**'
       - '.github/workflows/mobile-saas-android.yml'
   workflow_dispatch:
 

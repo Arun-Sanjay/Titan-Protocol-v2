@@ -108,6 +108,7 @@ function defaultProfile(userId: string): Profile {
   return {
     id: userId,
     email: null,
+    expo_push_token: null,
     display_name: null,
     archetype: null,
     level: 1,

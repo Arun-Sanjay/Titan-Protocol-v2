@@ -17,7 +17,10 @@ module.exports = {
   // Phase 2.4F: legacy/ contains the frozen web app's old tests which
   // import from a different module graph (Dexie, Next.js, etc.) and
   // have nothing to do with mobile. Skip them.
-  testPathIgnorePatterns: ["/node_modules/", "/legacy/", "/.expo/", "/android/"],
+  // Sibling packages (web/, shared/, mobile-saas/) live in this monorepo but
+  // have their own test runners (vitest for web, their own jest for mobile-saas)
+  // and module graphs. Classic's jest must not pick them up.
+  testPathIgnorePatterns: ["/node_modules/", "/legacy/", "/.expo/", "/android/", "/web/", "/shared/", "/mobile-saas/"],
   transformIgnorePatterns: [
     "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|@sentry/.*|posthog-react-native|posthog-core|native-base|react-native-svg|@shopify/.*|react-native-mmkv|react-native-reanimated|@tanstack/.*))",
   ],

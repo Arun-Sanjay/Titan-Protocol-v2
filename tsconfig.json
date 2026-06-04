@@ -18,6 +18,9 @@
     "metro.config.js",
     "titan-voice-lines",
     "legacy",
-    "android"
+    "android",
+    "web",
+    "shared",
+    "mobile-saas"
   ]
 }

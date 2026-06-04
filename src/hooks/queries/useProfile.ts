@@ -32,6 +32,7 @@ export function useProfile() {
       return {
         id: userId ?? "",
         email: null,
+        expo_push_token: null,
         xp: 0,
         level: 1,
         streak_current: 0,
