@@ -1,0 +1,84 @@
+{
+  "productName": "Titan Protocol",
+  "version": "0.1.0",
+  "identifier": "com.titan.protocol",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build:tauri",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../out"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Titan Protocol",
+        "width": 1440,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://github.com https://*.githubusercontent.com; worker-src 'self' blob:; media-src 'self' blob:"
+    },
+    "trayIcon": {
+      "iconPath": "icons/icon.png",
+      "iconAsTemplate": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "publisher": "Titan Protocol",
+    "copyright": "© 2026 Titan Protocol",
+    "category": "Productivity",
+    "shortDescription": "Your personal OS for relentless execution.",
+    "longDescription": "Titan Protocol is the personal operating system for people who refuse to drift. Track every domain of your life — body, mind, money, charisma — with the discipline of a system. Daily scores, identity-driven ranks, cross-device sync.",
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "dmg": {
+        "background": "dmg-background.png",
+        "windowSize": {
+          "width": 800,
+          "height": 600
+        },
+        "appPosition": {
+          "x": 200,
+          "y": 300
+        },
+        "applicationFolderPosition": {
+          "x": 600,
+          "y": 300
+        }
+      }
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": false,
+      "pubkey": "REPLACE_ME_WITH_OUTPUT_OF_tauri_signer_generate",
+      "endpoints": [
+        "https://github.com/Arun-Sanjay/Titan-Protocol-v2/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

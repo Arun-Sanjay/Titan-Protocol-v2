@@ -1,0 +1,134 @@
+/* ===== Chrome panel, button, badge, and outline components ===== */
+
+html[data-theme="hud"] .chrome-panel {
+  position: relative;
+  background:
+    /* top metallic falloff */
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.10) 0%,
+      rgba(255, 255, 255, 0.04) 22%,
+      rgba(0, 0, 0, 0.00) 62%
+    ),
+    /* rim light */
+    radial-gradient(
+      1000px 180px at 50% 0%,
+      rgba(255, 255, 255, 0.16),
+      transparent 72%
+    ),
+    var(--panel2);
+
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  border-radius: 20px;
+
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 0 0 2px rgba(0, 0, 0, 0.42) inset,
+    0 18px 60px rgba(0, 0, 0, 0.72),
+    0 0 44px var(--hud-glow);
+
+  backdrop-filter: blur(14px);
+}
+
+html[data-theme="hud"] .chrome-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.62),
+    rgba(255, 255, 255, 0.16),
+    rgba(210, 230, 255, 0.10),
+    rgba(255, 255, 255, 0.32)
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.95;
+  pointer-events: none;
+}
+
+html[data-theme="hud"] .chrome-panel::after {
+  content: "";
+  position: absolute;
+  top: -25%;
+  left: -60%;
+  width: 35%;
+  height: 160%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.26),
+    transparent
+  );
+  transform: rotate(18deg);
+  opacity: 0;
+  animation: chromeSweep 4.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+html[data-theme="hud"] .chrome-outline {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+}
+
+html[data-theme="hud"] .chrome-btn {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.16),
+      rgba(255, 255, 255, 0.05)
+    ),
+    rgba(12, 14, 18, 0.55);
+
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.10) inset,
+    0 12px 32px rgba(0, 0, 0, 0.70),
+    0 0 30px rgba(210, 230, 255, 0.10);
+
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+html[data-theme="hud"] .chrome-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.40);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset,
+    0 16px 40px rgba(0, 0, 0, 0.78),
+    0 0 44px rgba(210, 230, 255, 0.14);
+}
+
+html[data-theme="hud"] .badge-chrome {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(245, 248, 255, 0.92);
+}
+
+.tp-grid {
+  display: none;
+}
+
+.tp-scanline {
+  display: none;
+}
+
+.tp-flicker {
+  text-shadow: 0 0 20px rgba(210, 230, 255, 0.18),
+    0 0 38px rgba(160, 120, 255, 0.1);
+  animation: tp-flicker 4.5s infinite;
+}
+
+.tp-pulse {
+  animation: tp-pulse 1.4s ease-in-out infinite;
+}
+
+.tp-glow-btn:hover {
+  box-shadow: 0 0 26px rgba(210, 230, 255, 0.14), 0 0 36px rgba(255, 255, 255, 0.10);
+}
+
+.chrome-title {
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.10), 0 0 34px rgba(210, 230, 255, 0.10);
+}

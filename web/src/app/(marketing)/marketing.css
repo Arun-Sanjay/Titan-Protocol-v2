@@ -1,0 +1,610 @@
+/*
+ * Marketing pages — premium dark HUD styling, distinct from the in-app
+ * dashboard CSS so we can iterate independently. Composes against the
+ * project's CSS variables (`--bg0`, `--panel`, `--text`, etc.) so it
+ * inherits the theme + dark/cyberpunk swap automatically.
+ */
+
+.mk-root {
+  min-height: 100vh;
+  background:
+    radial-gradient(1100px 700px at 50% -100px, rgba(120, 160, 255, 0.06), transparent 70%),
+    radial-gradient(900px 600px at 80% 60%, rgba(255, 200, 120, 0.025), transparent 70%),
+    var(--bg0, #0a0a0a);
+  color: var(--text, #e8eaed);
+  font-family: var(--font-mono, ui-monospace, "JetBrains Mono", monospace);
+  display: flex;
+  flex-direction: column;
+}
+
+.mk-main {
+  flex: 1;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
+/* ────────────────────────── Top nav ────────────────────────── */
+
+.mk-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(8, 9, 12, 0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mk-nav-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.mk-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text, #e8eaed);
+  letter-spacing: 2.5px;
+  font-weight: 700;
+  font-size: 13px;
+}
+.mk-brand-mark {
+  color: rgba(180, 200, 255, 0.85);
+  font-size: 16px;
+  text-shadow: 0 0 12px rgba(120, 160, 255, 0.5);
+}
+.mk-brand-text {
+  font-family: var(--font-mono, monospace);
+}
+
+.mk-nav-links {
+  display: none;
+  gap: 22px;
+}
+@media (min-width: 720px) {
+  .mk-nav-links {
+    display: inline-flex;
+  }
+}
+.mk-nav-link {
+  color: rgba(232, 234, 237, 0.62);
+  text-decoration: none;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 500;
+  transition: color 120ms ease;
+}
+.mk-nav-link:hover {
+  color: rgba(232, 234, 237, 0.96);
+}
+
+.mk-nav-cta {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ────────────────────────── Buttons ────────────────────────── */
+
+.mk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 140ms ease;
+  white-space: nowrap;
+}
+
+.mk-btn-primary {
+  background: linear-gradient(180deg, rgba(232, 240, 255, 0.96), rgba(200, 210, 232, 0.88));
+  color: #0a0a0a;
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 24px -10px rgba(120, 160, 255, 0.45);
+}
+.mk-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 14px 32px -10px rgba(120, 160, 255, 0.6);
+}
+
+.mk-btn-ghost {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text, #e8eaed);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.mk-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* ────────────────────────── Hero ────────────────────────── */
+
+.mk-hero {
+  padding: 120px 0 80px;
+  text-align: center;
+  position: relative;
+}
+
+.mk-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(180, 200, 255, 0.85);
+  background: rgba(120, 160, 255, 0.08);
+  border: 1px solid rgba(120, 160, 255, 0.2);
+  border-radius: 999px;
+  margin-bottom: 32px;
+}
+.mk-hero-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--status-success, #34d399);
+  box-shadow: 0 0 8px var(--status-success, #34d399);
+}
+
+.mk-hero-title {
+  font-family: var(--font-mono, monospace);
+  font-size: clamp(40px, 7vw, 72px);
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin: 0 0 24px;
+  color: rgba(245, 248, 255, 0.96);
+  text-shadow: 0 2px 32px rgba(120, 160, 255, 0.1);
+}
+.mk-hero-title-accent {
+  background: linear-gradient(180deg, rgba(232, 240, 255, 1), rgba(180, 200, 255, 0.75));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.mk-hero-subtitle {
+  max-width: 640px;
+  margin: 0 auto 40px;
+  font-size: 17px;
+  line-height: 1.6;
+  color: rgba(232, 234, 237, 0.66);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.mk-hero-ctas {
+  display: inline-flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.mk-hero-meta {
+  margin-top: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 24px;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(180, 188, 200, 0.5);
+}
+.mk-hero-meta-item { display: inline-flex; align-items: center; gap: 8px; }
+.mk-hero-meta-bullet {
+  width: 4px; height: 4px; border-radius: 999px;
+  background: rgba(180, 200, 255, 0.5);
+}
+
+/* ────────────────────────── Section ────────────────────────── */
+
+.mk-section {
+  padding: 72px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mk-section-kicker {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(180, 200, 255, 0.7);
+  margin: 0 0 12px;
+}
+
+.mk-section-title {
+  font-family: var(--font-mono, monospace);
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 0 0 16px;
+  color: rgba(245, 248, 255, 0.95);
+}
+
+.mk-section-lede {
+  max-width: 600px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(232, 234, 237, 0.62);
+  margin: 0 0 40px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ────────────────────────── Engine grid ────────────────────────── */
+
+.mk-grid {
+  display: grid;
+  gap: 16px;
+}
+.mk-grid-4 {
+  grid-template-columns: 1fr;
+}
+@media (min-width: 720px) {
+  .mk-grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1080px) {
+  .mk-grid-4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+.mk-card {
+  padding: 28px 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.005));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+.mk-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  transform: translateY(-2px);
+}
+
+.mk-card-mark {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  color: rgba(180, 200, 255, 0.65);
+  margin: 0 0 14px;
+}
+.mk-card-title {
+  font-family: var(--font-mono, monospace);
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: rgba(245, 248, 255, 0.95);
+  letter-spacing: -0.3px;
+}
+.mk-card-text {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(232, 234, 237, 0.62);
+  margin: 0;
+}
+
+/* ────────────────────────── Three-up rhythm ────────────────────────── */
+
+.mk-grid-3 {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 900px) {
+  .mk-grid-3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+.mk-step {
+  padding: 28px 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+.mk-step-num {
+  font-family: var(--font-mono, monospace);
+  font-size: 36px;
+  font-weight: 200;
+  color: rgba(180, 200, 255, 0.4);
+  line-height: 1;
+  margin: 0 0 18px;
+}
+
+/* ────────────────────────── Big visual block ────────────────────────── */
+
+.mk-stat {
+  padding: 32px 28px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.mk-stat-value {
+  font-family: var(--font-mono, monospace);
+  font-size: clamp(48px, 8vw, 72px);
+  font-weight: 700;
+  letter-spacing: -2px;
+  line-height: 1;
+  color: rgba(245, 248, 255, 0.97);
+  text-shadow: 0 2px 24px rgba(120, 160, 255, 0.18);
+}
+.mk-stat-body {
+  flex: 1;
+  min-width: 240px;
+}
+.mk-stat-title {
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(180, 200, 255, 0.8);
+  margin: 0 0 8px;
+}
+.mk-stat-desc {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(232, 234, 237, 0.62);
+  margin: 0;
+}
+
+/* ────────────────────────── Rank ladder ────────────────────────── */
+
+.mk-ranks {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 720px) {
+  .mk-ranks { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1080px) {
+  .mk-ranks { grid-template-columns: repeat(6, 1fr); }
+}
+.mk-rank {
+  padding: 16px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  text-align: center;
+}
+.mk-rank-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: rgba(245, 248, 255, 0.92);
+  margin: 0 0 4px;
+}
+.mk-rank-tier {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(180, 200, 255, 0.55);
+  margin: 0;
+}
+
+/* ────────────────────────── Pricing teaser ────────────────────────── */
+
+.mk-price {
+  padding: 36px;
+  background: linear-gradient(180deg, rgba(120, 160, 255, 0.04), rgba(120, 160, 255, 0.01));
+  border: 1px solid rgba(120, 160, 255, 0.18);
+  border-radius: 12px;
+  text-align: center;
+}
+.mk-price-pill {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: rgba(180, 200, 255, 0.8);
+  padding: 4px 12px;
+  background: rgba(120, 160, 255, 0.1);
+  border: 1px solid rgba(120, 160, 255, 0.25);
+  border-radius: 999px;
+  margin-bottom: 18px;
+}
+.mk-price-big {
+  font-family: var(--font-mono, monospace);
+  font-size: clamp(40px, 5vw, 56px);
+  font-weight: 700;
+  letter-spacing: -1.2px;
+  margin: 0 0 12px;
+  color: rgba(245, 248, 255, 0.96);
+}
+.mk-price-sub {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(232, 234, 237, 0.62);
+  margin: 0 0 24px;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ────────────────────────── Footer ────────────────────────── */
+
+.mk-footer {
+  margin-top: 96px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 56px 24px 28px;
+  background: rgba(6, 7, 10, 0.6);
+}
+.mk-footer-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  gap: 48px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 880px) {
+  .mk-footer-inner { grid-template-columns: 1.2fr 2fr; }
+}
+.mk-footer-brand .mk-brand-mark {
+  font-size: 18px;
+}
+.mk-footer-brand .mk-brand-text {
+  font-size: 14px;
+}
+.mk-footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.mk-footer-tagline {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  color: rgba(232, 234, 237, 0.58);
+  margin: 0;
+  max-width: 280px;
+}
+.mk-footer-cols {
+  display: grid;
+  gap: 32px;
+  grid-template-columns: 1fr 1fr;
+}
+@media (min-width: 720px) {
+  .mk-footer-cols { grid-template-columns: repeat(4, 1fr); }
+}
+.mk-footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mk-footer-h {
+  font-size: 10px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: rgba(180, 200, 255, 0.6);
+  margin: 0 0 6px;
+}
+.mk-footer-link {
+  font-size: 13px;
+  color: rgba(232, 234, 237, 0.7);
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.mk-footer-link:hover {
+  color: rgba(232, 234, 237, 0.95);
+}
+.mk-footer-link-muted {
+  color: rgba(232, 234, 237, 0.4);
+  cursor: default;
+  font-style: italic;
+}
+.mk-footer-strip {
+  max-width: 1180px;
+  margin: 32px auto 0;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.mk-footer-meta {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(180, 188, 200, 0.45);
+}
+
+/* ────────────────────────── Misc page primitives ────────────────────────── */
+
+.mk-page-hero {
+  padding: 80px 0 48px;
+  max-width: 760px;
+}
+.mk-page-title {
+  font-family: var(--font-mono, monospace);
+  font-size: clamp(36px, 5vw, 52px);
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin: 0 0 16px;
+  color: rgba(245, 248, 255, 0.96);
+}
+.mk-page-lede {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+  color: rgba(232, 234, 237, 0.66);
+  margin: 0;
+}
+.mk-prose {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  color: rgba(232, 234, 237, 0.78);
+  max-width: 680px;
+}
+.mk-prose p { margin: 0 0 18px; }
+.mk-prose h2 {
+  font-family: var(--font-mono, monospace);
+  font-size: 20px;
+  letter-spacing: 0.5px;
+  margin: 36px 0 16px;
+  color: rgba(245, 248, 255, 0.92);
+}
+.mk-prose ul { margin: 0 0 18px; padding-left: 20px; }
+.mk-prose li { margin-bottom: 6px; }
+
+/* ────────────────────────── 404 ────────────────────────── */
+
+.mk-404 {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 16px;
+}
+.mk-404-code {
+  font-family: var(--font-mono, monospace);
+  font-size: clamp(80px, 12vw, 120px);
+  font-weight: 700;
+  letter-spacing: -2px;
+  background: linear-gradient(180deg, rgba(232, 240, 255, 0.9), rgba(120, 160, 255, 0.4));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+  line-height: 1;
+}
+.mk-404-line {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(180, 200, 255, 0.65);
+}
+.mk-404-body {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(232, 234, 237, 0.6);
+  max-width: 420px;
+}

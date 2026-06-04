@@ -1,0 +1,133 @@
+name: Tauri Release
+
+# Triggers
+#   - push of a tag matching v*.*.* (e.g. v0.2.0): builds + signs + uploads
+#     installers for macOS, Windows, Linux. Creates a GitHub Release.
+#   - workflow_dispatch: manual trigger from the Actions tab.
+#
+# Required repository secrets (set in Settings → Secrets → Actions):
+#   TAURI_SIGNING_PRIVATE_KEY            From `tauri signer generate -w <path>` (private)
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD   Password set during generation
+#
+# Optional secrets (only needed when ready to ship signed builds):
+#   APPLE_CERTIFICATE                    Base64 of Developer ID Application .p12 (macOS)
+#   APPLE_CERTIFICATE_PASSWORD           .p12 password
+#   APPLE_SIGNING_IDENTITY               "Developer ID Application: Your Name (TEAMID)"
+#   APPLE_ID                             Apple Developer email
+#   APPLE_PASSWORD                       App-specific password from appleid.apple.com
+#   APPLE_TEAM_ID                        10-char Apple team ID
+#   WINDOWS_CERTIFICATE                  Base64 of .pfx (Windows EV or OV cert)
+#   WINDOWS_CERTIFICATE_PASSWORD         .pfx password
+#
+# Without the optional certs, builds still complete — they just aren't
+# distribution-signed. macOS users see Gatekeeper warnings; Windows users
+# see SmartScreen warnings; the updater signature still validates.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+concurrency:
+  group: tauri-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Install Linux deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            build-essential
+
+      - name: Install npm deps
+        run: npm install
+
+      - name: Build web bundle (Vite)
+        run: npm run build
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater bundle signing (required — these protect the auto-update
+          # supply chain regardless of platform code-signing).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+          # macOS code-signing + notarization (optional — without these
+          # the .dmg / .app still builds but isn't Gatekeeper-trusted).
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+          # Windows code-signing (optional — without it, .msi / .exe trigger
+          # SmartScreen until reputation builds).
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        with:
+          # Release tag + body. `__VERSION__` is replaced by the version
+          # in tauri.conf.json at build time.
+          tagName: ${{ github.ref_name }}
+          releaseName: "Titan Protocol __VERSION__"
+          releaseBody: |
+            ## What's new
+
+            See the in-app changelog (/changelog) for the full picture.
+
+            **Auto-update**: existing installs will pull this build via the
+            updater on next launch.
+
+            **Fresh install**: download the bundle for your OS below.
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}

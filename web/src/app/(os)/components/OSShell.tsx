@@ -1,0 +1,173 @@
+import * as React from "react";
+import { Link, useLocation } from "react-router-dom";
+
+import { PageTransition } from "../../../components/ui/PageTransition";
+import { NavIcon } from "../../../components/ui/NavIcon";
+
+// Lazy-load heavy components that aren't needed on initial render
+const CommandPalette = React.lazy(() =>
+  import("../../../components/ui/CommandPalette").then((mod) => ({ default: mod.CommandPalette }))
+);
+const CyberTickerLazy = React.lazy(() =>
+  import("./CyberTicker").then((mod) => ({ default: mod.CyberTicker }))
+);
+import { playClick } from "../../../lib/sound";
+import OnboardingWizard, { useOnboarding } from "../../../components/onboarding/OnboardingWizard";
+import { useTheme } from "../../../components/ui/ThemeProvider";
+import { MobileNav } from "./MobileNav";
+import { UserMenu } from "./UserMenu";
+import { useIsMobile } from "../../../hooks/useIsMobile";
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+};
+
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Core",
+    items: [
+      { href: "/app", label: "Dashboard", icon: "dashboard" },
+      { href: "/app/command", label: "Command Center", icon: "command" },
+      { href: "/app/analytics", label: "Analytics", icon: "analytics" },
+    ],
+  },
+  {
+    label: "Engines",
+    items: [
+      { href: "/app/body", label: "Body", icon: "body" },
+      { href: "/app/mind", label: "Mind", icon: "mind" },
+      { href: "/app/money", label: "Money", icon: "money" },
+      { href: "/app/general", label: "General", icon: "general" },
+    ],
+  },
+  {
+    label: "Track",
+    items: [
+      { href: "/app/habits", label: "Habits", icon: "habits" },
+      { href: "/app/journal", label: "Journal", icon: "journal" },
+      { href: "/app/goals", label: "Goals", icon: "goals" },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { href: "/app/focus", label: "Focus Timer", icon: "focus" },
+      { href: "/app/body/workouts", label: "Workouts", icon: "workout" },
+      { href: "/app/body/sleep", label: "Sleep Tracker", icon: "sleep" },
+      { href: "/app/body/weight", label: "Weight Tracker", icon: "weight" },
+      { href: "/app/body/nutrition", label: "Nutrition", icon: "nutrition" },
+      { href: "/app/money/cashflow", label: "Finance Tracker", icon: "money" },
+    ],
+  },
+];
+
+function isActive(pathname: string, href: string): boolean {
+  if (href === "/app") return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function OSShell({ children }: Readonly<{ children: React.ReactNode }>) {
+  const { pathname } = useLocation();
+  const { theme } = useTheme();
+  const {
+    isComplete: onboardingComplete,
+    markComplete: markOnboardingComplete,
+    reset: resetOnboarding,
+  } = useOnboarding();
+  const isMobile = useIsMobile();
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("onboarding") === "1") {
+      resetOnboarding();
+      params.delete("onboarding");
+      const next = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}${window.location.hash}`;
+      window.history.replaceState({}, "", next);
+    }
+  }, [resetOnboarding]);
+
+  function handleNavClick() {
+    playClick();
+  }
+
+  function renderNavGroups() {
+    return NAV_GROUPS.map((group, gi) => (
+      <div key={group.label} className={gi > 0 ? "tp-nav-group" : undefined}>
+        {gi > 0 && <div className="tp-nav-divider" />}
+        <p className="tp-nav-group-label">{group.label}</p>
+        {group.items.map((item) => {
+          const active = isActive(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              to={item.href}
+              onClick={handleNavClick}
+              className={["tp-nav-item", active ? "is-active" : ""].join(" ")}
+            >
+              <NavIcon name={item.icon} size={15} className="tp-nav-icon" />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    ));
+  }
+
+  return (
+    <div className="tp-os-shell">
+      {!onboardingComplete && (
+        <OnboardingWizard onComplete={markOnboardingComplete} />
+      )}
+      <React.Suspense fallback={null}>
+        <CommandPalette />
+      </React.Suspense>
+
+      {/* Mobile: hamburger menu + slide-in drawer */}
+      <MobileNav />
+
+      {/* Desktop sidebar — completely unchanged */}
+      <aside className="tp-nav tp-nav-desktop hidden sm:flex sm:flex-col">
+        <div className="tp-nav-header">
+          <div className="tp-nav-brand">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true" className="tp-nav-logo">
+              <polygon points="12,2 22,10 18,22 6,22 2,10" />
+              <line x1="2" y1="10" x2="22" y2="10" strokeOpacity="0.45" />
+              <line x1="6" y1="22" x2="12" y2="2" strokeOpacity="0.45" />
+              <line x1="18" y1="22" x2="12" y2="2" strokeOpacity="0.45" />
+            </svg>
+            <p className="tp-nav-title">Titan OS</p>
+          </div>
+        </div>
+        <div className="tp-nav-user">
+          <UserMenu variant="sidebar" />
+        </div>
+        <nav className="tp-nav-list tp-nav-scrollable tp-nav-list-grow">{renderNavGroups()}</nav>
+        <div className="tp-nav-bottom">
+          <Link
+            to="/app/settings"
+            onClick={handleNavClick}
+            className={["tp-nav-item", isActive(pathname, "/app/settings") ? "is-active" : ""].join(" ")}
+          >
+            <NavIcon name="settings" size={15} className="tp-nav-icon" />
+            <span>Settings</span>
+          </Link>
+        </div>
+      </aside>
+
+      <div className={`tp-main min-w-0 ${isMobile ? "tp-main--mobile" : ""}`} style={isMobile ? { overflowX: 'hidden' } : undefined}>
+        <PageTransition>
+          <div className="min-w-0">{children}</div>
+        </PageTransition>
+      </div>
+
+      {theme === "cyberpunk" && (
+        <React.Suspense fallback={null}>
+          <CyberTickerLazy />
+        </React.Suspense>
+      )}
+    </div>
+  );
+}

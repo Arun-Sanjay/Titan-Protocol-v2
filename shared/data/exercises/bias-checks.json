@@ -1,0 +1,427 @@
+[
+  {
+    "id": "bc_001",
+    "type": "bias_check",
+    "difficulty": 1,
+    "category": "confirmation_bias",
+    "scenario": "A manager promotes the employee who agrees with them most, overlooking a higher performer who frequently challenges their ideas.",
+    "question": "Which cognitive bias is at play?",
+    "options": [
+      { "id": "a", "text": "Confirmation Bias", "description": "Favoring information that confirms existing beliefs" },
+      { "id": "b", "text": "Halo Effect", "description": "Overall impression influences specific judgments" },
+      { "id": "c", "text": "Anchoring", "description": "Over-relying on the first piece of information" },
+      { "id": "d", "text": "Availability Bias", "description": "Judging likelihood by how easily examples come to mind" }
+    ],
+    "correct": "a",
+    "explanation": "Confirmation bias leads us to favor people and information that confirm what we already believe. The manager values agreement over performance.",
+    "insight": "Seek out people who challenge your thinking — they make your decisions better."
+  },
+  {
+    "id": "bc_002",
+    "type": "bias_check",
+    "difficulty": 1,
+    "category": "sunk_cost",
+    "scenario": "Your friend says 'I've watched 6 episodes of this terrible show, I might as well finish the season.'",
+    "question": "What bias is driving this reasoning?",
+    "options": [
+      { "id": "a", "text": "Anchoring", "description": "Fixating on an initial reference point" },
+      { "id": "b", "text": "Sunk Cost Fallacy", "description": "Continuing because of already invested resources" },
+      { "id": "c", "text": "Status Quo Bias", "description": "Preferring the current state of affairs" },
+      { "id": "d", "text": "Bandwagon Effect", "description": "Doing something because others do it" }
+    ],
+    "correct": "b",
+    "explanation": "The sunk cost fallacy makes us continue investing because of past investment, rather than evaluating future value independently.",
+    "insight": "Ask yourself: 'If I hadn't already invested, would I start this today?'"
+  },
+  {
+    "id": "bc_003",
+    "type": "bias_check",
+    "difficulty": 2,
+    "category": "anchoring",
+    "scenario": "A car dealer shows you a luxury model at $80,000 first, then the $40,000 model you came for. It suddenly feels like a great deal.",
+    "question": "Which bias made the $40,000 car seem more appealing?",
+    "options": [
+      { "id": "a", "text": "Framing Effect", "description": "Being influenced by how information is presented" },
+      { "id": "b", "text": "Recency Bias", "description": "Giving more weight to recent events" },
+      { "id": "c", "text": "Anchoring", "description": "Over-relying on the first piece of information encountered" },
+      { "id": "d", "text": "Loss Aversion", "description": "Feeling losses more strongly than equivalent gains" }
+    ],
+    "correct": "c",
+    "explanation": "Anchoring occurs when an initial piece of information sets a reference point that influences subsequent judgments.",
+    "insight": "Before any negotiation, set your own anchor by researching fair prices independently."
+  },
+  {
+    "id": "bc_004",
+    "type": "bias_check",
+    "difficulty": 2,
+    "category": "dunning_kruger",
+    "scenario": "After reading one article about investing, your colleague gives everyone stock tips and dismisses a financial advisor with 20 years of experience.",
+    "question": "Which effect best explains this behavior?",
+    "options": [
+      { "id": "a", "text": "Overconfidence Bias", "description": "Excessive confidence in one's answers" },
+      { "id": "b", "text": "Dunning-Kruger Effect", "description": "Low competence paired with high confidence" },
+      { "id": "c", "text": "Authority Bias", "description": "Trusting authority figures too readily" },
+      { "id": "d", "text": "Optimism Bias", "description": "Believing bad outcomes are less likely for oneself" }
+    ],
+    "correct": "b",
+    "explanation": "The Dunning-Kruger effect describes how people with limited knowledge greatly overestimate their competence. They lack the expertise to see what they don't know.",
+    "insight": "The more you learn, the more you realize how much you don't know. Expertise breeds humility."
+  },
+  {
+    "id": "bc_005",
+    "type": "bias_check",
+    "difficulty": 1,
+    "category": "availability_heuristic",
+    "scenario": "After seeing three news stories about plane crashes, you decide to drive 12 hours instead of taking a 2-hour flight, even though driving is far more dangerous.",
+    "question": "Which bias is influencing this decision?",
+    "options": [
+      { "id": "a", "text": "Loss Aversion", "description": "Preferring to avoid losses over acquiring gains" },
+      { "id": "b", "text": "Negativity Bias", "description": "Giving more weight to negative experiences" },
+      { "id": "c", "text": "Availability Heuristic", "description": "Judging probability by how easily examples come to mind" },
+      { "id": "d", "text": "Risk Aversion", "description": "Preferring certainty over uncertainty" }
+    ],
+    "correct": "c",
+    "explanation": "The availability heuristic leads us to judge event likelihood based on how easily we recall examples. Dramatic news makes plane crashes feel more probable.",
+    "insight": "When making risk decisions, look up actual statistics rather than relying on what comes to mind."
+  },
+  {
+    "id": "bc_006",
+    "type": "bias_check",
+    "difficulty": 2,
+    "category": "anchoring",
+    "scenario": "During salary negotiations, the recruiter mentions the role 'typically pays $60,000.' You had researched $80,000 as market rate but find yourself negotiating around $65,000.",
+    "question": "What happened to your negotiation strategy?",
+    "options": [
+      { "id": "a", "text": "Social Proof", "description": "Following what others typically do" },
+      { "id": "b", "text": "Authority Bias", "description": "Deferring to the recruiter's expertise" },
+      { "id": "c", "text": "Anchoring", "description": "The first number mentioned set the reference point" },
+      { "id": "d", "text": "Compromise Effect", "description": "Choosing a middle option between extremes" }
+    ],
+    "correct": "c",
+    "explanation": "The recruiter's $60,000 figure became your mental anchor, pulling your counter-offer down from your researched rate. First numbers disproportionately influence final agreements.",
+    "insight": "Always state your number first in negotiations — whoever anchors first has the advantage."
+  },
+  {
+    "id": "bc_007",
+    "type": "bias_check",
+    "difficulty": 3,
+    "category": "survivorship_bias",
+    "scenario": "You read that most successful entrepreneurs dropped out of college, so you consider dropping out too. The article profiles 5 billionaire dropouts.",
+    "question": "What critical thinking error are you making?",
+    "options": [
+      { "id": "a", "text": "Survivorship Bias", "description": "Only seeing the winners, not the many who failed" },
+      { "id": "b", "text": "Bandwagon Effect", "description": "Following what seems popular or trendy" },
+      { "id": "c", "text": "Halo Effect", "description": "Assuming success in one area means wisdom in all areas" },
+      { "id": "d", "text": "Narrative Fallacy", "description": "Creating a story that connects unrelated events" }
+    ],
+    "correct": "a",
+    "explanation": "Survivorship bias means you only see the dropouts who succeeded. For every billionaire dropout, there are thousands who dropped out and struggled. The failures are invisible.",
+    "insight": "When studying success stories, always ask: 'How many people did the same thing and failed?'"
+  },
+  {
+    "id": "bc_008",
+    "type": "bias_check",
+    "difficulty": 2,
+    "category": "framing",
+    "scenario": "A surgeon tells one patient 'this surgery has a 90% survival rate' and another 'this surgery has a 10% mortality rate.' The second patient is much more hesitant.",
+    "question": "Why did the same information produce different reactions?",
+    "options": [
+      { "id": "a", "text": "Anchoring", "description": "The first number heard set expectations" },
+      { "id": "b", "text": "Framing Effect", "description": "The way information is presented changes how we perceive it" },
+      { "id": "c", "text": "Loss Aversion", "description": "Losses feel worse than equivalent gains" },
+      { "id": "d", "text": "Negativity Bias", "description": "Negative information has more psychological impact" }
+    ],
+    "correct": "b",
+    "explanation": "The framing effect shows that identical information presented differently leads to different decisions. '90% survival' and '10% mortality' are the same fact, but feel very different.",
+    "insight": "When someone presents a statistic, mentally reframe it the opposite way to see through the framing."
+  },
+  {
+    "id": "bc_009",
+    "type": "bias_check",
+    "difficulty": 1,
+    "category": "bandwagon",
+    "scenario": "A new restaurant opens with a 2-hour wait line every night. You assume the food must be amazing and wait in line too, without reading any reviews.",
+    "question": "Which bias drove you to join the queue?",
+    "options": [
+      { "id": "a", "text": "Bandwagon Effect", "description": "Doing something because many others are doing it" },
+      { "id": "b", "text": "Authority Bias", "description": "Trusting expert opinions over your own judgment" },
+      { "id": "c", "text": "Halo Effect", "description": "One positive trait influencing overall judgment" },
+      { "id": "d", "text": "Availability Heuristic", "description": "Judging by what easily comes to mind" }
+    ],
+    "correct": "a",
+    "explanation": "The bandwagon effect makes us assume something is good because many people are choosing it. Popularity becomes a proxy for quality without independent evaluation.",
+    "insight": "Crowd size tells you about marketing, not quality. Form your own opinion before following the crowd."
+  },
+  {
+    "id": "bc_010",
+    "type": "bias_check",
+    "difficulty": 3,
+    "category": "confirmation_bias",
+    "scenario": "An investor who bought a stock at $50 only reads positive analyst reports about the company and dismisses negative ones as 'fear-mongering.' The stock drops to $30.",
+    "question": "Which bias prevented the investor from seeing the warning signs?",
+    "options": [
+      { "id": "a", "text": "Sunk Cost Fallacy", "description": "Holding on because of the initial investment" },
+      { "id": "b", "text": "Optimism Bias", "description": "Underestimating the probability of negative outcomes" },
+      { "id": "c", "text": "Confirmation Bias", "description": "Seeking only information that supports existing beliefs" },
+      { "id": "d", "text": "Endowment Effect", "description": "Overvaluing what we already own" }
+    ],
+    "correct": "c",
+    "explanation": "Confirmation bias made the investor actively seek supporting evidence while dismissing contradicting data. This selective information diet creates a dangerous blind spot.",
+    "insight": "For every important decision, actively seek out the strongest argument against your position."
+  },
+  {
+    "id": "bc_011",
+    "type": "bias_check",
+    "difficulty": 2,
+    "category": "halo_effect",
+    "scenario": "A startup gets massive funding because its CEO previously worked at Google. No one questions the business model, which has fundamental flaws.",
+    "question": "What bias gave investors false confidence?",
+    "options": [
+      { "id": "a", "text": "Authority Bias", "description": "Trusting credentialed experts automatically" },
+      { "id": "b", "text": "Halo Effect", "description": "One positive trait creating an overall positive impression" },
+      { "id": "c", "text": "Survivorship Bias", "description": "Only seeing the winners from Google" },
+      { "id": "d", "text": "Social Proof", "description": "Following what other investors are doing" }
+    ],
+    "correct": "b",
+    "explanation": "The halo effect made the CEO's Google background cast a positive glow over the entire venture. One impressive credential made investors assume everything else was equally impressive.",
+    "insight": "Evaluate each dimension of a person or company independently — a great resume doesn't guarantee a great business."
+  },
+  {
+    "id": "bc_012",
+    "type": "bias_check",
+    "difficulty": 3,
+    "category": "status_quo",
+    "scenario": "Your company has used the same supplier for 10 years. A new supplier offers 30% lower prices with identical quality, but management decides to 'stick with what works.'",
+    "question": "What bias is keeping the company from switching?",
+    "options": [
+      { "id": "a", "text": "Status Quo Bias", "description": "Preferring the current state over change" },
+      { "id": "b", "text": "Sunk Cost Fallacy", "description": "Valuing past investment in the relationship" },
+      { "id": "c", "text": "Loss Aversion", "description": "Fear of what could go wrong with a new supplier" },
+      { "id": "d", "text": "Anchoring", "description": "Being stuck on the original supplier's pricing" }
+    ],
+    "correct": "a",
+    "explanation": "Status quo bias creates a preference for the current state of affairs. The psychological comfort of familiarity outweighs a clear rational benefit, even when the data is compelling.",
+    "insight": "Periodically re-evaluate long-standing decisions as if making them for the first time."
+  },
+  {
+    "id": "bc_013",
+    "type": "bias_check",
+    "difficulty": 3,
+    "category": "survivorship_bias",
+    "scenario": "A mutual fund advertises '15 years of beating the market!' What they don't mention: they started 30 funds 15 years ago and quietly closed the 20 that underperformed.",
+    "question": "What makes this advertisement misleading?",
+    "options": [
+      { "id": "a", "text": "Framing Effect", "description": "Presenting only the positive angle" },
+      { "id": "b", "text": "Survivorship Bias", "description": "Only the winning funds survived to advertise" },
+      { "id": "c", "text": "Cherry Picking", "description": "Selecting only favorable data points" },
+      { "id": "d", "text": "Hindsight Bias", "description": "Claiming the outcome was predictable after the fact" }
+    ],
+    "correct": "b",
+    "explanation": "Survivorship bias is systematic here — the fund company created many funds, knowing only some would outperform. By closing losers and advertising winners, they appear skilled rather than lucky.",
+    "insight": "When evaluating track records, ask how many attempts were made, not just how many succeeded."
+  },
+  {
+    "id": "bc_014",
+    "type": "bias_check",
+    "difficulty": 2,
+    "category": "framing",
+    "scenario": "A grocery store labels ground beef as '80% lean' instead of '20% fat.' The lean-labeled beef sells significantly better even though it's the identical product.",
+    "question": "Which bias explains the sales difference?",
+    "options": [
+      { "id": "a", "text": "Anchoring", "description": "The number 80 sounds high and positive" },
+      { "id": "b", "text": "Bandwagon Effect", "description": "Buying what sells more creates a cycle" },
+      { "id": "c", "text": "Framing Effect", "description": "Identical information presented differently changes perception" },
+      { "id": "d", "text": "Halo Effect", "description": "The word 'lean' creates a health halo" }
+    ],
+    "correct": "c",
+    "explanation": "This is a textbook framing effect. Emphasizing the positive attribute (lean) vs. the negative (fat) completely changes perception of an identical product.",
+    "insight": "When evaluating products or offers, convert positive frames to negative and vice versa to see through the spin."
+  },
+  {
+    "id": "bc_015",
+    "type": "bias_check",
+    "difficulty": 4,
+    "category": "sunk_cost",
+    "scenario": "A company has spent $50M developing a product. Market research shows it will fail, but the CEO says 'We can't waste $50M — push it to launch.'",
+    "question": "What error is the CEO making?",
+    "options": [
+      { "id": "a", "text": "Overconfidence Bias", "description": "Believing they can make it work despite evidence" },
+      { "id": "b", "text": "Commitment Escalation", "description": "Doubling down on a failing course of action" },
+      { "id": "c", "text": "Sunk Cost Fallacy", "description": "Letting past spending drive future decisions" },
+      { "id": "d", "text": "Status Quo Bias", "description": "Continuing because that's the plan" }
+    ],
+    "correct": "c",
+    "explanation": "The $50M is gone regardless of the launch decision. The CEO is letting irrecoverable past costs dictate a future decision that should be based only on expected future returns.",
+    "insight": "In any decision, ignore what you've already spent. Only consider: 'From this point forward, what's the best use of resources?'"
+  },
+  {
+    "id": "bc_016",
+    "type": "bias_check",
+    "difficulty": 3,
+    "category": "anchoring",
+    "scenario": "A charity asks donors: 'Would you like to donate $500, $250, $100, or other amount?' Most people choose $100, feeling it's the modest option. Without the anchor, the average donation is $35.",
+    "question": "What technique is the charity using?",
+    "options": [
+      { "id": "a", "text": "Social Proof", "description": "Implying others donate at these levels" },
+      { "id": "b", "text": "Reciprocity", "description": "Making donors feel obligated to give more" },
+      { "id": "c", "text": "Anchoring", "description": "High initial numbers shift the reference point upward" },
+      { "id": "d", "text": "Decoy Effect", "description": "Including options to make one seem best" }
+    ],
+    "correct": "c",
+    "explanation": "By presenting $500 first, the charity anchors donors to a high reference point. $100 feels small by comparison, even though it's nearly 3x the typical donation without anchoring.",
+    "insight": "Notice when options are presented in descending order — the first number is usually an anchor designed to shift your baseline."
+  },
+  {
+    "id": "bc_017",
+    "type": "bias_check",
+    "difficulty": 2,
+    "category": "bandwagon",
+    "scenario": "During a team meeting, three people quickly agree on a plan. Two others have concerns but stay silent because they don't want to be the dissenting voice. The plan fails.",
+    "question": "Which group dynamic contributed to this failure?",
+    "options": [
+      { "id": "a", "text": "Groupthink", "description": "Desire for harmony suppresses critical thinking" },
+      { "id": "b", "text": "Bandwagon Effect", "description": "Conforming to the apparent majority opinion" },
+      { "id": "c", "text": "Authority Bias", "description": "Deferring to whoever spoke first" },
+      { "id": "d", "text": "Herd Mentality", "description": "Following the group without thinking" }
+    ],
+    "correct": "b",
+    "explanation": "The bandwagon effect silenced dissent because the dissenters perceived majority support for the plan. The quick agreement created pressure to conform rather than voice legitimate concerns.",
+    "insight": "In meetings, have people write their opinions before discussion starts — this prevents the bandwagon from forming."
+  },
+  {
+    "id": "bc_018",
+    "type": "bias_check",
+    "difficulty": 3,
+    "category": "halo_effect",
+    "scenario": "A physically attractive job candidate receives higher competence ratings in interviews than equally qualified but less attractive candidates, across all interviewers.",
+    "question": "Which bias produced these inflated ratings?",
+    "options": [
+      { "id": "a", "text": "Affinity Bias", "description": "Preferring people similar to ourselves" },
+      { "id": "b", "text": "Halo Effect", "description": "One positive trait influencing judgment of unrelated traits" },
+      { "id": "c", "text": "Confirmation Bias", "description": "Seeking evidence that confirms a positive first impression" },
+      { "id": "d", "text": "Horn Effect", "description": "One negative trait creating overall negative impression" }
+    ],
+    "correct": "b",
+    "explanation": "The halo effect causes physical attractiveness to create a 'glow' that inflates perceived competence, intelligence, and trustworthiness — traits completely unrelated to appearance.",
+    "insight": "Use structured interviews with standardized rubrics to reduce the halo effect's influence on hiring decisions."
+  },
+  {
+    "id": "bc_019",
+    "type": "bias_check",
+    "difficulty": 4,
+    "category": "confirmation_bias",
+    "scenario": "A doctor suspects a rare disease and orders tests. When results are ambiguous, they interpret borderline values as supporting the rare diagnosis, missing a common condition with identical symptoms.",
+    "question": "What led to this diagnostic error?",
+    "options": [
+      { "id": "a", "text": "Availability Heuristic", "description": "The rare disease was recently in the news" },
+      { "id": "b", "text": "Anchoring", "description": "The initial suspicion fixed the diagnostic direction" },
+      { "id": "c", "text": "Confirmation Bias", "description": "Interpreting ambiguous evidence to support the initial hypothesis" },
+      { "id": "d", "text": "Representativeness", "description": "Matching symptoms to a prototypical disease" }
+    ],
+    "correct": "c",
+    "explanation": "Once the doctor formed a hypothesis, confirmation bias led them to interpret ambiguous test results as supporting it. Borderline values that could go either way were read as confirming the rare diagnosis.",
+    "insight": "When evaluating evidence, consider: 'If I believed the opposite, how would I interpret this same data?'"
+  },
+  {
+    "id": "bc_020",
+    "type": "bias_check",
+    "difficulty": 2,
+    "category": "status_quo",
+    "scenario": "You've had the same phone plan for 5 years. Better plans exist at half the price. You know this but haven't switched because 'it's not that big a deal' and 'switching is a hassle.'",
+    "question": "What's keeping you on the old plan?",
+    "options": [
+      { "id": "a", "text": "Loss Aversion", "description": "Fear of losing something in the switch" },
+      { "id": "b", "text": "Sunk Cost Fallacy", "description": "Loyalty to the years already invested" },
+      { "id": "c", "text": "Status Quo Bias", "description": "The default option feels safer than change" },
+      { "id": "d", "text": "Endowment Effect", "description": "Overvaluing what you currently have" }
+    ],
+    "correct": "c",
+    "explanation": "Status quo bias creates inertia where the effort of changing feels disproportionately high compared to the benefit, even when the math clearly favors switching.",
+    "insight": "Schedule a quarterly 'default audit' — review subscriptions, plans, and habits you've kept just because they're familiar."
+  },
+  {
+    "id": "bc_021",
+    "type": "bias_check",
+    "difficulty": 4,
+    "category": "survivorship_bias",
+    "scenario": "A business book studies 50 companies with a specific management practice and concludes it leads to success. They never checked how many failed companies used the same practice.",
+    "question": "What methodological error invalidates this conclusion?",
+    "options": [
+      { "id": "a", "text": "Correlation vs. Causation", "description": "Assuming the practice caused the success" },
+      { "id": "b", "text": "Survivorship Bias", "description": "Only studying the survivors, not the failures" },
+      { "id": "c", "text": "Selection Bias", "description": "The sample was not randomly selected" },
+      { "id": "d", "text": "Narrative Fallacy", "description": "Creating a convincing story from incomplete data" }
+    ],
+    "correct": "b",
+    "explanation": "By only studying successful companies, the researchers can't determine if the practice leads to success. If 500 failed companies used the same practice, it's not a differentiator — it's just common.",
+    "insight": "Any study of success that ignores failure is fundamentally flawed. Always demand the base rate."
+  },
+  {
+    "id": "bc_022",
+    "type": "bias_check",
+    "difficulty": 3,
+    "category": "availability_heuristic",
+    "scenario": "Your company had one data breach two years ago. Now the security team gets 5x the budget of the product team, even though product failures cost 10x more annually than security incidents.",
+    "question": "Why does security get disproportionate funding?",
+    "options": [
+      { "id": "a", "text": "Recency Bias", "description": "The breach happened more recently than product failures" },
+      { "id": "b", "text": "Availability Heuristic", "description": "The dramatic breach is easy to recall, daily product losses aren't" },
+      { "id": "c", "text": "Loss Aversion", "description": "Fear of another public breach outweighs product gains" },
+      { "id": "d", "text": "Risk Aversion", "description": "Preferring to eliminate known risks first" }
+    ],
+    "correct": "b",
+    "explanation": "The dramatic data breach is vivid and easily recalled, making security threats feel more probable and urgent. The slow, steady cost of product failures is less memorable despite being larger.",
+    "insight": "Make decisions based on data, not drama. Calculate actual costs rather than relying on how memorable events are."
+  },
+  {
+    "id": "bc_023",
+    "type": "bias_check",
+    "difficulty": 5,
+    "category": "dunning_kruger",
+    "scenario": "A senior engineer with 15 years of experience says 'I'm not sure this approach will work — let me research more.' A junior engineer with 6 months says 'I'll have this done by Friday, easy.'",
+    "question": "What pattern explains the experience-confidence mismatch?",
+    "options": [
+      { "id": "a", "text": "Impostor Syndrome vs. Overconfidence", "description": "The senior doubts themselves while the junior doesn't" },
+      { "id": "b", "text": "Dunning-Kruger Effect", "description": "Competence and confidence follow an inverse U-curve" },
+      { "id": "c", "text": "Status Quo Bias", "description": "The senior prefers careful approaches" },
+      { "id": "d", "text": "Planning Fallacy", "description": "The junior underestimates the time needed" }
+    ],
+    "correct": "b",
+    "explanation": "The Dunning-Kruger effect predicts this pattern: beginners overestimate their ability because they don't know what they don't know, while experts are aware of complexities and edge cases that could derail the project.",
+    "insight": "When someone is supremely confident about a complex task, check if they've done something similar before. True expertise sounds cautious."
+  },
+  {
+    "id": "bc_024",
+    "type": "bias_check",
+    "difficulty": 4,
+    "category": "status_quo",
+    "scenario": "A country's organ donation rate is 12% under an opt-in system. A neighboring country with opt-out has 99.9%. The actual willingness to donate is nearly identical in both populations.",
+    "question": "What explains the massive difference in donation rates?",
+    "options": [
+      { "id": "a", "text": "Cultural Differences", "description": "The populations have different values about donation" },
+      { "id": "b", "text": "Status Quo Bias", "description": "People accept the default option rather than actively choosing" },
+      { "id": "c", "text": "Social Proof", "description": "Higher rates encourage more people to join" },
+      { "id": "d", "text": "Framing Effect", "description": "Opt-out frames donation as the normal choice" }
+    ],
+    "correct": "b",
+    "explanation": "Status quo bias is so powerful that the default option determines behavior for the vast majority. Most people won't actively opt in or out — they'll just keep whatever box is pre-checked.",
+    "insight": "Design your environment with the best defaults. Set good behaviors as the default and make bad ones require effort."
+  },
+  {
+    "id": "bc_025",
+    "type": "bias_check",
+    "difficulty": 5,
+    "category": "sunk_cost",
+    "scenario": "A PhD student is 4 years into a 5-year program. They realize they hate academia and have a great job offer in industry. Their advisor says 'You've come so far, just one more year.' They stay.",
+    "question": "What combination of biases trapped this student?",
+    "options": [
+      { "id": "a", "text": "Sunk Cost + Authority Bias", "description": "Past investment plus advisor influence" },
+      { "id": "b", "text": "Status Quo + Loss Aversion", "description": "Comfort with current path plus fear of losing the degree" },
+      { "id": "c", "text": "Sunk Cost + Status Quo Bias", "description": "Past investment plus preference for the familiar path" },
+      { "id": "d", "text": "Commitment Escalation + Social Pressure", "description": "Public commitment plus expectations from others" }
+    ],
+    "correct": "c",
+    "explanation": "The sunk cost of 4 years makes leaving feel wasteful, and status quo bias makes the familiar PhD path feel safer than the unknown industry role. Together, they create a powerful trap that overrides rational career analysis.",
+    "insight": "When facing a major life decision, write down what you'd advise a friend in the same situation — distance dissolves these biases."
+  }
+]

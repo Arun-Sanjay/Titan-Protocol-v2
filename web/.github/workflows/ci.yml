@@ -1,0 +1,46 @@
+name: Web CI
+
+# Triggers
+#   - push to main: typecheck + vitest
+#   - PRs to main: typecheck + vitest
+#   - workflow_dispatch: manual run from the Actions tab
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: web-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Type-check & tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The web app consumes ../shared as a file: dependency, so we need
+      # both directories present. The runner clones web/ by default;
+      # if/when shared/ gets a public GitHub remote, switch to a
+      # multi-repo checkout here.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+
+      - name: Vitest
+        run: npx vitest run --passWithNoTests
+
+      - name: Build (Vite)
+        run: npm run build

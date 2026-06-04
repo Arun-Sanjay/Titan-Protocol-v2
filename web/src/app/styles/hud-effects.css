@@ -1,0 +1,211 @@
+/* ===== HUD background, overlays, and animations ===== */
+
+html[data-theme="hud"] body {
+  color: var(--text);
+
+  /* Deep graphite base */
+  background:
+    radial-gradient(
+      1200px 900px at 65% 30%,
+      rgba(255, 255, 255, 0.05),
+      transparent 60%
+    ),
+    radial-gradient(
+      900px 700px at 20% 65%,
+      rgba(255, 255, 255, 0.035),
+      transparent 58%
+    ),
+    linear-gradient(180deg, #050607 0%, #020203 55%, #000 100%);
+}
+
+html[data-theme="hud"] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -2;
+
+  /* Ambient bloom */
+  background-image:
+    radial-gradient(980px 560px at 72% 38%, rgba(255,255,255,0.085), transparent 62%),
+    radial-gradient(900px 520px at 28% 30%, rgba(255,255,255,0.055), transparent 64%),
+    radial-gradient(1500px 980px at 50% 55%, transparent 42%, rgba(0, 0, 0, 0.90) 100%);
+
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-size: 100% 100%, 100% 100%, 100% 100%;
+
+  opacity: 0.98;
+  animation: osGlowPulse 7.2s ease-in-out infinite;
+}
+
+html[data-theme="hud"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+
+  /* Combat HUD overlay: thin lines, grids, corner brackets, and scan sweep */
+  background-image:
+    /* thin precision grid */
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.035) 0px,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 120px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.035) 0px,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 120px
+    ),
+
+    /* micro grid */
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.02) 0px,
+      rgba(255, 255, 255, 0.02) 1px,
+      transparent 1px,
+      transparent 18px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0px,
+      rgba(255, 255, 255, 0.02) 1px,
+      transparent 1px,
+      transparent 18px
+    ),
+
+    /* corner bracket hints */
+    linear-gradient(90deg, rgba(255,255,255,0.10), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,0.08), transparent 60%),
+
+    /* scan sweep */
+    linear-gradient(
+      180deg,
+      transparent,
+      rgba(255, 255, 255, 0.06),
+      transparent
+    );
+
+  background-repeat: repeat, repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
+  background-size: auto, auto, auto, auto, 100% 100%, 100% 100%, 100% 260px;
+  background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 -320px;
+
+  opacity: 0.52;
+  mix-blend-mode: screen;
+  animation: osScan 9.5s linear infinite;
+}
+
+/* ===== Keyframes ===== */
+
+@keyframes chromeSweep {
+  0%,
+  55% {
+    opacity: 0;
+    transform: translateX(-30%) rotate(18deg);
+  }
+  62% {
+    opacity: 0.28;
+  }
+  78% {
+    opacity: 0;
+    transform: translateX(260%) rotate(18deg);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tp-scan {
+  0% {
+    transform: translateY(-20vh);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translateY(120vh);
+    opacity: 0;
+  }
+}
+
+@keyframes tp-flicker {
+  0%,
+  100% {
+    opacity: 1;
+    filter: saturate(1);
+  }
+  2% {
+    opacity: 0.92;
+  }
+  4% {
+    opacity: 0.98;
+  }
+  6% {
+    opacity: 0.88;
+    filter: saturate(1.15);
+  }
+  8% {
+    opacity: 1;
+  }
+  12% {
+    opacity: 0.94;
+  }
+  16% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0.97;
+  }
+  56% {
+    opacity: 0.85;
+  }
+  57% {
+    opacity: 1;
+  }
+}
+
+@keyframes tp-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes osScan {
+  0% {
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 -240px;
+  }
+  100% {
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 calc(100% + 240px);
+  }
+}
+
+@keyframes osGlowPulse {
+  0%,
+  100% {
+    opacity: 0.85;
+    filter: saturate(1) brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: saturate(1.06) brightness(1.03);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="hud"] body::before,
+  html[data-theme="hud"] body::after,
+  html[data-theme="marketing"] body::before,
+  html[data-theme="marketing"] body::after {
+    animation: none;
+  }
+}

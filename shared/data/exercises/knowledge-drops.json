@@ -1,0 +1,272 @@
+[
+  {
+    "id": "kd_001",
+    "type": "knowledge_drop",
+    "difficulty": 1,
+    "category": "psychology",
+    "scenario": "The Zeigarnik Effect: Your brain remembers incomplete tasks better than completed ones. That nagging feeling about an unfinished project? Your brain literally keeps the neural 'file open' until the task is done. This is why to-do lists work — writing a task down 'closes the loop' enough to free mental bandwidth, even if you haven't done it yet.",
+    "question": "How can you use the Zeigarnik Effect to your advantage?",
+    "options": [
+      { "id": "a", "text": "Start tasks even briefly to create mental momentum, then capture next steps in a list", "description": "Use the open loop to drive action" },
+      { "id": "b", "text": "Finish every task before starting a new one", "description": "Close all loops immediately" },
+      { "id": "c", "text": "Avoid starting tasks you can't finish today", "description": "Prevent open loops" },
+      { "id": "d", "text": "Use alarms to remind you about unfinished tasks", "description": "External memory aids" }
+    ],
+    "correct": "a",
+    "explanation": "Starting a task creates an open loop in your brain that nags until completion. Use this: begin hard tasks with just 5 minutes of work, then capture next steps. Your brain will keep working on it subconsciously.",
+    "insight": "Start hard tasks at the end of the day. Your brain will process them overnight via the Zeigarnik Effect.",
+    "identity_tags": ["operator", "monk", "scholar"]
+  },
+  {
+    "id": "kd_002",
+    "type": "knowledge_drop",
+    "difficulty": 1,
+    "category": "psychology",
+    "scenario": "Parkinson's Law: Work expands to fill the time available for its completion. Give yourself a week to write a report, and it takes a week. Give yourself 3 hours, and it takes 3 hours — often at comparable quality. The extra time doesn't improve output; it just invites procrastination and over-polishing.",
+    "question": "What's the best practical application of Parkinson's Law?",
+    "options": [
+      { "id": "a", "text": "Set artificially tight deadlines for every task to force efficiency", "description": "Compress available time to compress work" },
+      { "id": "b", "text": "Always allocate generous time to avoid stress", "description": "Comfortable timelines" },
+      { "id": "c", "text": "Work without deadlines to focus on quality", "description": "Remove time pressure entirely" },
+      { "id": "d", "text": "Break large tasks into smaller ones with separate deadlines", "description": "Granular time management" }
+    ],
+    "correct": "a",
+    "explanation": "Setting aggressive (but achievable) deadlines forces you to focus on what matters and skip unnecessary perfectionism. A 3-hour deadline for a report forces you to outline, write, and ship — no time for 4 hours of font selection.",
+    "insight": "Try halving the time you normally allocate to tasks. You'll be surprised how often the output is just as good.",
+    "identity_tags": ["titan", "operator", "warrior"]
+  },
+  {
+    "id": "kd_003",
+    "type": "knowledge_drop",
+    "difficulty": 2,
+    "category": "psychology",
+    "scenario": "Dunbar's Number: Anthropologist Robin Dunbar found that humans can maintain about 150 meaningful social relationships. Beyond that, we can't keep track of social dynamics. This breaks down into layers: ~5 intimate confidants, ~15 close friends, ~50 good friends, and ~150 casual friends.",
+    "question": "What does Dunbar's Number suggest about networking?",
+    "options": [
+      { "id": "a", "text": "Focus on deepening your inner 5-15 relationships rather than collecting contacts", "description": "Quality over quantity in relationships" },
+      { "id": "b", "text": "Try to expand beyond 150 connections using social media", "description": "Technology can overcome the limit" },
+      { "id": "c", "text": "Networking events are useless beyond 150 people", "description": "Strict numerical cutoff" },
+      { "id": "d", "text": "Delete contacts you haven't spoken to in a year", "description": "Prune the network" }
+    ],
+    "correct": "a",
+    "explanation": "Your inner circle (5-15 people) has the biggest impact on your life. Instead of collecting 1,000 LinkedIn connections, invest deeply in the small number of relationships that actually shape your trajectory.",
+    "insight": "Audit your social energy: are you investing in your vital 15, or spreading thin across 500 acquaintances?",
+    "identity_tags": ["monk", "operator"]
+  },
+  {
+    "id": "kd_004",
+    "type": "knowledge_drop",
+    "difficulty": 2,
+    "category": "psychology",
+    "scenario": "The Peak-End Rule: People judge experiences primarily by two moments — the peak (most intense point) and the end. A vacation with one amazing day and a smooth last day is remembered more fondly than a consistently good vacation with a stressful departure.",
+    "question": "How should you design experiences using the Peak-End Rule?",
+    "options": [
+      { "id": "a", "text": "Make every moment equally excellent for consistency", "description": "Uniform quality approach" },
+      { "id": "b", "text": "Invest heavily in creating one peak moment and a strong finish, even if the middle is ordinary", "description": "Optimize the peak and the ending" },
+      { "id": "c", "text": "Front-load the best experiences at the beginning", "description": "Start strong" },
+      { "id": "d", "text": "Avoid any negative moments at all costs", "description": "Minimize lows" }
+    ],
+    "correct": "b",
+    "explanation": "Resources are limited. Rather than spreading quality thinly, create one unforgettable peak moment and ensure the ending is positive. The memory of the experience will be disproportionately shaped by these two points.",
+    "insight": "In presentations, meetings, and dates: plan one 'wow' moment and always finish strong.",
+    "identity_tags": ["architect", "operator"]
+  },
+  {
+    "id": "kd_005",
+    "type": "knowledge_drop",
+    "difficulty": 1,
+    "category": "psychology",
+    "scenario": "The Mere Exposure Effect: We develop preferences for things simply because we encounter them repeatedly. Songs you initially dislike grow on you after hearing them 10 times. People you see daily at the gym become more likeable — not because you know them, but because they're familiar.",
+    "question": "What's a surprising implication of the Mere Exposure Effect?",
+    "options": [
+      { "id": "a", "text": "Your preferences are largely shaped by what you're repeatedly exposed to, not by objective quality", "description": "Exposure drives preference more than merit" },
+      { "id": "b", "text": "First impressions are the most important", "description": "Initial reactions matter most" },
+      { "id": "c", "text": "You should try everything once to form accurate preferences", "description": "Diversity of exposure" },
+      { "id": "d", "text": "Advertising is manipulation because it uses repeated exposure", "description": "Ethical concern about marketing" }
+    ],
+    "correct": "a",
+    "explanation": "Your environment shapes your preferences more than you realize. The music you like, foods you prefer, and people you trust are heavily influenced by simple familiarity. This means you can deliberately shape your preferences by controlling your exposure.",
+    "insight": "Want to like healthy food or enjoy exercise? Expose yourself to it repeatedly without pressure. Familiarity breeds preference.",
+    "identity_tags": ["monk", "scholar", "warrior"]
+  },
+  {
+    "id": "kd_006",
+    "type": "knowledge_drop",
+    "difficulty": 2,
+    "category": "decision_science",
+    "scenario": "Base Rate Neglect: A test for a rare disease is 99% accurate. You test positive. Most people assume they're 99% likely to have the disease. But if the disease affects 1 in 10,000 people, even a 99% accurate test produces far more false positives than true positives. Your actual chance of having the disease is about 1%.",
+    "question": "Why do most people get this wrong?",
+    "options": [
+      { "id": "a", "text": "They ignore the base rate (how common the condition is) and focus only on the test accuracy", "description": "Failing to consider prior probability" },
+      { "id": "b", "text": "They don't understand percentages", "description": "Math illiteracy" },
+      { "id": "c", "text": "They trust doctors too much", "description": "Authority bias" },
+      { "id": "d", "text": "The test is misleading by design", "description": "Deceptive testing" }
+    ],
+    "correct": "a",
+    "explanation": "Base rate neglect means ignoring how common something is when evaluating evidence. Even a 99% accurate test is unreliable for rare conditions because the false positive rate overwhelms the true positive rate.",
+    "insight": "Before reacting to any test or claim, always ask: 'How common is this in the first place?' The base rate changes everything.",
+    "identity_tags": ["scholar", "architect"]
+  },
+  {
+    "id": "kd_007",
+    "type": "knowledge_drop",
+    "difficulty": 3,
+    "category": "decision_science",
+    "scenario": "Regression to the Mean: After an exceptionally good quarter, most companies have a worse one. After a terrible sports season, teams usually improve. This isn't because success causes complacency or failure motivates effort — it's statistics. Extreme results include luck, and luck doesn't persist.",
+    "question": "How does regression to the mean affect performance evaluation?",
+    "options": [
+      { "id": "a", "text": "You should reward people after poor performance and punish after good performance", "description": "Counterintuitive management" },
+      { "id": "b", "text": "Judge performance over many data points, not single extreme results, because outliers naturally regress", "description": "Evaluate trends, not peaks" },
+      { "id": "c", "text": "Extreme performance is always due to luck", "description": "Skill doesn't exist" },
+      { "id": "d", "text": "Set expectations based on the best past result", "description": "Use peak performance as baseline" }
+    ],
+    "correct": "b",
+    "explanation": "One amazing month could be 70% skill and 30% luck. Expecting the same result next month ignores that the luck component will likely not repeat. Evaluate trends over 6+ data points to separate signal from noise.",
+    "insight": "Don't overreact to single data points — good or bad. Wait for trends before drawing conclusions.",
+    "identity_tags": ["architect", "scholar", "operator"]
+  },
+  {
+    "id": "kd_008",
+    "type": "knowledge_drop",
+    "difficulty": 3,
+    "category": "decision_science",
+    "scenario": "Goodhart's Law: When a measure becomes a target, it ceases to be a good measure. A hospital measures success by patient wait times. Staff starts seeing patients faster, but cuts consultation time, leading to misdiagnoses. The metric improved; the actual quality of care declined.",
+    "question": "What's the core lesson of Goodhart's Law?",
+    "options": [
+      { "id": "a", "text": "Don't measure anything — measurements always corrupt behavior", "description": "Anti-measurement extreme" },
+      { "id": "b", "text": "Pair every metric with a counter-metric that catches gaming behavior", "description": "Balanced measurement prevents optimization of one metric at others' expense" },
+      { "id": "c", "text": "Use qualitative assessments instead of quantitative metrics", "description": "Replace numbers with judgment" },
+      { "id": "d", "text": "Change metrics frequently so people can't game them", "description": "Moving target approach" }
+    ],
+    "correct": "b",
+    "explanation": "Metrics are essential, but any single metric will be gamed. The solution: pair metrics. If you measure speed, also measure quality. If you measure revenue, also measure customer satisfaction. One metric alone creates perverse incentives.",
+    "insight": "In your own life, pair every goal with a quality check. Losing weight? Also track strength. Making money? Also track time freedom.",
+    "identity_tags": ["architect", "operator"]
+  },
+  {
+    "id": "kd_009",
+    "type": "knowledge_drop",
+    "difficulty": 3,
+    "category": "decision_science",
+    "scenario": "Survivorship Bias (Deep Dive): During WWII, engineers studied bullet holes on returning planes and wanted to add armor where the holes were. Statistician Abraham Wald realized they should armor where the holes WEREN'T — because planes hit there didn't return. The missing planes were the data they needed.",
+    "question": "What's the key insight from Wald's analysis?",
+    "options": [
+      { "id": "a", "text": "The most important data is often the data you can't see — the failures, the dropouts, the silent majority", "description": "Missing data is the most informative data" },
+      { "id": "b", "text": "Always protect the areas that are hit most often", "description": "Reinforce weak points" },
+      { "id": "c", "text": "Military statistics are unreliable", "description": "Questioning the data source" },
+      { "id": "d", "text": "More armor is always better", "description": "Maximum protection approach" }
+    ],
+    "correct": "a",
+    "explanation": "The planes that returned were a biased sample — they survived BECAUSE the holes were in non-critical areas. The critical information was in the planes that didn't return. This principle applies everywhere: studying only successes gives a distorted picture.",
+    "insight": "When analyzing any outcome, always ask: 'What am I NOT seeing? Who dropped out? What failed silently?'",
+    "identity_tags": ["scholar", "architect"]
+  },
+  {
+    "id": "kd_010",
+    "type": "knowledge_drop",
+    "difficulty": 4,
+    "category": "decision_science",
+    "scenario": "The Lindy Effect: For things that don't have a natural lifespan (ideas, books, technologies), every additional day of survival increases expected remaining lifespan. A book that's been in print for 100 years is likely to remain in print for another 100. A book published last week may not survive the month.",
+    "question": "How should the Lindy Effect influence your choices?",
+    "options": [
+      { "id": "a", "text": "Prefer time-tested ideas, tools, and practices over trendy new ones — longevity is the best quality filter", "description": "Old is often more reliable than new" },
+      { "id": "b", "text": "Always adopt the newest technology for competitive advantage", "description": "Innovation-first" },
+      { "id": "c", "text": "Everything old is automatically better", "description": "Conservative extreme" },
+      { "id": "d", "text": "Wait 10 years before adopting anything new", "description": "Ultra-cautious" }
+    ],
+    "correct": "a",
+    "explanation": "The Lindy Effect doesn't say old is always better — it says survival time is the strongest signal of durability. Stoic philosophy (2,000 years) is more likely to remain relevant than this year's productivity hack. Weight training (centuries) is more durable than the latest fitness trend.",
+    "insight": "When choosing what to learn, read, or practice — favor things that have survived decades. They'll likely survive decades more.",
+    "identity_tags": ["monk", "scholar"]
+  },
+  {
+    "id": "kd_011",
+    "type": "knowledge_drop",
+    "difficulty": 2,
+    "category": "performance",
+    "scenario": "Deliberate Practice: Expert performers don't just practice more — they practice differently. Deliberate practice has four elements: it targets specific weaknesses, provides immediate feedback, pushes just beyond current ability, and requires intense concentration. Playing guitar for fun builds habit. Deliberate practice isolates the chord transition that's sloppy and drills it 100 times.",
+    "question": "What distinguishes deliberate practice from regular practice?",
+    "options": [
+      { "id": "a", "text": "It's uncomfortable — you focus specifically on what you're worst at, with feedback, at the edge of your ability", "description": "Targeted discomfort with feedback" },
+      { "id": "b", "text": "It requires a coach or teacher", "description": "External guidance" },
+      { "id": "c", "text": "It means practicing more hours per day", "description": "Volume increase" },
+      { "id": "d", "text": "It involves visualization and mental rehearsal", "description": "Mental practice" }
+    ],
+    "correct": "a",
+    "explanation": "Deliberate practice is defined by targeting weaknesses, not strengths. It feels uncomfortable because you're constantly at the edge of your ability. A coach helps but isn't required — self-awareness and feedback loops work too.",
+    "insight": "In your next practice session, identify your weakest skill and spend 80% of your time there. Discomfort means growth.",
+    "identity_tags": ["warrior", "titan", "operator"]
+  },
+  {
+    "id": "kd_012",
+    "type": "knowledge_drop",
+    "difficulty": 2,
+    "category": "performance",
+    "scenario": "Flow Triggers: Psychologist Mihaly Csikszentmihalyi identified conditions that trigger flow states — periods of deep, effortless concentration. Key triggers: clear goals, immediate feedback, the challenge-skill balance (task is 4% harder than your current ability), elimination of distractions, and deep embodiment (physical engagement).",
+    "question": "Which factor is MOST important for triggering flow?",
+    "options": [
+      { "id": "a", "text": "The challenge must be slightly beyond your current skill level — too easy breeds boredom, too hard breeds anxiety", "description": "The 4% challenge-skill sweet spot" },
+      { "id": "b", "text": "You need to be passionate about the activity", "description": "Intrinsic motivation" },
+      { "id": "c", "text": "You need at least 2 uninterrupted hours", "description": "Time block requirement" },
+      { "id": "d", "text": "You need to be well-rested", "description": "Physical readiness" }
+    ],
+    "correct": "a",
+    "explanation": "The challenge-skill balance is the core trigger. If the task is too easy, your attention wanders. If it's too hard, anxiety blocks flow. The sweet spot is approximately 4% beyond your current ability — achievable but stretching.",
+    "insight": "To enter flow more often, adjust task difficulty. If bored, raise the stakes. If anxious, break the task into a smaller, achievable chunk.",
+    "identity_tags": ["titan", "warrior", "monk"]
+  },
+  {
+    "id": "kd_013",
+    "type": "knowledge_drop",
+    "difficulty": 2,
+    "category": "performance",
+    "scenario": "Sleep and Memory Consolidation: During deep sleep (NREM stages 3-4), your brain replays the day's experiences at 20x speed, strengthening neural connections for important memories and pruning irrelevant ones. REM sleep then integrates these memories with existing knowledge, creating insights. Cutting sleep by 2 hours can reduce memory consolidation by 40%.",
+    "question": "What's the most important implication for learning?",
+    "options": [
+      { "id": "a", "text": "Study before sleep and get a full night's rest — sleep is when learning actually solidifies", "description": "Timing study sessions before sleep" },
+      { "id": "b", "text": "Napping during the day replaces nighttime sleep for learning", "description": "Daytime nap approach" },
+      { "id": "c", "text": "Studying more hours is more important than sleep quality", "description": "Volume over rest" },
+      { "id": "d", "text": "Sleep only affects emotional memory, not factual learning", "description": "Limited scope of sleep's effect" }
+    ],
+    "correct": "a",
+    "explanation": "Reviewing material before sleep is the most efficient learning strategy because your brain will replay and consolidate that specific information during deep sleep. Late-night study sessions that cut into sleep are counterproductive.",
+    "insight": "Review your most important learning material in the 30 minutes before bed. Your sleeping brain will do the heavy lifting.",
+    "identity_tags": ["scholar", "monk", "warrior"]
+  },
+  {
+    "id": "kd_014",
+    "type": "knowledge_drop",
+    "difficulty": 3,
+    "category": "performance",
+    "scenario": "Ultradian Rhythms: Your body operates on 90-minute cycles throughout the day (not just during sleep). After 90 minutes of focused work, your brain needs 15-20 minutes of recovery. Pushing through this recovery window leads to diminishing returns, increased errors, and stress hormones that actually impair learning.",
+    "question": "How should you structure your workday based on ultradian rhythms?",
+    "options": [
+      { "id": "a", "text": "Work in focused 90-minute blocks with 15-20 minute breaks between them", "description": "Align work sprints with biological rhythms" },
+      { "id": "b", "text": "Take a break every 25 minutes (Pomodoro technique)", "description": "Shorter cycles" },
+      { "id": "c", "text": "Work until you feel tired, then rest", "description": "Listen to your body" },
+      { "id": "d", "text": "Push through tiredness — willpower overcomes biology", "description": "Grind mindset" }
+    ],
+    "correct": "a",
+    "explanation": "Your biology is on a 90-minute cycle. Working with this rhythm (90 min on, 20 min off) produces more output than 8 hours of continuous work because you're leveraging peak focus periods and allowing proper neural recovery.",
+    "insight": "Set a 90-minute timer. When it rings, stop — even if you feel productive. The break will make the next 90 minutes better.",
+    "identity_tags": ["titan", "operator", "warrior"]
+  },
+  {
+    "id": "kd_015",
+    "type": "knowledge_drop",
+    "difficulty": 2,
+    "category": "performance",
+    "scenario": "Progressive Overload: The foundation of all physical adaptation. Your body only grows stronger when faced with demands slightly beyond its current capacity. Lifting the same weight forever maintains fitness but doesn't build it. Adding 2.5% more weight, one more rep, or slightly longer endurance — consistently — produces compound results over months.",
+    "question": "What principle makes progressive overload work beyond just fitness?",
+    "options": [
+      { "id": "a", "text": "Small, consistent increases compound over time — in fitness, skills, knowledge, and habits", "description": "The compound effect of marginal gains" },
+      { "id": "b", "text": "You should always push to maximum effort", "description": "Maximum intensity" },
+      { "id": "c", "text": "The body adapts faster with larger increases", "description": "Bigger jumps, faster progress" },
+      { "id": "d", "text": "Progressive overload only works for physical training", "description": "Limited to fitness domain" }
+    ],
+    "correct": "a",
+    "explanation": "Progressive overload is a universal principle. Adding one more page of reading per day, slightly harder problems in math, or marginally more responsibility at work — these compound into massive improvements over months.",
+    "insight": "Apply progressive overload to everything: what's one small increase you can make to today's effort versus yesterday's?",
+    "identity_tags": ["warrior", "titan", "operator"]
+  }
+]
