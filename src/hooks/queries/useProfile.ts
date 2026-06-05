@@ -32,7 +32,6 @@ export function useProfile() {
       return {
         id: userId ?? "",
         email: null,
-        expo_push_token: null,
         xp: 0,
         level: 1,
         streak_current: 0,
@@ -46,6 +45,7 @@ export function useProfile() {
         archetype: null,
         mode: "full_protocol",
         focus_engines: [],
+        expo_push_token: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };

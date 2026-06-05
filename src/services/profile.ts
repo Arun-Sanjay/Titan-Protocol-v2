@@ -108,7 +108,6 @@ function defaultProfile(userId: string): Profile {
   return {
     id: userId,
     email: null,
-    expo_push_token: null,
     display_name: null,
     archetype: null,
     level: 1,
@@ -122,6 +121,7 @@ function defaultProfile(userId: string): Profile {
     tutorial_completed: false,
     first_use_date: null,
     first_task_completed_at: null,
+    expo_push_token: null,
     created_at: now,
     updated_at: now,
   };

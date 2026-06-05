@@ -1,11 +1,11 @@
-# Titan Protocol — Android App
+# Titan Protocol — Android App (Classic)
 
-> Mobile-first gamified "personal OS" app. Expo SDK 55, RN 0.83, React 19, Hermes + New Architecture. Ship target: Google Play (freemium, solo dev).
+> Mobile-first gamified "personal OS" app. Expo SDK 55, RN 0.83, React 19, Hermes + New Architecture. Ship target: Google Play (freemium, solo dev). **This is the original standalone APK — renamed "Titan Protocol Classic" at SaaS launch (bundle id `com.titan.protocol` → `com.titan.protocol.classic`). It is NOT part of the SaaS sync ecosystem.**
 >
 > **Architecture: Local-only. Cloud is a manual opt-in backup, nothing more.**
 > Every screen reads and writes SQLite. The UI never touches the network for normal operation. A "Backup to Cloud" / "Restore from Cloud" pair in the Profile tab lets the user snapshot to Supabase and pull back on another device.
 >
-> **Status:** Android is shipping and stable. The web app runs the same architecture — local SQLite (sqlite-wasm in browser, tauri-plugin-sql on desktop) + manual Supabase backup/restore. See `../web/CLAUDE.md` for web-specific notes and `../ROADMAP.md` for the migration record.
+> **Status:** Android is shipping and stable, and this codebase stays frozen on the local-first architecture. ⚠️ The SaaS frontends (`../web/` and `../mobile-saas/`) are now **hybrid cloud-first** — Supabase is their source of truth, SQLite a cache, Realtime keeps it fresh. Do NOT copy their `cloudUpsert`/Realtime patterns here. See `../CLAUDE.md` for the two-architecture split and `../ROADMAP.md` for the migration record.
 
 ---
 
@@ -74,7 +74,7 @@ No NativeWind, no styled-components, no Redux, no SWR, no query-client persister
 
 ## 3. Data stores
 
-**Local (SQLite) — `titan.db`, 42 user-facing tables + 3 housekeeping, schema in `src/db/sqlite/migrations/001_initial.sql`.**
+**Local (SQLite) — `titan.db`, 42 user-facing tables + 1 housekeeping (`schema_migrations`), schema in `src/db/sqlite/migrations/001_initial.sql`.**
 Every user table carries `_deleted` (soft-delete tombstone) and `_dirty` (legacy column, ignored in local-only mode). Writes just clear both to 0.
 
 The 42 user-facing tables:
@@ -95,9 +95,11 @@ user_titles, water_logs, weight_logs
 That's 42 user-facing tables. One additional housekeeping table lives on disk:
 - `schema_migrations` — created by `migrator.ts` on first boot, tracks applied migration IDs.
 
-Legacy tables (`pending_mutations`, `sync_meta`) were dropped by migration `002_drop_legacy_sync_tables` (2026-04-23).
+Legacy tables (`pending_mutations`, `sync_meta`) were dropped by migration `002_drop_legacy_sync_tables` (2026-04-23). Migration `003_add_expo_push_token` (2026-05-26) added `profiles.expo_push_token` to keep this app's schema readable when restoring a cloud backup written by the SaaS apps.
 
-Composite-PK tables: `srs_cards`, `user_titles`, `field_op_cooldown`, `focus_settings`, `nutrition_profile`, `progression`, `subscriptions`, `titan_mode_state`.
+**3 migrations total**, registered in `src/db/sqlite/migrations/index.ts`: `001_initial`, `002_drop_legacy_sync_tables`, `003_add_expo_push_token`.
+
+Composite-PK tables (multi-column PRIMARY KEY) are only **two**: `srs_cards` (`user_id, exercise_id`) and `user_titles` (`user_id, title_id`). The other per-user singletons — `field_op_cooldown`, `focus_settings`, `nutrition_profile`, `progression`, `subscriptions`, `titan_mode_state` — use a **single-column `user_id` PRIMARY KEY**, not a composite. (`PRIMARY_KEYS` in `src/sync/tables.ts` is the source of truth.)
 
 **Supabase — `rmvodrpgaffxeultskst` (region `ap-south-1`).**
 Schema matches SQLite 1:1 minus the housekeeping columns. Touched by:
@@ -202,7 +204,7 @@ export function useXxx() {
 
 ```
 mobile/
-├── app/                     Expo Router screens (45 screens)
+├── app/                     Expo Router screens (~41 route screens, excl. layouts)
 │   ├── _layout.tsx          Root — fonts, DB migration, auth gate, overlays
 │   ├── (auth)/              login, email-login, signup, verify (+ layout)
 │   ├── (tabs)/              HQ (index), engines, track, hub, profile (+ layout)
@@ -221,7 +223,7 @@ mobile/
 ├── src/
 │   ├── components/
 │   │   ├── ui/              48 primitives (Panel, Card, Gauges, Charts, etc.)
-│   │   ├── v2/              81 files — onboarding beats, 18 day cinematics,
+│   │   ├── v2/              ~92 files — onboarding beats, 18 day cinematics,
 │   │   │                    celebrations, walkthrough, skill tree,
 │   │   │                    progression, quests, mind-training, narrative,
 │   │   │                    identity, habits, achievements

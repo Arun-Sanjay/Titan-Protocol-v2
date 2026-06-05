@@ -18,7 +18,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
-import SQL_001 from "../db/sqlite/migrations/001_initial.sql?raw";
+import { migrations } from "../db/sqlite/migrations";
 import { SYNCED_TABLES } from "../db/sqlite/column-types";
 
 describe("SQLite initial migration", () => {
@@ -27,7 +27,9 @@ describe("SQLite initial migration", () => {
   beforeEach(() => {
     db = new Database(":memory:");
     db.pragma("foreign_keys = OFF");
-    db.exec(SQL_001);
+    // Apply the full migration chain (001 + 002 + 003…) so the in-memory
+    // schema matches what ships — including later ADD COLUMN / new tables.
+    for (const m of migrations) db.exec(m.sql);
   });
 
   it("creates exactly the tables we expect", () => {
@@ -38,13 +40,14 @@ describe("SQLite initial migration", () => {
       .all() as { name: string }[];
     const names = rows.map((r) => r.name);
 
-    // 42 user-facing tables + 2 housekeeping (pending_mutations, sync_meta) = 44
-    expect(names).toHaveLength(44);
+    // 43 user-facing tables + 2 housekeeping (pending_mutations, sync_meta) = 45
+    expect(names).toHaveLength(45);
     expect(names).toContain("profiles");
     expect(names).toContain("tasks");
     expect(names).toContain("completions");
     expect(names).toContain("habits");
     expect(names).toContain("srs_cards");
+    expect(names).toContain("xp_log");
     expect(names).toContain("pending_mutations");
     expect(names).toContain("sync_meta");
   });
@@ -62,7 +65,7 @@ describe("SQLite initial migration", () => {
     for (const t of SYNCED_TABLES) {
       expect(schemaTables.has(t), `missing SQL table for ${t}`).toBe(true);
     }
-    expect(SYNCED_TABLES.length).toBe(42);
+    expect(SYNCED_TABLES.length).toBe(43);
   });
 
   it("can round-trip a task row", () => {

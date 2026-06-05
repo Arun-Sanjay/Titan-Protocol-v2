@@ -4,6 +4,9 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 import { ThemeProvider } from "../components/ui/ThemeProvider";
 import { DailyPlanningProvider } from "../app/(os)/components/DailyPlanningProvider";
 import { FirstRunPullGate } from "../components/FirstRunPullGate";
+import { StreakSettlementGate } from "../app/(os)/components/StreakSettlementGate";
+import { RankUpWatcher } from "../app/(os)/components/RankUpWatcher";
+import { CelebrationProvider } from "../components/ui/Celebration";
 import { UpdateChecker } from "../components/UpdateChecker";
 import { useWebAuth } from "../lib/auth";
 
@@ -16,17 +19,21 @@ export function OSLayout() {
     <FirstRunPullGate userId={user.id}>
       <ThemeProvider>
         <DailyPlanningProvider>
-          <main className="osCanvas">
-            <div className="osStage">
-              <OSShell>
-                <ErrorBoundary>
-                  <Outlet />
-                </ErrorBoundary>
-              </OSShell>
-            </div>
-          </main>
-          {/* Tauri-only auto-update banner — no-op in the browser build. */}
-          <UpdateChecker />
+          <CelebrationProvider>
+            <StreakSettlementGate />
+            <RankUpWatcher />
+            <main className="osCanvas">
+              <div className="osStage">
+                <OSShell>
+                  <ErrorBoundary>
+                    <Outlet />
+                  </ErrorBoundary>
+                </OSShell>
+              </div>
+            </main>
+            {/* Tauri-only auto-update banner — no-op in the browser build. */}
+            <UpdateChecker />
+          </CelebrationProvider>
         </DailyPlanningProvider>
       </ThemeProvider>
     </FirstRunPullGate>

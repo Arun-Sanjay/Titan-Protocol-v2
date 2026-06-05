@@ -1821,12 +1821,51 @@ export type Database = {
           },
         ]
       }
+      xp_log: {
+        Row: {
+          consistency: number
+          created_at: string
+          date_key: string
+          multiplier: number
+          settled: boolean
+          streak_value: number
+          tasks_counted: number
+          updated_at: string
+          user_id: string
+          xp_earned: number
+        }
+        Insert: {
+          consistency?: number
+          created_at?: string
+          date_key: string
+          multiplier?: number
+          settled?: boolean
+          streak_value?: number
+          tasks_counted?: number
+          updated_at?: string
+          user_id: string
+          xp_earned?: number
+        }
+        Update: {
+          consistency?: number
+          created_at?: string
+          date_key?: string
+          multiplier?: number
+          settled?: boolean
+          streak_value?: number
+          tasks_counted?: number
+          updated_at?: string
+          user_id?: string
+          xp_earned?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      streak_warning_push: { Args: never; Returns: undefined }
     }
     Enums: {
       app_mode:

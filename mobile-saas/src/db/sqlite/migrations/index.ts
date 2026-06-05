@@ -1,6 +1,7 @@
 import { SQL as SQL_001 } from "./001_initial";
 import { SQL as SQL_002 } from "./002_drop_legacy_sync_tables";
 import { SQL as SQL_003 } from "./003_add_expo_push_token";
+import { SQL as SQL_004 } from "./004_add_xp_log";
 
 export interface Migration {
   id: string;
@@ -15,4 +16,5 @@ export const migrations: Migration[] = [
   { id: "001_initial", sql: SQL_001 },
   { id: "002_drop_legacy_sync_tables", sql: SQL_002 },
   { id: "003_add_expo_push_token", sql: SQL_003 },
+  { id: "004_add_xp_log", sql: SQL_004 },
 ];

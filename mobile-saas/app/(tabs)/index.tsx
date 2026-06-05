@@ -12,29 +12,25 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { PageHeader } from "../../src/components/ui/PageHeader";
 import { Panel } from "../../src/components/ui/Panel";
-import { TitanProgress } from "../../src/components/ui/TitanProgress";
 import { RadarChart } from "../../src/components/ui/RadarChart";
-import { ComparisonCard } from "../../src/components/ui/ComparisonCard";
-import { EngineStatCard } from "../../src/components/ui/EngineStatCard";
-import { PlanningList, type PlanningRow } from "../../src/components/ui/PlanningList";
-import { MetricValue } from "../../src/components/ui/MetricValue";
+import { WeekStrip } from "../../src/components/ui/WeekStrip";
 
 import { useDashboardWeek, useDailyPlanning } from "../../src/hooks/queries/useDashboard";
-import { ENGINES, type EngineKey } from "../../src/lib/scoring";
+import { useProfile } from "../../src/hooks/queries/useProfile";
+import { getRankForLevel } from "../../src/db/gamification";
+import { ENGINES } from "../../src/lib/scoring";
 import { ENGINE_META } from "../../src/lib/dashboard-stats";
-import { formatDateShort } from "../../src/lib/date";
-import { colors, fonts, spacing, radius } from "../../src/theme";
+import { getGreeting } from "../../src/lib/date";
+import { colors, fonts, spacing, radius, shadows } from "../../src/theme";
 
-const ENGINE_COLORS: Record<EngineKey, string> = {
-  body: colors.body,
-  mind: colors.mind,
-  money: colors.money,
-  charisma: colors.charisma,
-};
+const RADAR_SIZE = Math.min(300, Dimensions.get("window").width - 96);
 
-const RADAR_SIZE = Math.min(280, Dimensions.get("window").width - 120);
+function initialsFor(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 export default function HQScreen() {
   const router = useRouter();
@@ -42,6 +38,7 @@ export default function HQScreen() {
 
   const planning = useDailyPlanning();
   const week = useDashboardWeek();
+  const { data: profile } = useProfile();
   const titan = planning.titan;
 
   const radarData = useMemo(
@@ -53,20 +50,27 @@ export default function HQScreen() {
     [titan],
   );
 
-  const thisWeekAvg = useMemo(() => {
-    const active = week.comparison.filter((c) => c.thisWeekAvg > 0 || c.lastWeekAvg > 0);
-    if (active.length === 0) return 0;
-    return Math.round(active.reduce((sum, c) => sum + c.thisWeekAvg, 0) / active.length);
-  }, [week.comparison]);
+  const weekScoreMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const d of week.titanSparkline) map[d.dateKey] = d.percent;
+    return map;
+  }, [week.titanSparkline]);
+
+  const streak = profile?.streak_current ?? 0;
+  const level = profile?.level ?? 1;
+  const rank = getRankForLevel(level);
+  const displayName = profile?.display_name?.trim() || profile?.email?.split("@")[0] || "Operator";
+  const initials = initialsFor(displayName);
 
   const onRefresh = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     void queryClient.invalidateQueries({ queryKey: ["dailyPlanning"] });
     void queryClient.invalidateQueries({ queryKey: ["tasks"] });
     void queryClient.invalidateQueries({ queryKey: ["completions"] });
+    void queryClient.invalidateQueries({ queryKey: ["profile"] });
   }, [queryClient]);
 
-  const go = useCallback((href: string) => router.push(href as never), [router]);
+  const goProfile = useCallback(() => router.navigate("/(tabs)/profile"), [router]);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -76,162 +80,44 @@ export default function HQScreen() {
           <RefreshControl refreshing={false} onRefresh={onRefresh} tintColor={colors.textMuted} />
         }
       >
-        <PageHeader
-          kicker="Titan Protocol"
-          title="Titan OS"
-          subtitle="Your performance operating system — four engines, one view."
-        />
-
-        {/* ── Hero: Titan Score ── */}
-        <Panel tone="hero" style={styles.heroPanel}>
-          <Text style={styles.kicker}>Titan Score</Text>
-          <Text style={styles.scoreMain}>{titan.percent.toFixed(1)}%</Text>
-          <Text style={styles.muted}>{titan.enginesActiveCount}/4 engines active today</Text>
-
-          <View style={styles.scoreRows}>
-            {ENGINES.map((engine) => {
-              const s = titan.perEngine[engine];
-              return (
-                <View key={engine} style={styles.scoreRow}>
-                  <View style={styles.scoreRowHead}>
-                    <Text style={styles.scoreRowLabel}>{ENGINE_META[engine].label}</Text>
-                    <Text style={styles.scoreRowValue}>{s.percent.toFixed(1)}%</Text>
-                  </View>
-                  <TitanProgress value={s.percent} />
-                </View>
-              );
-            })}
+        {/* ── Header: greeting + streak + avatar ── */}
+        <View style={styles.headerRow}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>{getGreeting().toUpperCase()}</Text>
+            <Text style={styles.title}>HQ</Text>
           </View>
-        </Panel>
 
-        {/* ── vs Last Week ── */}
-        {week.comparison.length > 0 && (
-          <Panel>
-            <Text style={styles.panelKicker}>vs Last Week</Text>
-            <View style={styles.comparisonRow}>
-              {week.comparison.map((c) => (
-                <ComparisonCard
-                  key={c.engine}
-                  label={ENGINE_META[c.engine].label}
-                  change={c.change}
-                  thisWeekAvg={c.thisWeekAvg}
-                  lastWeekAvg={c.lastWeekAvg}
-                />
-              ))}
-            </View>
-          </Panel>
-        )}
+          <View style={styles.headerRight}>
+            {streak > 0 && (
+              <View style={styles.streakChip}>
+                <Text style={styles.streakFire}>🔥</Text>
+                <Text style={styles.streakCount}>{streak}</Text>
+              </View>
+            )}
+            <Pressable
+              onPress={goProfile}
+              style={({ pressed }) => [
+                styles.avatar,
+                { borderColor: rank.color, backgroundColor: rank.color + "22" },
+                pressed && styles.pressed,
+              ]}
+              accessibilityLabel="Open profile"
+            >
+              <Text style={[styles.avatarText, { color: rank.color }]}>{initials}</Text>
+            </Pressable>
+          </View>
+        </View>
 
-        {/* ── Engine Overview (radar) ── */}
-        <Panel>
+        {/* ── Radar centerpiece + 7-day strip ── */}
+        <Panel tone="hero" style={styles.heroPanel}>
           <Text style={styles.panelKicker}>Engine Overview</Text>
           <View style={styles.radarWrap}>
             <RadarChart data={radarData} size={RADAR_SIZE} />
           </View>
-        </Panel>
 
-        {/* ── Engine cards ── */}
-        <View style={styles.engineCards}>
-          {ENGINES.map((engine) => {
-            const s = titan.perEngine[engine];
-            return (
-              <EngineStatCard
-                key={engine}
-                label={ENGINE_META[engine].label}
-                scorePct={s.percent}
-                sparkData={week.sparklines[engine].map((e) => e.percent)}
-                color={ENGINE_COLORS[engine]}
-                planLabel={s.pointsTotal > 0 ? `Today: ${s.percent}%` : "Plan not set"}
-                dayLabel={`${s.pointsDone}/${s.pointsTotal} pts`}
-                onPress={() => go(ENGINE_META[engine].route)}
-              />
-            );
-          })}
-        </View>
-
-        {/* ── This Week ── */}
-        <Panel>
-          <Text style={styles.panelKicker}>This Week</Text>
-          <View style={styles.summaryRow}>
-            <MetricValue label="Avg Titan Score" value={`${thisWeekAvg}%`} size="md" />
-            <MetricValue label="Tasks Completed" value={week.taskStats.totalCompleted} size="md" />
-            <View>
-              <MetricValue label="Best Day" value={`${week.taskStats.bestDay.percent}%`} size="md" />
-              <Text style={styles.metricMeta}>{formatDateShort(week.taskStats.bestDay.dateKey)}</Text>
-            </View>
-          </View>
-        </Panel>
-
-        {/* ── Today Planner ── */}
-        <Panel tone="hero" style={styles.plannerPanel}>
-          <View>
-            <Text style={styles.kicker}>Today Planner</Text>
-            <Text style={styles.plannerTitle}>Personal Command Layer</Text>
-            <Text style={styles.muted}>Planning date · {planning.dateKey}</Text>
-          </View>
-
-          <View style={styles.plannerBlock}>
-            <Text style={styles.panelKicker}>Titan Score Summary</Text>
-            <Text style={styles.plannerPercent}>{titan.percent.toFixed(1)}%</Text>
-            <Text style={styles.muted}>
-              {planning.summary.completedPoints}/{planning.summary.totalPoints} points ·{" "}
-              {titan.enginesActiveCount}/4 engines active
-            </Text>
-          </View>
-
-          <View style={styles.plannerBlock}>
-            <Text style={styles.panelKicker}>Engines At Risk</Text>
-            <PlanningList
-              rows={planning.enginesAtRisk.map<PlanningRow>((r) => ({
-                id: r.engine,
-                title: `${r.label} · ${r.scorePct}%`,
-                sub: r.reason,
-                actionLabel: "Open",
-                onAction: () => go(r.route),
-              }))}
-              emptyText="All engines are above threshold."
-            />
-          </View>
-
-          <View style={styles.plannerBlock}>
-            <Text style={styles.panelKicker}>Top Incomplete Main Tasks</Text>
-            <PlanningList
-              rows={planning.topIncompleteMainTasks.map<PlanningRow>((t) => ({
-                id: t.id,
-                title: t.title,
-                sub: t.engineLabel,
-                actionLabel: "Enter",
-                onAction: () => go(t.route),
-              }))}
-              emptyText="No incomplete main tasks detected."
-            />
-          </View>
-
-          <View style={styles.plannerBlock}>
-            <Text style={styles.panelKicker}>Next Best Action</Text>
-            <Text style={styles.nextTitle}>{planning.nextBestAction.title}</Text>
-            <Text style={styles.muted}>{planning.nextBestAction.detail}</Text>
-            <Pressable
-              onPress={() => go(planning.nextBestAction.href)}
-              style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
-            >
-              <Text style={styles.ctaText}>{planning.nextBestAction.cta}</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.plannerBlock}>
-            <Text style={styles.panelKicker}>Quick Actions</Text>
-            <View style={styles.quickActions}>
-              {planning.quickActions.map((a) => (
-                <Pressable
-                  key={a.href}
-                  onPress={() => go(a.href)}
-                  style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
-                >
-                  <Text style={styles.chipText}>{a.label}</Text>
-                </Pressable>
-              ))}
-            </View>
+          <View style={styles.weekBlock}>
+            <Text style={styles.weekKicker}>This Week</Text>
+            <WeekStrip scoreMap={weekScoreMap} />
           </View>
         </Panel>
 
@@ -244,70 +130,49 @@ export default function HQScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.xl, gap: spacing.lg },
+  pressed: { opacity: 0.7 },
 
-  kicker: { ...fonts.kicker, color: colors.textMuted },
-  muted: { ...fonts.small, fontSize: 12, color: colors.textMuted },
-  panelKicker: { ...fonts.kicker, color: colors.textMuted, marginBottom: spacing.md },
+  // Header
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: spacing.xs,
+  },
+  headerLeft: { gap: spacing.xs },
+  greeting: { ...fonts.kicker, color: colors.textMuted, letterSpacing: 2 },
+  title: { ...fonts.title, fontSize: 32, letterSpacing: -0.5 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  streakChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.warningDim,
+    borderWidth: 1,
+    borderColor: "rgba(251, 191, 36, 0.45)",
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    ...shadows.glow,
+    shadowColor: colors.warning,
+    shadowOpacity: 0.4,
+  },
+  streakFire: { fontSize: 15 },
+  streakCount: { ...fonts.mono, fontSize: 15, fontWeight: "800", color: colors.warning },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { ...fonts.mono, fontSize: 14, fontWeight: "700" },
 
   // Hero
-  heroPanel: { gap: spacing.xs },
-  scoreMain: {
-    ...fonts.monoLarge,
-    fontSize: 52,
-    fontWeight: "700",
-    marginTop: spacing.xs,
-  },
-  scoreRows: { gap: spacing.md, marginTop: spacing.lg },
-  scoreRow: { gap: spacing.xs },
-  scoreRowHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  scoreRowLabel: { ...fonts.kicker, fontSize: 10, color: colors.textSecondary },
-  scoreRowValue: { ...fonts.mono, fontSize: 12, color: colors.text },
-
-  // vs Last Week
-  comparisonRow: { flexDirection: "row", gap: spacing.sm },
-
-  // Radar
+  heroPanel: { gap: spacing.lg },
+  panelKicker: { ...fonts.kicker, color: colors.textMuted, letterSpacing: 2 },
   radarWrap: { alignItems: "center", justifyContent: "center", paddingVertical: spacing.sm },
-
-  // Engine cards
-  engineCards: { gap: spacing.lg },
-
-  // This Week
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm },
-  metricMeta: { ...fonts.small, fontSize: 11, color: colors.textMuted, marginTop: 2 },
-
-  // Planner
-  plannerPanel: { gap: spacing.lg },
-  plannerTitle: {
-    ...fonts.title,
-    fontSize: 20,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginTop: spacing.xs,
-  },
-  plannerBlock: { gap: spacing.xs },
-  plannerPercent: { ...fonts.monoLarge, fontSize: 36, fontWeight: "700" },
-  nextTitle: { ...fonts.subheading, fontSize: 15 },
-  cta: {
-    alignSelf: "flex-start",
-    marginTop: spacing.sm,
-    backgroundColor: colors.surfaceBorderStrong,
-    borderWidth: 1,
-    borderColor: colors.cardBorderActive,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  ctaText: { ...fonts.kicker, fontSize: 11, color: colors.text },
-  quickActions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.panelBorder,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  chipText: { ...fonts.kicker, fontSize: 10, color: colors.textSecondary },
-  pressed: { opacity: 0.65 },
+  weekBlock: { gap: spacing.sm },
+  weekKicker: { ...fonts.kicker, color: colors.textMuted, fontSize: 10, letterSpacing: 1.5 },
 });

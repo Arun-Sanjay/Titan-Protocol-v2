@@ -16,6 +16,10 @@ import {
 } from "../../services/tasks";
 import { runAchievementCheck } from "../../lib/achievement-integration";
 import { invalidateScoring } from "../../lib/score-invalidation";
+import { awardXpForCompletion, refundXpForUncomplete } from "../../services/xp";
+import { enqueueRankUp } from "../../services/rank-ups";
+import { xpKeys } from "./useXp";
+import { profileKeys } from "./useProfile";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
 
@@ -102,6 +106,20 @@ export function useToggleCompletion() {
         dateKey: vars.dateKey,
         engine: vars.task.engine,
       });
+      if (result.added) {
+        // Award XP (10/day cap + streak multiplier handled in the service).
+        // On a level-up, enqueue a rank-up event for the celebration watcher.
+        const award = await awardXpForCompletion(vars.dateKey, vars.task.id);
+        if (award.awarded && award.leveledUp) {
+          await enqueueRankUp({
+            fromLevel: award.fromLevel,
+            toLevel: award.toLevel,
+          });
+        }
+      } else {
+        // Un-completing a counted task refunds its XP (anti-gaming guarded).
+        await refundXpForUncomplete(vars.dateKey, vars.task.id);
+      }
       return { completed: result.added };
     },
     onMutate: async (vars) => {
@@ -126,6 +144,11 @@ export function useToggleCompletion() {
       // this the user toggles a task and the Dashboard stays at the
       // pre-toggle score (the planning context only refetched at midnight).
       invalidateScoring(qc);
+      // XP/level/rank moved — refresh the profile chip, today's XP ledger,
+      // and the rank-up queue (the celebration watcher reads it).
+      qc.invalidateQueries({ queryKey: profileKeys.all });
+      qc.invalidateQueries({ queryKey: xpKeys.day(vars.dateKey) });
+      qc.invalidateQueries({ queryKey: ["rank_ups"] });
       runAchievementCheck(qc).catch(() => {});
     },
   });

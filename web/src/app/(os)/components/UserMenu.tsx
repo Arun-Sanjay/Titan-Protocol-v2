@@ -13,7 +13,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useProfile } from "../../../hooks/queries/useProfile";
 import { useCurrentUserEmail } from "../../../lib/session";
 import { useWebAuth } from "../../../lib/auth";
-import { getRankForLevel } from "@titan/shared/db/gamification";
+import { rankForLevel, nextRank, levelProgressPct } from "../../../lib/ranks";
 import { playClick } from "../../../lib/sound";
 
 function initialsFrom(name: string | null, email: string | null): string {
@@ -42,7 +42,9 @@ export function UserMenu({
     (email ? email.split("@")[0] : "Operator");
   const level = profile?.level ?? 1;
   const xp = profile?.xp ?? 0;
-  const rank = getRankForLevel(level);
+  const rank = rankForLevel(level);
+  const upcoming = nextRank(level);
+  const progressPct = levelProgressPct(xp);
   const initials = initialsFrom(profile?.display_name ?? null, email);
 
   React.useEffect(() => {
@@ -146,6 +148,27 @@ export function UserMenu({
             <span style={{ color: "var(--tx-muted, #808080)" }}>
               LVL {level} · {xp.toLocaleString()} XP
             </span>
+          </div>
+
+          <div style={progressWrapStyle} data-testid="user-menu-progress">
+            <div style={progressTrackStyle}>
+              <div
+                style={{
+                  ...progressFillStyle,
+                  width: `${progressPct}%`,
+                  background: `linear-gradient(90deg, ${rank.color}, ${rank.color}bb)`,
+                  boxShadow: `0 0 8px ${rank.color}66`,
+                }}
+              />
+            </div>
+            <div style={progressLabelStyle}>
+              <span>{xp % 500} / 500 XP</span>
+              <span>
+                {upcoming
+                  ? `Next: ${upcoming.name} · LVL ${upcoming.minLevel}`
+                  : "Max rank"}
+              </span>
+            </div>
           </div>
 
           <div style={dividerStyle} />
@@ -279,6 +302,34 @@ const statRowStyle: React.CSSProperties = {
   borderRadius: 8,
   background: "var(--tx-panel, rgba(255,255,255,0.04))",
   fontSize: 11,
+};
+
+const progressWrapStyle: React.CSSProperties = {
+  padding: "4px 11px 2px",
+  margin: "0 2px",
+};
+
+const progressTrackStyle: React.CSSProperties = {
+  height: 5,
+  borderRadius: 999,
+  background: "var(--tx-stroke, rgba(255,255,255,0.08))",
+  overflow: "hidden",
+};
+
+const progressFillStyle: React.CSSProperties = {
+  height: "100%",
+  borderRadius: 999,
+  transition: "width 240ms ease-out",
+};
+
+const progressLabelStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 8,
+  marginTop: 5,
+  fontSize: 9.5,
+  letterSpacing: "0.03em",
+  color: "var(--tx-muted, #808080)",
 };
 
 const dividerStyle: React.CSSProperties = {

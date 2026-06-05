@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUserId, useCurrentUserEmail } from "../../lib/session";
 import { getProfile, upsertProfile, type Profile } from "../../services/profile";
+import { settleStreaks } from "../../services/xp";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
 
@@ -109,40 +110,20 @@ export function useAwardXP() {
 }
 
 /**
- * Update streak based on the current date.
+ * Consistency-based streak settlement — the single streak authority.
  *
- * Logic:
- *  - streak_last_date === dateKey → no change
- *  - streak_last_date === yesterday → increment
- *  - else → reset to 1
+ * Replaces the old "active-yesterday" streak. `settleStreaks()` folds each
+ * past, unsettled day's Titan score into the streak: a day >= 60% continues it
+ * (+1), a day below (or a missed day) resets it to 0. Fired once per app-open
+ * by `StreakSettlementGate`; idempotent (only advances past streak_last_date,
+ * never settles today).
  */
-export function useUpdateStreak() {
+export function useSettleStreaks() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: async (dateKey: string): Promise<{ newStreak: number }> => {
-      const profile = await getProfile();
-      const lastDate = profile?.streak_last_date ?? null;
-      let newStreak = profile?.streak_current ?? 0;
-
-      if (lastDate !== dateKey) {
-        const last = new Date(lastDate ?? "1970-01-01");
-        const current = new Date(dateKey);
-        const diffDays = Math.round(
-          (current.getTime() - last.getTime()) / 86_400_000,
-        );
-        newStreak = diffDays === 1 ? newStreak + 1 : 1;
-      }
-
-      const newBest = Math.max(newStreak, profile?.streak_best ?? 0);
-      await upsertProfile({
-        streak_current: newStreak,
-        streak_best: newBest,
-        streak_last_date: dateKey,
-      });
-      return { newStreak };
-    },
-    onSuccess: () => {
+    mutationFn: () => settleStreaks(),
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: profileKeys.all });
     },
   });

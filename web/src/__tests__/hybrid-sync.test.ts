@@ -19,7 +19,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
-import SQL_001 from "../db/sqlite/migrations/001_initial.sql?raw";
+import { migrations } from "../db/sqlite/migrations";
 import { SYNCED_TABLES } from "../db/sqlite/column-types";
 
 describe("Hybrid sync — SQLite invariants", () => {
@@ -28,7 +28,9 @@ describe("Hybrid sync — SQLite invariants", () => {
   beforeEach(() => {
     db = new Database(":memory:");
     db.pragma("foreign_keys = OFF");
-    db.exec(SQL_001);
+    // Apply the full migration chain so every SYNCED_TABLES table exists
+    // (incl. xp_log from 003), matching the shipped schema.
+    for (const m of migrations) db.exec(m.sql);
   });
 
   // ─── wipeAllSyncedTables ─────────────────────────────────────────────────

@@ -546,6 +546,20 @@ export const COLUMN_TYPES: Record<string, TableColumns> = {
     _dirty: 'dirty_flag',
     _deleted: 'dirty_flag',
   },
+  xp_log: {
+    user_id: 'text',
+    date_key: 'text',
+    tasks_counted: 'integer',
+    xp_earned: 'integer',
+    consistency: 'integer',
+    streak_value: 'integer',
+    multiplier: 'real',
+    settled: 'boolean',
+    created_at: 'text',
+    updated_at: 'text',
+    _dirty: 'dirty_flag',
+    _deleted: 'dirty_flag',
+  },
 };
 
 /** Ordered list of table names that participate in sync (push + pull). */

@@ -68,6 +68,7 @@ export const TABLE_QUERY_KEY_ROOTS: Record<string, readonly string[]> = {
   sleep_logs: ["sleep"],
   weight_logs: ["weight"],
   subscriptions: ["subscriptions"],
+  xp_log: ["xp_log"],
 };
 
 export function queryKeysFor(table: string): readonly string[] {
@@ -89,6 +90,7 @@ export const PRIMARY_KEYS: Record<string, readonly string[]> = {
   progression: ["user_id"],
   subscriptions: ["user_id"],
   titan_mode_state: ["user_id"],
+  xp_log: ["user_id", "date_key"],
 };
 
 export function primaryKeyFor(table: string): readonly string[] {

@@ -4,6 +4,7 @@
 // copy under mobile/src/db/sqlite/migrations/.
 import SQL_001 from "./001_initial.sql?raw";
 import SQL_002 from "./002_add_expo_push_token.sql?raw";
+import SQL_003 from "./003_add_xp_log.sql?raw";
 
 export interface Migration {
   id: string;
@@ -17,4 +18,5 @@ export interface Migration {
 export const migrations: Migration[] = [
   { id: "001_initial", sql: SQL_001 },
   { id: "002_add_expo_push_token", sql: SQL_002 },
+  { id: "003_add_xp_log", sql: SQL_003 },
 ];
