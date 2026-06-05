@@ -17,6 +17,7 @@ import { setCurrentUser } from "./session";
 import { subscribeUserChanges } from "../sync/realtime";
 import { wipeAllSyncedTables } from "../sync/first-run-pull";
 import { flushDirtyRows } from "../sync/flush-dirty";
+import { catchUpResync } from "../sync/resync";
 import { identifyUser, resetUser } from "./observability";
 
 type WebAuthContextValue = {
@@ -75,11 +76,19 @@ export function WebAuthProvider({ children }: { children: React.ReactNode }) {
   // costs nothing. The flush has an in-flight guard against double-fire.
   useEffect(() => {
     if (!user?.id) return;
+    // Network back → flush local writes up + catch up on anything other
+    // devices changed while we were offline (Realtime doesn't replay gaps).
     const onOnline = () => {
-      void flushDirtyRows();
+      void catchUpResync(queryClient);
     };
+    // Tab refocus (e.g. returning to the laptop after using the phone): if
+    // the Realtime socket dropped while hidden we may have missed cross-device
+    // changes — pull them down. If the socket stayed connected, changes
+    // already arrived live; just flush any pending local writes.
     const onVisibility = () => {
-      if (document.visibilityState === "visible") void flushDirtyRows();
+      if (document.visibilityState !== "visible") return;
+      if (!supabase.realtime.isConnected()) void catchUpResync(queryClient);
+      else void flushDirtyRows();
     };
     window.addEventListener("online", onOnline);
     document.addEventListener("visibilitychange", onVisibility);
@@ -87,7 +96,7 @@ export function WebAuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [user?.id]);
+  }, [user?.id, queryClient]);
 
   const value = useMemo<WebAuthContextValue>(
     () => ({

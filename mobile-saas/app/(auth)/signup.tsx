@@ -42,9 +42,10 @@ export default function SignupScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setBusy(true);
+    const trimmedEmail = email.trim();
     try {
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: trimmedEmail,
         password,
       });
       if (error) throw error;
@@ -56,7 +57,30 @@ export default function SignupScreen() {
         });
         return;
       }
-      router.replace("/(auth)/verify");
+
+      // No session came back (the Supabase project keeps GoTrue's "confirm
+      // email" on). New accounts are auto-confirmed server-side by the
+      // `auto_confirm_on_signup` trigger, so sign in immediately for a
+      // frictionless create → in-app flow — no inbox round-trip. Mirrors
+      // web/src/app/(auth)/login/page.tsx.
+      const { data: signInData, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password,
+        });
+      if (signInError) throw signInError;
+      if (signInData.session) {
+        useAuthStore.setState({
+          session: signInData.session,
+          user: signInData.session.user,
+        });
+        return;
+      }
+
+      // Account exists but the auto sign-in didn't yield a session — send the
+      // user to the sign-in screen instead of a dead end.
+      Alert.alert("Account created", "Please sign in to continue.");
+      router.replace("/(auth)/email-login");
     } catch (e) {
       logError("signup.submit", e);
       const message =

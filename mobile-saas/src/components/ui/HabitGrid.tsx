@@ -7,8 +7,18 @@ type HabitGridCell = {
   completed: boolean;
 };
 
+/** Aggregate-activity cell: how many of `max` were logged on `dateKey`. */
+type IntensityCell = {
+  dateKey: string;
+  count: number;
+  max: number;
+};
+
 type Props = {
-  logs: HabitGridCell[];
+  /** Boolean mode — single habit's per-day completion. */
+  logs?: HabitGridCell[];
+  /** Intensity mode — aggregate activity, colored by count/max. */
+  cells?: IntensityCell[];
   weeks?: number;
   color?: string;
 };
@@ -17,19 +27,35 @@ const CELL_SIZE = 14;
 const CELL_GAP = 2;
 const DAYS = ["M", "", "W", "", "F", "", "S"];
 
+function toAlphaHex(alpha: number): string {
+  const clamped = Math.max(0, Math.min(1, alpha));
+  return Math.round(clamped * 255)
+    .toString(16)
+    .padStart(2, "0");
+}
+
 export const HabitGrid = React.memo(function HabitGrid({
   logs,
+  cells,
   weeks = 12,
   color = "#34d399",
 }: Props) {
-  // Build a lookup map for fast access
+  // Build a date → fill-alpha lookup (0 = empty). Supports both the boolean
+  // (single-habit) mode and the intensity (aggregate) mode.
   const logMap = useMemo(() => {
-    const map = new Map<string, boolean>();
-    for (const log of logs) {
-      map.set(log.dateKey, log.completed);
+    const map = new Map<string, number>();
+    if (cells) {
+      for (const c of cells) {
+        const ratio = c.max > 0 ? c.count / c.max : 0;
+        map.set(c.dateKey, ratio === 0 ? 0 : 0.2 + 0.75 * Math.min(1, ratio));
+      }
+    } else if (logs) {
+      for (const log of logs) {
+        map.set(log.dateKey, log.completed ? 0.6 : 0);
+      }
     }
     return map;
-  }, [logs]);
+  }, [logs, cells]);
 
   // Generate date grid: weeks × 7 days, ending today
   const grid = useMemo(() => {
@@ -42,8 +68,8 @@ export const HabitGrid = React.memo(function HabitGrid({
     const totalDays = weeks * 7;
     const startOffset = mondayOffset + (weeks - 1) * 7;
 
-    const columns: { dateKey: string; completed: boolean; isFuture: boolean }[][] = [];
-    let currentWeek: { dateKey: string; completed: boolean; isFuture: boolean }[] = [];
+    const columns: { dateKey: string; alpha: number; isFuture: boolean }[][] = [];
+    let currentWeek: { dateKey: string; alpha: number; isFuture: boolean }[] = [];
 
     for (let i = startOffset; i >= -6 + mondayOffset; i--) {
       const d = new Date(today);
@@ -53,7 +79,7 @@ export const HabitGrid = React.memo(function HabitGrid({
 
       currentWeek.push({
         dateKey: dk,
-        completed: logMap.get(dk) ?? false,
+        alpha: logMap.get(dk) ?? 0,
         isFuture,
       });
 
@@ -90,8 +116,8 @@ export const HabitGrid = React.memo(function HabitGrid({
                   {
                     backgroundColor: day.isFuture
                       ? "rgba(255, 255, 255, 0.015)"
-                      : day.completed
-                      ? color + "99" // ~60% opacity
+                      : day.alpha > 0
+                      ? color + toAlphaHex(day.alpha)
                       : "rgba(255, 255, 255, 0.03)",
                   },
                 ]}

@@ -145,7 +145,7 @@ export function useXxx() {
 - Query keys are **tuple-typed** with `as const`.
 - `enabled: Boolean(userId)` on every `useQuery` hook.
 - Never read or write MMKV for user data — device prefs only.
-- New table? Touches **5 places**: (1) Supabase migration, (2) regenerate `shared/types/supabase.ts` and mirror to `src/types/supabase.ts`, (3) SQLite migration in this app, (4) SQLite migration in web, (5) Realtime publication on Supabase. See parent SAAS_ROADMAP for the workflow.
+- New table? Touches **5 places**: (1) Supabase migration, (2) regenerate `shared/types/supabase.ts` and mirror to `src/types/supabase.ts` (+ `mobile/src/types/supabase.ts`), (3) SQLite migration in this app, (4) SQLite migration in web (and `mobile/` Classic only if it needs the column), (5) `COLUMN_TYPES`+`PRIMARY_KEYS` in each app + the Realtime publication on Supabase. See the root `CLAUDE.md` §"Schema changes" for the full workflow.
 
 ---
 
@@ -232,7 +232,9 @@ eas submit --platform android --profile production
 | **M3** | 26 services + 25 hooks | ✅ done (2026-05-26) | 83 cloud-write sites, 0 sqlite-write sites in services; 68 jest tests pass; cross-device CRUD smoke pending |
 | **M4** | Core screens — Dashboard, engines, tasks, habits | ✅ done (2026-05-26) | tsc clean; 11 jest suites / 70 tests including forbidden-patterns lint; emulator visual review + perf trace pending |
 | **M5** | Secondary screens + push notifications | ✅ done (2026-05-26) | 6 screens + onboarding wizard live; send-push Edge Function deployed; pg_cron daily streak warning scheduled at 14:30 UTC; permission prompt timed post-first-task |
-| **M6** | Ship — bundle migration, store assets, submission | 🟡 in progress | eas.json + app.json polish + iOS Google guard ✅; store copy + privacy disclosures + screenshot spec + customer emails ✅; README + M6_SUBMISSION_CHECKLIST.md ✅; user actions outstanding (Apple Dev / Google Play / EAS init / Classic bundle rename / build + submit) |
+| **M6** | Ship — bundle migration, store assets, submission | 🟡 code-complete (2026-05-26); user actions only | eas.json + app.json polish + iOS Google guard ✅; store copy + privacy disclosures + screenshot spec + customer emails ✅; README + M6_SUBMISSION_CHECKLIST.md ✅; outstanding = Apple Dev / Google Play / EAS init / Classic bundle rename / build + submit (see `../RELEASE_READINESS.md`) |
+
+> **Post-M6 (2026-05-30):** scoring-invalidation tightening in `src/hooks/queries/useTasks.ts` — `useToggleCompletion`/`useToggleCompletionWithReward` also invalidate the per-engine task list; `useCreateTask`/`useDeleteTask` invalidate `recentCompletions` (analytics reliability denominator). Mirrors a web fix; mobile-saas was never vulnerable to the web Context-staleness bug because HQ derives scores live (see §9).
 
 When a milestone lands:
 1. Update this table's status column to ✅.
@@ -260,5 +262,7 @@ These are documented in detail in the lift-source CLAUDE.md files; pasted here f
 - **Android shadow OOM**: never raw `elevation: N` outside `theme/shadows.ts`. Cap at 2 for panels, 0 for rows.
 - **`withRepeat(-1)` leak**: pair with `cancelAnimation(sv)` in useEffect cleanup.
 - **`.toISOString().slice(0,10)` is wrong** east of UTC near midnight. Use `getTodayKey()` / `toLocalDateKey()`.
-- **Cinematics + ceremonies**: Classic has 81 v2 components for narrative beats. mobile-saas deliberately defers these — light onboarding only in M5.
+- **Cinematics + ceremonies**: Classic has ~92 v2 components for narrative beats. mobile-saas deliberately defers these — light onboarding only in M5.
 - **The Realtime channel can disconnect on iOS backgrounding**. Acceptable for v1; reconnects on resume.
+- **Scores derive live, not from a cache/Context.** HQ (`app/(tabs)/index.tsx`) computes engine + Titan scores via `useMemo` over `useAllTasks` + `useAllCompletionsForDate` (`lib/scoring.ts` — the canonical display-score model). This is *why* a stale-Context bug (which the web Dashboard once had) can't happen here — keep score reads derived from live query data, never stored in a provider.
+- **Migrator self-heal**: `src/db/sqlite/migrator.ts` treats "duplicate column"/"already exists" as already-applied (`isAlreadyAppliedError`) so a half-applied migration on a device doesn't brick boot. Don't remove it; expo-sqlite devices hit this.

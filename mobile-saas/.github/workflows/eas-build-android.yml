@@ -1,0 +1,77 @@
+name: EAS Build · Android (fallback)
+
+# Alternative to android-apk.yml: kicks off an Android APK build on
+# Expo's cloud (EAS Build) instead of building locally on the GH runner.
+#
+# Useful when GH's hosted runners are queue-slow or this repo's Actions
+# tier is throttled — EAS uses a completely separate runner pool, so it
+# bypasses any GH-side capacity issues.
+#
+# Trade-off: requires an EXPO_TOKEN secret (generated at expo.dev →
+# account → access tokens → create token). Without it, the eas-build
+# step exits with a clear "Either log in with eas login or set the
+# EXPO_TOKEN environment variable" error.
+#
+# Triggered manually only — don't want both workflows racing on push.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Android preview APK (EAS cloud)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Provision .env
+        env:
+          SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            {
+              echo "EXPO_PUBLIC_SUPABASE_URL=${SUPABASE_URL}"
+              echo "EXPO_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}"
+            } > .env
+          elif [ -f .env.example ]; then
+            cp .env.example .env
+          fi
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx jest --passWithNoTests
+
+      - name: Build Android preview APK on EAS
+        run: |
+          eas build \
+            --platform android \
+            --profile preview \
+            --non-interactive \
+            --wait
+
+      - name: Summary
+        run: |
+          {
+            echo "## EAS Android Preview build dispatched"
+            echo ""
+            echo "Scroll up for the build URL — it points at expo.dev/artifacts/…/build.apk."
+            echo "Tap that URL on your phone to download + install, or AirDrop / Drive"
+            echo "the file over from your Mac."
+          } >> "$GITHUB_STEP_SUMMARY"

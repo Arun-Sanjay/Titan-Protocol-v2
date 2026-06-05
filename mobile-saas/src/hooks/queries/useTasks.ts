@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../stores/useAuthStore";
 import {
   listTasks,
@@ -30,6 +30,17 @@ export const tasksKeys = {
     ["completions", "engine", engine, dateKey] as const,
   recentCompletions: ["completions", "recent"] as const,
 };
+
+/**
+ * Bust the derived score caches so HQ (hero %, radar, per-engine bars,
+ * planner) and Analytics refetch after a task/completion mutation. Mirrors
+ * web's invalidateScoring. Prefix keys match every dated sub-key.
+ */
+function invalidateScoring(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["dashboard"] });
+  qc.invalidateQueries({ queryKey: ["dailyPlanning"] });
+  qc.invalidateQueries({ queryKey: ["analytics"] });
+}
 
 // ─── Hooks ──────────────────────────────────────────────────────────────────
 
@@ -69,12 +80,12 @@ export function useEngineCompletions(engine: EngineKey, dateKey: string) {
   });
 }
 
-export function useRecentCompletionMap() {
+export function useRecentCompletionMap(days = 30) {
   const userId = useAuthStore((s) => s.user?.id);
   return useQuery({
-    queryKey: tasksKeys.recentCompletions,
+    queryKey: [...tasksKeys.recentCompletions, days] as const,
     queryFn: async () => {
-      const completions = await listRecentCompletions(30);
+      const completions = await listRecentCompletions(days);
       const map: Record<string, string[]> = {};
       for (const c of completions) {
         if (!map[c.task_id]) map[c.task_id] = [];
@@ -130,7 +141,11 @@ export function useToggleCompletion() {
       qc.invalidateQueries({
         queryKey: tasksKeys.engineCompletions(vars.task.engine, vars.dateKey),
       });
-      // Fire-and-forget achievement check after task completion settles
+      // Per-engine task list is used by engine-detail screens that recompute
+      // their own day score from useEngineTasks + useEngineCompletions —
+      // invalidate so screens on other engines still rerender correctly.
+      qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.task.engine) });
+      invalidateScoring(qc);
       runAchievementCheck(qc).catch(() => {});
       // Fire-and-forget skill-tree re-evaluation so level-1 "task_count"
       // nodes flip to "ready" as the user plays, not only after evening
@@ -212,7 +227,9 @@ export function useToggleCompletionWithReward() {
       qc.invalidateQueries({
         queryKey: tasksKeys.engineCompletions(vars.task.engine, vars.dateKey),
       });
+      qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.task.engine) });
       qc.invalidateQueries({ queryKey: profileQueryKey });
+      invalidateScoring(qc);
       runAchievementCheck(qc).catch(() => {});
       evaluateAllTrees().catch(() => {});
     },
@@ -232,8 +249,13 @@ export function useCreateTask() {
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev) qc.setQueryData(tasksKeys.all, ctx.prev);
     },
-    onSettled: () => {
+    onSettled: (_data, _err, vars) => {
       qc.invalidateQueries({ queryKey: tasksKeys.all });
+      qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.engine) });
+      // Analytics' "task reliability" view derives from this map — adding
+      // a task changes the eligible-tasks denominator.
+      qc.invalidateQueries({ queryKey: tasksKeys.recentCompletions });
+      invalidateScoring(qc);
     },
   });
 }
@@ -264,6 +286,10 @@ export function useDeleteTask() {
       if (vars.engine) {
         qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.engine) });
       }
+      // Deleted task disappears from the reliability ranking used by
+      // analytics; refresh the recent-completion map.
+      qc.invalidateQueries({ queryKey: tasksKeys.recentCompletions });
+      invalidateScoring(qc);
     },
   });
 }

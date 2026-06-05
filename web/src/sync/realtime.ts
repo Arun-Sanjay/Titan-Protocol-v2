@@ -24,6 +24,7 @@ import { rowToSqlite } from "../db/sqlite/coerce";
 import { logError } from "../lib/error-log";
 import { SYNCED_TABLES, primaryKeyFor } from "./tables";
 import { invalidateScoring, tableAffectsScoring } from "../lib/score-invalidation";
+import { catchUpResync } from "./resync";
 
 type ChangeEvent =
   | "INSERT"
@@ -65,8 +66,16 @@ export function subscribeUserChanges(
     );
   }
 
+  // Track joins so we can distinguish the first subscribe from a re-subscribe.
+  // A re-SUBSCRIBED means the socket was down for a while (sleep, network
+  // drop); Realtime does NOT replay postgres_changes missed during the gap,
+  // so pull the cloud state back down to catch up.
+  let hasJoinedBefore = false;
   channel.subscribe((status) => {
-    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+    if (status === "SUBSCRIBED") {
+      if (hasJoinedBefore) void catchUpResync(queryClient);
+      hasJoinedBefore = true;
+    } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
       logError("realtime.channel.status", { status, userId });
     }
   });

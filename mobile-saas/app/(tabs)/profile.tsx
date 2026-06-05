@@ -17,6 +17,7 @@ import Constants from "expo-constants";
 
 import { Panel } from "../../src/components/ui/Panel";
 import { PageHeader } from "../../src/components/ui/PageHeader";
+import { AccountChip } from "../../src/components/ui/AccountChip";
 import { useAuthStore } from "../../src/stores/useAuthStore";
 import { useThemeStore, type ThemeKey } from "../../src/stores/useThemeStore";
 import { useOnboardingStore } from "../../src/stores/useOnboardingStore";
@@ -205,6 +206,8 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView contentContainerStyle={styles.content}>
         <PageHeader kicker="OPERATOR" title="Profile" />
+
+        <AccountChip />
 
         {/* ─── Appearance ─────────────────────────────────────── */}
         <Section title="APPEARANCE">

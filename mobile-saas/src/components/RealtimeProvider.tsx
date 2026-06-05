@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../stores/useAuthStore";
 import { subscribeUserChanges } from "../sync/realtime";
 import { flushDirtyRows } from "../sync/flush-dirty";
+import { catchUpResync } from "../sync/resync";
+import { supabase } from "../lib/supabase";
 
 /**
  * Opens the Supabase Realtime channel for the signed-in user. Subscribes
@@ -37,11 +39,17 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!userId) return;
     const handler = (state: AppStateStatus) => {
-      if (state === "active") void flushDirtyRows();
+      if (state !== "active") return;
+      // Foreground: if the Realtime socket dropped while backgrounded we may
+      // have missed cross-device changes (Realtime doesn't replay) — pull them
+      // down. If the socket stayed connected, changes already arrived live;
+      // just flush any pending local writes.
+      if (!supabase.realtime.isConnected()) void catchUpResync(queryClient);
+      else void flushDirtyRows();
     };
     const sub = AppState.addEventListener("change", handler);
     return () => sub.remove();
-  }, [userId]);
+  }, [userId, queryClient]);
 
   return <>{children}</>;
 }
