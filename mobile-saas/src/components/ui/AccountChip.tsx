@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useProfile } from "../../hooks/queries/useProfile";
 import { useAuthStore } from "../../stores/useAuthStore";
-import { getRankForLevel } from "../../db/gamification";
+import { rankForLevel, nextRank, levelProgressPct } from "../../lib/ranks";
 import { TitanProgress } from "./TitanProgress";
 import { colors, fonts, spacing, radius } from "../../theme";
 
@@ -24,11 +24,12 @@ export const AccountChip = React.memo(function AccountChip() {
 
   const level = profile?.level ?? 1;
   const xp = profile?.xp ?? 0;
-  const rank = getRankForLevel(level);
+  const rank = rankForLevel(level);
+  const next = nextRank(level);
   const name = profile?.display_name?.trim() || (email ? email.split("@")[0] : "Operator");
 
   const xpInLevel = Math.max(0, xp - (level - 1) * XP_PER_LEVEL);
-  const pct = Math.max(0, Math.min(100, (xpInLevel / XP_PER_LEVEL) * 100));
+  const pct = levelProgressPct(xp);
 
   return (
     <View style={styles.card}>
@@ -56,6 +57,10 @@ export const AccountChip = React.memo(function AccountChip() {
       </View>
 
       <TitanProgress value={pct} color={rank.color} shimmer={false} />
+
+      <Text style={styles.nextHint}>
+        {next ? `NEXT · ${next.name} @ LVL ${next.minLevel}` : "MAX RANK REACHED"}
+      </Text>
     </View>
   );
 });
@@ -87,4 +92,10 @@ const styles = StyleSheet.create({
   level: { ...fonts.kicker, fontSize: 11, color: colors.textMuted, letterSpacing: 1 },
   spacer: { flex: 1 },
   xp: { ...fonts.mono, fontSize: 11, color: colors.textMuted },
+  nextHint: {
+    ...fonts.kicker,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    color: colors.textMuted,
+  },
 });

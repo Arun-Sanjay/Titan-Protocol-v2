@@ -18,7 +18,7 @@ import { WeekStrip } from "../../src/components/ui/WeekStrip";
 
 import { useDashboardWeek, useDailyPlanning } from "../../src/hooks/queries/useDashboard";
 import { useProfile } from "../../src/hooks/queries/useProfile";
-import { getRankForLevel } from "../../src/db/gamification";
+import { rankForLevel } from "../../src/lib/ranks";
 import { ENGINES } from "../../src/lib/scoring";
 import { ENGINE_META } from "../../src/lib/dashboard-stats";
 import { getGreeting } from "../../src/lib/date";
@@ -58,7 +58,7 @@ export default function HQScreen() {
 
   const streak = profile?.streak_current ?? 0;
   const level = profile?.level ?? 1;
-  const rank = getRankForLevel(level);
+  const rank = rankForLevel(level);
   const displayName = profile?.display_name?.trim() || profile?.email?.split("@")[0] || "Operator";
   const initials = initialsFor(displayName);
 

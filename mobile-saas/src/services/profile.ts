@@ -68,41 +68,6 @@ export async function awardXP(xpDelta: number): Promise<{
   });
 }
 
-/**
- * Atomic streak update. Same rationale as `awardXP` — without the tx,
- * a streak update concurrent with an XP award would race the read and
- * lose one of the writes.
- */
-export async function updateStreak(
-  dateKey: string,
-): Promise<{ newStreak: number }> {
-  const userId = await requireUserId();
-  return transaction(async () => {
-    const existing = await sqliteGet<Profile>("profiles", { id: userId });
-    const base: Profile = existing ?? defaultProfile(userId);
-    const lastDate = base.streak_last_date ?? null;
-    let newStreak = base.streak_current ?? 0;
-
-    if (lastDate !== dateKey) {
-      const last = new Date(lastDate ?? "1970-01-01");
-      const current = new Date(dateKey);
-      const diffDays = Math.round(
-        (current.getTime() - last.getTime()) / 86_400_000,
-      );
-      newStreak = diffDays === 1 ? newStreak + 1 : 1;
-    }
-
-    const newBest = Math.max(newStreak, base.streak_best ?? 0);
-    await cloudUpsert("profiles", {
-      ...base,
-      streak_current: newStreak,
-      streak_best: newBest,
-      streak_last_date: dateKey,
-    });
-    return { newStreak };
-  });
-}
-
 function defaultProfile(userId: string): Profile {
   const now = new Date().toISOString();
   return {

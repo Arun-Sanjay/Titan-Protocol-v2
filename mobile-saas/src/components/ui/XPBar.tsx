@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { colors, spacing, fonts } from "../../theme";
 import { TitanProgress } from "./TitanProgress";
-import { getRankForLevel } from "../../db/gamification";
+import { rankForLevel } from "../../lib/ranks";
 
 type Props = {
   xp: number;
@@ -12,7 +12,7 @@ type Props = {
 export const XPBar = React.memo(function XPBar({ xp, level }: Props) {
   const safeLevel = Math.max(1, Number.isFinite(level) ? level : 1);
   const safeXP = Number.isFinite(xp) ? Math.max(0, xp) : 0;
-  const rank = getRankForLevel(safeLevel);
+  const rank = rankForLevel(safeLevel);
   const currentLevelXP = safeXP - (safeLevel - 1) * 500;
   const needed = 500;
   const fraction = Math.min(1, Math.max(0, currentLevelXP / needed));

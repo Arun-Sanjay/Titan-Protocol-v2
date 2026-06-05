@@ -4,8 +4,10 @@
 //   - RANKS, DAILY_RANKS — XP-tier and daily-grade ladders (constants)
 //   - getDailyRank(score) — 6 production callers (HQ, protocol, briefing,
 //     ceremony, stat screen, power ring)
-//   - getRankForLevel(level) — 4 production callers (profile, XPBar,
-//     ceremony, stat screen)
+//   - getRankForLevel(level) — legacy 6-tier ladder. Superseded by the
+//     8-tier lib/ranks.ts (rankForLevel) for the rank-up/XP system; the
+//     rank surfaces (HQ avatar, AccountChip, XPBar) now read that instead.
+//     Kept here for the RANKS constant / any future 6-tier use.
 //
 // What was removed:
 //   - getProfile, saveProfile, awardXP, updateStreak — these had moved

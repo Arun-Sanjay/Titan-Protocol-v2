@@ -6,7 +6,6 @@ import {
   cloudUpsert,
   transaction,
 } from "../db/sqlite/service-helpers";
-import { sqliteGet } from "../db/sqlite/service-helpers";
 import type { Tables, Enums } from "../types/supabase";
 import { toLocalDateKey } from "../lib/date";
 
@@ -130,108 +129,6 @@ export async function toggleCompletion(params: {
       created_at: new Date().toISOString(),
     });
     return { added: true };
-  });
-}
-
-/**
- * Atomic toggle-and-award. Wraps the completion toggle and the matching
- * XP delta in a SINGLE SQLite transaction so:
- *
- *   - A failure on the XP write rolls back the toggle, so we never
- *     complete a task without crediting it (or, on un-complete, never
- *     subtract XP that was never awarded).
- *   - Concurrent taps serialize (transaction acts as a per-row mutex);
- *     the second tap sees the first's completion row and reverses it.
- *
- * Returns the toggle direction plus the level-up info so callers can
- * enqueue rank-up events outside the tx.
- */
-export async function toggleCompletionAndAward(params: {
-  taskId: string;
-  dateKey: string;
-  engine: EngineKey;
-  xpAmount: number;
-}): Promise<{
-  added: boolean;
-  leveledUp: boolean;
-  fromLevel: number;
-  toLevel: number;
-  xp: number;
-}> {
-  const userId = await requireUserId();
-  return transaction(async () => {
-    // ── Toggle the completion row. ───────────────────────────────────
-    const [existing] = await sqliteList<Completion>("completions", {
-      where: "task_id = ? AND date_key = ?",
-      params: [params.taskId, params.dateKey],
-      limit: 1,
-    });
-    let added: boolean;
-    if (existing) {
-      await cloudDelete("completions", { id: existing.id });
-      added = false;
-    } else {
-      await cloudUpsert("completions", {
-        id: newId(),
-        user_id: userId,
-        task_id: params.taskId,
-        date_key: params.dateKey,
-        engine: params.engine,
-        created_at: new Date().toISOString(),
-      });
-      added = true;
-    }
-
-    // ── Apply the matching XP delta inside the same tx. ──────────────
-    // Direct SQL via service-helpers (not the awardXP service) so we
-    // stay inside the outer transaction — calling awardXP here would
-    // open a SAVEPOINT which works, but pulling the read+write inline
-    // keeps the code obvious and avoids a second module import cycle.
-    type ProfileRow = Tables<"profiles">;
-    const profile = await sqliteGet<ProfileRow>("profiles", { id: userId });
-    const oldXP = profile?.xp ?? 0;
-    const oldLevel = profile?.level ?? 1;
-    const xpDelta = added ? params.xpAmount : -params.xpAmount;
-    const newXP = Math.max(0, oldXP + xpDelta);
-    const newLevel = Math.floor(newXP / 500) + 1;
-
-    if (profile) {
-      await cloudUpsert("profiles", {
-        ...profile,
-        xp: newXP,
-        level: newLevel,
-      });
-    } else {
-      // No profile row yet (extremely rare — should have been created
-      // at sign-in). Insert a minimal row so the XP isn't silently lost.
-      await cloudUpsert("profiles", {
-        id: userId,
-        email: null,
-        archetype: null,
-        mode: "full_protocol",
-        focus_engines: [],
-        xp: newXP,
-        level: newLevel,
-        streak_current: 0,
-        streak_best: 0,
-        streak_last_date: null,
-        first_use_date: null,
-        onboarding_completed: false,
-        tutorial_completed: false,
-        first_task_completed_at: null,
-        display_name: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-    }
-
-    return {
-      added,
-      leveledUp: newLevel > oldLevel,
-      fromLevel: oldLevel,
-      toLevel: newLevel,
-      xp: newXP,
-    };
   });
 }
 

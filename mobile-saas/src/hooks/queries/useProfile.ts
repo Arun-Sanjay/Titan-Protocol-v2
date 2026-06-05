@@ -4,9 +4,9 @@ import {
   getProfile,
   upsertProfile,
   awardXP,
-  updateStreak,
   type Profile,
 } from "../../services/profile";
+import { settleStreaks } from "../../services/xp";
 import { setJSON } from "../../db/storage";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
@@ -93,25 +93,25 @@ export function useAwardXP() {
 }
 
 /**
- * Update streak based on the current date.
+ * Consistency-based streak settlement — the single streak authority.
  *
- * Logic (in `services/profile.updateStreak`, atomic via transaction):
- *  - streak_last_date === dateKey → no change
- *  - streak_last_date === yesterday → increment
- *  - else → reset to 1
+ * Replaces the old "active-yesterday" streak. `settleStreaks()` folds each
+ * past, unsettled day's Titan score into the streak: a day >= 60% continues it
+ * (+1), a day below (or a missed day) resets it to 0. Fired once per app-open
+ * by `StreakSettlementGate`; idempotent (only advances past streak_last_date,
+ * never settles today). Mirrors web's `useSettleStreaks`.
  */
-export function useUpdateStreak() {
+export function useSettleStreaks() {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (dateKey: string) => updateStreak(dateKey),
+    mutationFn: () => settleStreaks(),
     onSuccess: (result) => {
-      // Mirror the authoritative streak into the MMKV cache used by
-      // `app/_layout.tsx` for the transmission context. The layout
-      // sits above the QueryClientProvider so it can't read this value
-      // via the hook; without this mirror it would stay at 0 forever
-      // (CLAUDE.md §10 "Streak MMKV/SQLite duality" debt).
-      setJSON("protocol_streak", result.newStreak);
+      // Mirror the authoritative streak into the MMKV cache the boss /
+      // protocol-integrity layer reads (`lib/protocol-integrity.ts`'s
+      // `protocol_streak` evaluator). That layer sits above the
+      // QueryClientProvider so it can't read this value via the hook.
+      if (result) setJSON("protocol_streak", result.streak);
       qc.invalidateQueries({ queryKey: profileQueryKey });
     },
   });
