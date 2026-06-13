@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Tint the iOS Safari status-bar + toolbar areas to match the app's
+         near-black background instead of the default white. -->
+    <meta name="theme-color" content="#050607" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Titan Protocol</title>
     <link rel="manifest" href="/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -13,6 +17,13 @@
         --font-mono-cyber: 'JetBrains Mono', monospace;
         --font-inter: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif;
         --font-jetbrains: 'JetBrains Mono', ui-monospace, monospace;
+      }
+      /* Paint the root + safe-area insets (notch / home-indicator) dark so iOS
+         Safari never shows white bars top/bottom, and avoid a white flash on
+         first paint before the bundle's theme CSS loads. */
+      html {
+        background-color: #050607;
+        color-scheme: dark;
       }
     </style>
   </head>
