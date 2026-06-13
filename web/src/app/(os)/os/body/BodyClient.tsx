@@ -1,4 +1,6 @@
 import * as React from "react";
+import { confirm } from "@/lib/confirm";
+import { toast } from "@/lib/toast";
 import { Link, useLocation } from "react-router-dom";
 
 import { MobileModal } from "../../../../components/ui/MobileModal";
@@ -7,6 +9,7 @@ import {
   useEngineCompletions,
   useToggleCompletion,
   useCreateTask,
+  useUpdateTask,
   useDeleteTask,
 } from "@/hooks/queries/useTasks";
 import type { EngineKey } from "@/services/tasks";
@@ -50,6 +53,7 @@ type TaskBucketCardProps = {
   onAdd: () => void;
   onToggle: (task: TaskWithCompletion) => void;
   onDelete: (task: TaskWithCompletion) => Promise<void>;
+  onEdit: (task: TaskWithCompletion) => void;
 };
 
 
@@ -63,6 +67,7 @@ function TaskBucketCard({
   onAdd,
   onToggle,
   onDelete,
+  onEdit,
 }: TaskBucketCardProps) {
   return (
     <TitanPanel tone="subtle">
@@ -96,6 +101,9 @@ function TaskBucketCard({
                   <details className="body-menu">
                     <summary>•••</summary>
                     <div className="body-menu-panel tx-menu-panel">
+                      <button type="button" onClick={() => onEdit(task)}>
+                        Edit
+                      </button>
                       <button type="button" onClick={() => onDelete(task)}>
                         Delete
                       </button>
@@ -125,6 +133,7 @@ export default function BodyClient() {
   const [newTaskPriority, setNewTaskPriority] = React.useState<"main" | "secondary">("main");
   const [newTaskDaysPerWeek, setNewTaskDaysPerWeek] = React.useState<number>(7);
   const [isAddingTask, setIsAddingTask] = React.useState<boolean>(false);
+  const [editingTaskId, setEditingTaskId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const stored = typeof window !== "undefined" ? window.localStorage.getItem("body.selectedDateISO") : null;
@@ -165,6 +174,7 @@ export default function BodyClient() {
 
   const toggleCompletion = useToggleCompletion();
   const createTask = useCreateTask();
+  const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
 
   const monthStartKey = React.useMemo(() => monthBounds(dateToISO(visibleMonth)).start, [visibleMonth]);
@@ -231,19 +241,52 @@ export default function BodyClient() {
     toggleCompletion.mutate({ task: { id: task.id, engine: ENGINE }, dateKey: selectedDateKey });
   }
 
-  async function handleAddTask() {
-    const title = newTaskTitle.trim();
-    if (!title) return;
-    createTask.mutate({ engine: ENGINE, title, kind: newTaskPriority, days_per_week: newTaskDaysPerWeek } as any);
+  function resetTaskForm() {
     setNewTaskTitle("");
     setNewTaskPriority("main");
     setNewTaskDaysPerWeek(7);
     setIsAddingTask(false);
+    setEditingTaskId(null);
+  }
+
+  async function handleAddTask() {
+    const title = newTaskTitle.trim();
+    if (!title) return;
+    if (editingTaskId) {
+      updateTaskMutation.mutate(
+        { taskId: editingTaskId, engine: ENGINE, title, kind: newTaskPriority, days_per_week: newTaskDaysPerWeek },
+        { onSuccess: () => toast.success("Task updated") },
+      );
+    } else {
+      createTask.mutate({ engine: ENGINE, title, kind: newTaskPriority, days_per_week: newTaskDaysPerWeek } as any);
+    }
+    resetTaskForm();
+  }
+
+  function handleEditStart(task: TaskWithCompletion) {
+    if (!task.id) return;
+    setNewTaskTitle(task.title);
+    setNewTaskPriority((task.kind as "main" | "secondary") ?? "main");
+    setNewTaskDaysPerWeek(
+      (rawTasks ?? []).find((t) => t.id === task.id)?.days_per_week ?? 7,
+    );
+    setEditingTaskId(task.id);
+    setIsAddingTask(true);
   }
 
   async function handleDelete(task: TaskWithCompletion) {
     if (!task.id) return;
-    deleteTaskMutation.mutate({ taskId: task.id, engine: ENGINE });
+    const ok = await confirm({
+      title: "Delete task?",
+      message: "This removes the task and its completion history. This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteTaskMutation.mutate(
+      { taskId: task.id, engine: ENGINE },
+      { onSuccess: () => toast.success("Task deleted") },
+    );
   }
 
   return (
@@ -344,6 +387,7 @@ export default function BodyClient() {
           onAdd={() => { setNewTaskPriority("secondary"); setIsAddingTask(true); }}
           onToggle={handleToggleTask}
           onDelete={handleDelete}
+          onEdit={handleEditStart}
         />
 
         <TaskBucketCard
@@ -357,20 +401,18 @@ export default function BodyClient() {
           onAdd={() => { setNewTaskPriority("main"); setIsAddingTask(true); }}
           onToggle={handleToggleTask}
           onDelete={handleDelete}
+          onEdit={handleEditStart}
         />
       </div>
 
-      <MobileModal open={isAddingTask} onClose={() => { setIsAddingTask(false); setNewTaskTitle(""); }} title="New Task">
+      <MobileModal open={isAddingTask} onClose={resetTaskForm} title={editingTaskId ? "Edit Task" : "New Task"}>
             <TitanPanelHeader
-              kicker="New Task"
+              kicker={editingTaskId ? "Edit Task" : "New Task"}
               rightSlot={
                 <TitanButton
                   tone="ghost"
                   compact
-                  onClick={() => {
-                    setIsAddingTask(false);
-                    setNewTaskTitle("");
-                  }}
+                  onClick={resetTaskForm}
                 >
                   Close
                 </TitanButton>
@@ -419,7 +461,7 @@ export default function BodyClient() {
               </div>
             </div>
             <div className="mt-5 flex gap-2">
-              <TitanButton onClick={handleAddTask}>Create</TitanButton>
+              <TitanButton onClick={handleAddTask}>{editingTaskId ? "Save" : "Create"}</TitanButton>
               <TitanButton
                 tone="ghost"
                 onClick={() => {

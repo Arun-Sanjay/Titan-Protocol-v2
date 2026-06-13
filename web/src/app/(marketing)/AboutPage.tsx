@@ -44,16 +44,18 @@ export default function AboutPage() {
           <p>
             We don't believe in "balanced." Balanced is what people who lack
             conviction call indecision. Pick an archetype — Athlete, Scholar,
-            Hustler, Showman, Warrior, Founder, Charmer, Titan — and the
-            weights on your daily score shift to match what that operator
-            would actually prioritize. The system meets you where you are.
+            Hustler, Showman, Warrior, Founder, Charmer, Titan — and run the
+            protocol as that operator. The system meets you where you are.
           </p>
 
           <h2>What we won't do</h2>
           <ul>
             <li>Sell your data. Train models on it. Ship dark-pattern nudges.</li>
             <li>Add ten more "AI" features that don't change your behavior.</li>
-            <li>Lock you in. Export to JSON / CSV is one click, anytime.</li>
+            <li>
+              Lock you in. Deleting your account erases every byte, instantly
+              — and a one-click export is on the roadmap.
+            </li>
             <li>Ship features that make the score easier to fake.</li>
           </ul>
 

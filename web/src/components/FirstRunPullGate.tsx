@@ -8,7 +8,7 @@
  * Idempotent: a user who already has cache data passes through instantly.
  * The pull runs at most once per session per user.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { pullIfEmpty } from "../sync/first-run-pull";
 import type { RestoreProgress } from "../sync/restore";
 
@@ -18,47 +18,51 @@ interface Props {
 }
 
 export function FirstRunPullGate({ userId, children }: Props) {
-  const [status, setStatus] = useState<"checking" | "syncing" | "ready">(
-    "checking",
-  );
+  const [status, setStatus] = useState<
+    "checking" | "syncing" | "error" | "ready"
+  >("checking");
   const [progress, setProgress] = useState<RestoreProgress | null>(null);
 
-  // Guard against double-fire in React 18 StrictMode and against the same
-  // user re-mounting the gate (e.g. parent re-render).
+  // Guard against double-fire in React StrictMode and against the same user
+  // re-mounting the gate (e.g. parent re-render). It only blocks the
+  // effect's auto-run; the Retry button calls runPull directly.
   const ranForRef = useRef<string | null>(null);
 
+  const runPull = useCallback(async () => {
+    setStatus("checking");
+    setProgress(null);
+    let ok = false;
+    try {
+      const res = await pullIfEmpty(userId, (p) => {
+        setStatus("syncing");
+        setProgress(p);
+      });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+    // On failure, show an error + Retry rather than rendering the app over an
+    // empty cache: an unsurfaced first-run pull failure looks identical to
+    // total data loss, and on a fresh device the cloud is the only copy.
+    setStatus(ok ? "ready" : "error");
+  }, [userId]);
+
   useEffect(() => {
-    // ranForRef guards the userId so we only kick off pullIfEmpty once per
-    // user — even under React.StrictMode's mount → unmount → remount cycle.
-    // The remount returns early here because ranForRef.current === userId
-    // from the first mount, so we don't fire a second concurrent pull.
-    //
-    // Note: we DO NOT use a `cancelled` flag to gate the final setStatus.
-    // StrictMode would set cancelled=true on the cleanup between the two
-    // mounts; the first mount's async then completes with cancelled=true
-    // and skips setStatus, leaving the gate stuck in "checking" forever
-    // (rendering null → blank screen). React 19 treats setState on an
-    // unmounted component as a no-op, so the unconditional setStatus is
-    // safe and prevents that hang.
+    // ranForRef guards the userId so we only auto-run the pull once per user
+    // — even under StrictMode's mount → unmount → remount cycle (the remount
+    // returns early because ranForRef.current === userId from the first
+    // mount). setState on an unmounted component is a no-op in React 19, so
+    // an in-flight pull settling after a StrictMode unmount is harmless.
     if (ranForRef.current === userId) return;
     ranForRef.current = userId;
-
-    void (async () => {
-      try {
-        await pullIfEmpty(userId, (p) => {
-          setStatus("syncing");
-          setProgress(p);
-        });
-      } catch {
-        // fall through — the setStatus below still fires so the gate
-        // doesn't stay stuck on "checking".
-      }
-      setStatus("ready");
-    })();
-  }, [userId]);
+    void runPull();
+  }, [userId, runPull]);
 
   if (status === "syncing") {
     return <PullSplash progress={progress} />;
+  }
+  if (status === "error") {
+    return <PullError onRetry={() => void runPull()} />;
   }
   if (status === "checking") {
     // Quick check — usually < 50ms. Don't flash a splash for this.
@@ -128,6 +132,58 @@ function PullSplash({ progress }: { progress: RestoreProgress | null }) {
       >
         {currentTable} · {rows} rows
       </div>
+    </div>
+  );
+}
+
+function PullError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "var(--bg0, #0a0a0a)",
+        color: "var(--text, #e6e6e6)",
+        fontFamily: "var(--font-mono, ui-monospace, monospace)",
+        gap: 12,
+        padding: 24,
+      }}
+    >
+      <div style={{ fontSize: 12, letterSpacing: 2, color: "#ff6b6b" }}>
+        SYNC FAILED
+      </div>
+      <div
+        style={{
+          fontSize: 13,
+          maxWidth: 460,
+          textAlign: "center",
+          lineHeight: 1.5,
+          color: "var(--muted, #808080)",
+        }}
+      >
+        We could not load your data from the cloud. Check your connection and
+        try again — your data is safe in the cloud.
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        style={{
+          marginTop: 16,
+          padding: "8px 20px",
+          background: "transparent",
+          color: "var(--text, #e6e6e6)",
+          border: "1px solid var(--stroke, #333)",
+          cursor: "pointer",
+          fontSize: 11,
+          letterSpacing: 2,
+          fontFamily: "inherit",
+        }}
+      >
+        RETRY
+      </button>
     </div>
   );
 }

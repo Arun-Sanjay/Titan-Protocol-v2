@@ -1,0 +1,41 @@
+[
+  {"id":"ach_first_blood","name":"First Blood","description":"Complete your first ever task","rarity":"common","xpReward":10,"conditionType":"tasks_completed_total","conditionValue":1,"iconName":"flash-outline"},
+  {"id":"ach_protocol_initiate","name":"Protocol Initiate","description":"Complete your first daily protocol","rarity":"common","xpReward":15,"conditionType":"protocol_completed","conditionValue":1,"iconName":"play-outline"},
+  {"id":"ach_night_owl","name":"Night Owl","description":"Complete protocol after 10pm","rarity":"common","xpReward":10,"conditionType":"protocol_time_after","conditionValue":22,"iconName":"moon-outline"},
+  {"id":"ach_early_bird","name":"Early Bird","description":"Complete protocol before 6am","rarity":"common","xpReward":15,"conditionType":"protocol_time_before","conditionValue":6,"iconName":"sunny-outline"},
+  {"id":"ach_bibliophile","name":"Bibliophile","description":"Complete 10 mind training exercises","rarity":"common","xpReward":15,"conditionType":"mind_exercises_total","conditionValue":10,"iconName":"book-outline"},
+  {"id":"ach_journal_keeper","name":"Journal Keeper","description":"Write 7 journal entries","rarity":"common","xpReward":10,"conditionType":"journal_entries_total","conditionValue":7,"iconName":"document-text-outline"},
+  {"id":"ach_habit_starter","name":"Habit Starter","description":"Complete all habits for 3 consecutive days","rarity":"common","xpReward":10,"conditionType":"all_habits_consecutive","conditionValue":3,"iconName":"checkbox-outline"},
+  {"id":"ach_money_conscious","name":"Money Conscious","description":"Score 50%+ in Money engine for 3 days","rarity":"common","xpReward":10,"conditionType":"engine_score_days","conditionValue":3,"conditionEngine":"money","conditionThreshold":50,"iconName":"cash-outline"},
+
+  {"id":"ach_shadow_operative","name":"Shadow Operative","description":"Complete all 4 engines for 3 consecutive days","rarity":"uncommon","xpReward":30,"conditionType":"all_engines_scored_consecutive","conditionValue":3,"iconName":"eye-outline"},
+  {"id":"ach_century","name":"Century","description":"Cast 100 identity votes","rarity":"uncommon","xpReward":40,"conditionType":"votes_total","conditionValue":100,"iconName":"hand-left-outline"},
+  {"id":"ach_phase_shifter","name":"Phase Shifter","description":"Complete Foundation phase","rarity":"uncommon","xpReward":30,"conditionType":"phase_completed","conditionValue":"building","iconName":"rocket-outline"},
+  {"id":"ach_quest_hunter","name":"Quest Hunter","description":"Complete 10 weekly quests","rarity":"uncommon","xpReward":35,"conditionType":"quests_completed_total","conditionValue":10,"iconName":"flag-outline"},
+  {"id":"ach_brain_trainer","name":"Brain Trainer","description":"Complete 25 mind training exercises","rarity":"uncommon","xpReward":30,"conditionType":"mind_exercises_total","conditionValue":25,"iconName":"bulb-outline"},
+  {"id":"ach_chain_builder","name":"Chain Builder","description":"Maintain a 7-day habit chain","rarity":"uncommon","xpReward":25,"conditionType":"habit_chain_days","conditionValue":7,"iconName":"link-outline"},
+  {"id":"ach_balanced_force","name":"Balanced Force","description":"All 4 engines score within 5% of each other on one day","rarity":"uncommon","xpReward":40,"conditionType":"all_engines_within_range","conditionValue":5,"iconName":"git-merge-outline"},
+  {"id":"ach_weekend_warrior","name":"Weekend Warrior","description":"Complete protocol on 4 consecutive weekends","rarity":"uncommon","xpReward":30,"conditionType":"streak_days","conditionValue":8,"iconName":"calendar-outline"},
+  {"id":"ach_consistency_king","name":"Consistency King","description":"14-day protocol streak","rarity":"uncommon","xpReward":35,"conditionType":"streak_days","conditionValue":14,"iconName":"trending-up-outline"},
+  {"id":"ach_knowledge_seeker","name":"Knowledge Seeker","description":"Complete 10 Knowledge Drops","rarity":"uncommon","xpReward":25,"conditionType":"mind_exercises_type","conditionValue":10,"conditionTag":"knowledge_drop","iconName":"school-outline"},
+
+  {"id":"ach_untouchable","name":"Untouchable","description":"7-day streak with 90%+ average Titan Score","rarity":"rare","xpReward":60,"conditionType":"streak_with_avg","conditionValue":7,"conditionThreshold":90,"iconName":"shield-outline"},
+  {"id":"ach_mind_reader","name":"Mind Reader","description":"Get 10 Bias Checks correct in a row","rarity":"rare","xpReward":50,"conditionType":"mind_accuracy_consecutive","conditionValue":10,"conditionTag":"bias_check","iconName":"eye-outline"},
+  {"id":"ach_perfectionist","name":"Perfectionist","description":"100% across all engines on a single day","rarity":"rare","xpReward":60,"conditionType":"all_engines_perfect","conditionValue":100,"iconName":"star-outline"},
+  {"id":"ach_habit_master","name":"Habit Master","description":"Complete all habits for 21 consecutive days","rarity":"rare","xpReward":75,"conditionType":"all_habits_consecutive","conditionValue":21,"iconName":"ribbon-outline"},
+  {"id":"ach_decision_maker","name":"Decision Maker","description":"80%+ accuracy on 20 Decision Drills","rarity":"rare","xpReward":50,"conditionType":"mind_accuracy_over_n","conditionValue":20,"conditionThreshold":80,"conditionTag":"decision_drill","iconName":"git-branch-outline"},
+  {"id":"ach_month_strong","name":"Month Strong","description":"30-day protocol streak","rarity":"rare","xpReward":80,"conditionType":"streak_days","conditionValue":30,"iconName":"flame-outline"},
+  {"id":"ach_s_class","name":"S-Class","description":"Achieve S rank (85%+) Titan Score","rarity":"rare","xpReward":50,"conditionType":"rank_achieved","conditionValue":"S","iconName":"trophy-outline"},
+  {"id":"ach_deep_thinker","name":"Deep Thinker","description":"Complete 50 mind training exercises total","rarity":"rare","xpReward":60,"conditionType":"mind_exercises_total","conditionValue":50,"iconName":"bulb-outline"},
+
+  {"id":"ach_the_machine","name":"The Machine","description":"60-day protocol streak — no days missed","rarity":"epic","xpReward":120,"conditionType":"streak_days","conditionValue":60,"iconName":"cog-outline"},
+  {"id":"ach_knowledge_vault","name":"Knowledge Vault","description":"Complete 50 Knowledge Drops","rarity":"epic","xpReward":100,"conditionType":"mind_exercises_type","conditionValue":50,"conditionTag":"knowledge_drop","iconName":"library-outline"},
+  {"id":"ach_branch_master","name":"Branch Master","description":"Complete an entire skill tree branch","rarity":"epic","xpReward":120,"conditionType":"skill_branch_complete","conditionValue":1,"iconName":"git-branch-outline"},
+  {"id":"ach_iron_habits","name":"Iron Habits","description":"Complete all habits for 60 consecutive days","rarity":"epic","xpReward":150,"conditionType":"all_habits_consecutive","conditionValue":60,"iconName":"barbell-outline"},
+  {"id":"ach_ss_elite","name":"SS Elite","description":"Achieve SS rank (95%+) Titan Score","rarity":"epic","xpReward":100,"conditionType":"rank_achieved","conditionValue":"SS","iconName":"diamond-outline"},
+  {"id":"ach_quarter_century","name":"Quarter Century","description":"Use Titan Protocol for 90 days","rarity":"epic","xpReward":130,"conditionType":"app_days_total","conditionValue":90,"iconName":"calendar-outline"},
+
+  {"id":"ach_titan_unlocked","name":"Titan Unlocked","description":"Unlock Titan Mode — 30 consecutive days at 85%+","rarity":"legendary","xpReward":300,"conditionType":"titan_mode_unlocked","conditionValue":1,"iconName":"flash"},
+  {"id":"ach_gauntlet_champion","name":"Gauntlet Champion","description":"Complete The Gauntlet Titan Challenge","rarity":"legendary","xpReward":500,"conditionType":"boss_completed","conditionValue":"boss_gauntlet","iconName":"trophy"},
+  {"id":"ach_year_one","name":"Year One","description":"Use Titan Protocol for 365 days","rarity":"legendary","xpReward":1000,"conditionType":"app_days_total","conditionValue":365,"iconName":"planet"}
+]

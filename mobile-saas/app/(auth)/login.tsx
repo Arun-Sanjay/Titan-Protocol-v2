@@ -7,6 +7,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -32,6 +33,11 @@ const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_I
 const GOOGLE_CONFIGURED =
   Boolean(GOOGLE_WEB_CLIENT_ID && GOOGLE_ANDROID_CLIENT_ID) &&
   Platform.OS !== "ios";
+
+// TODO(launch): point at the production web origin once deployed. The
+// pages exist in the web app at /#/terms and /#/privacy.
+const TERMS_URL = "https://titanprotocol.app/#/terms";
+const PRIVACY_URL = "https://titanprotocol.app/#/privacy";
 
 /**
  * Auth entry — three paths:
@@ -219,7 +225,21 @@ export default function LoginScreen() {
           style={styles.footer}
         >
           <Text style={styles.footerText}>
-            By continuing you agree to the Protocol Terms and Privacy Policy.
+            By continuing you agree to the{" "}
+            <Text
+              style={styles.footerLink}
+              onPress={() => void Linking.openURL(TERMS_URL)}
+            >
+              Protocol Terms
+            </Text>{" "}
+            and{" "}
+            <Text
+              style={styles.footerLink}
+              onPress={() => void Linking.openURL(PRIVACY_URL)}
+            >
+              Privacy Policy
+            </Text>
+            .
           </Text>
         </Animated.View>
       </View>
@@ -295,5 +315,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: "center",
     maxWidth: 300,
+  },
+  footerLink: {
+    color: colors.textSecondary,
+    textDecorationLine: "underline",
   },
 });

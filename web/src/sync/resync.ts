@@ -11,58 +11,90 @@
  *
  * This closes the gap: whenever the connection is re-established (realtime
  * re-subscribe), the network comes back (`online`), or the tab refocuses
- * while the socket is down, pull the cloud state back into SQLite.
+ * while the socket is down, pull the cloud state back into SQLite. The
+ * StreakSettlementGate also forces a run at app-open so settlement never
+ * folds days from a stale cache.
  *
  * Order matters — flush local writes UP before pulling cloud DOWN:
  *   1. `flushDirtyRows()` pushes any rows a failed `cloudUpsert` left dirty.
- *   2. Only if nothing is still dirty (`failed === 0`) do we `restoreFromCloud()`
- *      — a full-table re-pull wipes each table before re-inserting, so running
- *      it with an unsynced local row present would drop that row. When a dirty
- *      row remains we skip the pull and let the next trigger retry.
+ *   2. Only when that flush actually ran and left nothing dirty do we
+ *      `restoreFromCloud()` — the full-table re-pull wipes each table before
+ *      re-inserting, so running it with an unsynced local row present (or
+ *      with another flush mid-flight, whose rows are still `_dirty=1`)
+ *      would drop that row. Otherwise we skip the pull; the next trigger
+ *      retries.
  *
- * Concurrency: one flight at a time; throttled so the burst of triggers a
- * laptop-wake fires (online + visibilitychange + realtime re-subscribe) does
- * a single pull, not three.
+ * Concurrency: one flight at a time — concurrent callers AWAIT the same
+ * in-flight run and see its real outcome. Throttled so the burst of
+ * triggers a laptop-wake fires (online + visibilitychange + realtime
+ * re-subscribe) does a single pull, not three.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { logError } from "../lib/error-log";
 import { invalidateScoring } from "../lib/score-invalidation";
 import { flushDirtyRows } from "./flush-dirty";
 import { restoreFromCloud } from "./restore";
+import { markSynced } from "./sync-status";
 
-let inFlight = false;
+/**
+ * Outcome of a catch-up attempt. Callers that need a FRESH cache before
+ * acting (e.g. streak settlement) must require `"pulled"` — every other
+ * status means the local cache may still be stale.
+ */
+export type ResyncResult =
+  | { status: "pulled" }
+  | { status: "skipped-throttled" }
+  | { status: "skipped-flush-inflight" }
+  | { status: "skipped-dirty"; failed: number }
+  | { status: "failed" };
+
+let inFlight: Promise<ResyncResult> | null = null;
 let lastSuccessAt = 0;
 const MIN_INTERVAL_MS = 8000;
 
 export async function catchUpResync(
   queryClient: QueryClient,
   opts: { force?: boolean } = {},
-): Promise<void> {
-  if (inFlight) return;
+): Promise<ResyncResult> {
+  if (inFlight) return inFlight;
   const now = Date.now();
-  if (!opts.force && now - lastSuccessAt < MIN_INTERVAL_MS) return;
-
-  inFlight = true;
-  try {
-    const flush = await flushDirtyRows();
-    // A dirty row that still failed to push must not be wiped by the
-    // full-table restore below. Skip this round; the next trigger retries.
-    if (flush.failed > 0) return;
-
-    const result = await restoreFromCloud();
-    if (!result.success) {
-      logError("resync.restore.failed", result.error);
-      return;
-    }
-
-    lastSuccessAt = Date.now();
-    // SQLite was just rewritten from cloud — refetch every screen, plus the
-    // derived score caches (their keys don't match the table predicate).
-    queryClient.invalidateQueries();
-    invalidateScoring(queryClient);
-  } catch (e) {
-    logError("resync.failed", e);
-  } finally {
-    inFlight = false;
+  if (!opts.force && now - lastSuccessAt < MIN_INTERVAL_MS) {
+    return { status: "skipped-throttled" };
   }
+
+  inFlight = (async (): Promise<ResyncResult> => {
+    try {
+      const flush = await flushDirtyRows();
+      // Another flush is mid-flight (or there is no user): its rows may
+      // still sit `_dirty=1` and the full-table restore below would wipe
+      // them. Back off; the next trigger retries.
+      if (flush.skipped) return { status: "skipped-flush-inflight" };
+      // A dirty row that still failed to push must not be wiped by the
+      // full-table restore. Skip this round; the next trigger retries.
+      if (flush.failed > 0) {
+        return { status: "skipped-dirty", failed: flush.failed };
+      }
+
+      const result = await restoreFromCloud();
+      if (!result.success) {
+        logError("resync.restore.failed", result.error);
+        return { status: "failed" };
+      }
+
+      lastSuccessAt = Date.now();
+      markSynced();
+      // SQLite was just rewritten from cloud — refetch every screen, plus
+      // the derived score caches (their keys don't match the table
+      // predicate).
+      queryClient.invalidateQueries();
+      invalidateScoring(queryClient);
+      return { status: "pulled" };
+    } catch (e) {
+      logError("resync.failed", e);
+      return { status: "failed" };
+    } finally {
+      inFlight = null;
+    }
+  })();
+  return inFlight;
 }

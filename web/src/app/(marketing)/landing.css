@@ -1,0 +1,472 @@
+/*
+ * Titan landing — design system ported from `new titan landing copy`
+ * (Next.js + Tailwind v3). Two parts:
+ *
+ *  1. An `@theme` block that registers the source's `titan.*` design tokens so
+ *     the ported Tailwind utilities (`bg-titan-bg`, `rounded-pill`,
+ *     `shadow-button`, `animate-blink`, …) resolve under this app's Tailwind v4.
+ *     These token names are landing-only and don't exist elsewhere in the app,
+ *     so registering them globally is safe (no collision with the `.mk-*` / HUD
+ *     styles). Fonts are deliberately NOT registered here — see below — to avoid
+ *     changing the app-wide `font-sans` / `font-mono`.
+ *
+ *  2. The source `globals.css` component + utility layers, ported and SCOPED
+ *     under `.titan-landing` so they can only style the landing route.
+ *
+ * Imported by `src/app/globals.css` (after `@import "tailwindcss";`).
+ */
+
+@theme {
+  /* Colors — Protocol Black identity */
+  --color-titan-bg: #000000;
+  --color-titan-black: #000000;
+  --color-titan-surface: rgba(255, 255, 255, 0.03);
+  --color-titan-surfaceHover: rgba(255, 255, 255, 0.05);
+  --color-titan-border: rgba(255, 255, 255, 0.06);
+  --color-titan-borderHover: rgba(255, 255, 255, 0.12);
+  --color-titan-text: #ffffff;
+  --color-titan-textMuted: rgba(255, 255, 255, 0.6);
+  --color-titan-textTertiary: rgba(255, 255, 255, 0.35);
+  --color-titan-accent: #a6daff;
+  --color-titan-champagne: #c9b99a;
+  /* Engine colors — used ONLY on the Four Engines cards */
+  --color-titan-body: #00ff88;
+  --color-titan-mind: #a78bfa;
+  --color-titan-money: #fbbf24;
+  --color-titan-charisma: #60a5fa;
+
+  /* Radii */
+  --radius-card: 16px;
+  --radius-cardLg: 24px;
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --shadow-cardRest: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-cardHover: 0 24px 60px -16px rgba(0, 0, 0, 0.55),
+    0 8px 24px -12px rgba(0, 0, 0, 0.45);
+  --shadow-button: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-buttonHover: 0 16px 40px -12px rgba(255, 255, 255, 0.18),
+    0 4px 12px -4px rgba(255, 255, 255, 0.1);
+  --shadow-device: 0 30px 80px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.35);
+
+  /* Animations */
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-blink: blink 1.4s steps(1) infinite;
+  --animate-floatY: floatY 5s ease-in-out infinite;
+}
+
+/* Keyframes — global (referenced by the @theme animations + scoped classes) */
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes phoneFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -8px, 0);
+  }
+}
+@keyframes marqueeX {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* ===================================================================== */
+/* Landing scope — base + fonts                                          */
+/* ===================================================================== */
+
+.titan-landing {
+  background: #000000;
+  color: #ffffff;
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* `overflow: clip` prevents horizontal scroll without creating a scroll
+ * container (which would break descendant `position: sticky`). */
+@supports (overflow: clip) {
+  .titan-landing {
+    overflow-x: clip;
+  }
+}
+
+/* Offset in-page anchor scrolls so targets clear the sticky nav. */
+.titan-landing :where(section[id], [data-anchor]) {
+  scroll-margin-top: 84px;
+}
+
+/* Map the font utilities to the landing faces WITHOUT touching the app's
+ * global font-sans / font-mono (scoped override beats the base utility). */
+.titan-landing .font-sans {
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+}
+.titan-landing .font-mono {
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+}
+
+.titan-landing ::selection {
+  background: rgba(166, 218, 255, 0.3);
+  color: #ffffff;
+}
+
+.titan-landing :focus-visible {
+  outline: 1px solid rgba(166, 218, 255, 0.5);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titan-landing *,
+  .titan-landing *::before,
+  .titan-landing *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ===================================================================== */
+/* Components (scoped)                                                    */
+/* ===================================================================== */
+
+/* === Dark surface card with masked metallic gradient border === */
+.titan-landing .surface-card {
+  position: relative;
+  background: rgba(4, 4, 7, 0.88);
+  border: 1px solid transparent;
+  border-radius: 16px;
+  transition:
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+.titan-landing .surface-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.05) 22%,
+    rgba(255, 255, 255, 0.18) 45%,
+    rgba(255, 255, 255, 0.04) 70%,
+    rgba(255, 255, 255, 0.16) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  transition: background 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.titan-landing .surface-card-hover:hover {
+  transform: translateY(-4px);
+  background: rgba(8, 8, 12, 0.92);
+  box-shadow:
+    0 24px 60px -16px rgba(0, 0, 0, 0.7),
+    0 8px 24px -12px rgba(0, 0, 0, 0.55);
+}
+.titan-landing .surface-card-hover:hover::before {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.32) 0%,
+    rgba(255, 255, 255, 0.08) 22%,
+    rgba(255, 255, 255, 0.28) 45%,
+    rgba(255, 255, 255, 0.06) 70%,
+    rgba(255, 255, 255, 0.24) 100%
+  );
+}
+
+/* === GPU-friendly float + marquee === */
+.titan-landing .phone-float {
+  animation: phoneFloat 5s ease-in-out infinite;
+  will-change: transform;
+}
+.titan-landing .marquee-x {
+  animation: marqueeX 45s linear infinite;
+  will-change: transform;
+}
+.titan-landing .marquee-x-fast {
+  animation: marqueeX 60s linear infinite;
+  will-change: transform;
+}
+
+@media (max-width: 767px) {
+  .titan-landing .hero-bg-image {
+    filter: brightness(0.66);
+  }
+}
+
+/* SVG noise overlay for the ScrollBackground */
+.titan-landing .scroll-bg-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+  mix-blend-mode: overlay;
+}
+
+/* Soft gradient text — white -> 70% white */
+.titan-landing .text-gradient-soft {
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.7) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Champagne metallic gradient text — pricing only */
+.titan-landing .text-champagne {
+  background: linear-gradient(180deg, #e8d8b8 0%, #c9b99a 50%, #9a8a6a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* === Heading voices (Inter, tight) === */
+.titan-landing .heading-display {
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.titan-landing .heading-section {
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+/* === Phone frame === */
+.titan-landing .phone-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 19.5;
+  border-radius: 40px;
+  padding: 6px;
+  background: linear-gradient(160deg, #1c1c20 0%, #141418 50%, #1a1a1e 100%);
+  box-shadow:
+    0 25px 60px rgba(0, 0, 0, 0.5),
+    0 10px 30px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.titan-landing .phone-frame::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 41px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.02) 30%,
+    rgba(255, 255, 255, 0.14) 60%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  z-index: -1;
+  pointer-events: none;
+}
+.titan-landing .phone-frame::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90px;
+  height: 22px;
+  background: #000;
+  border-radius: 999px;
+  z-index: 5;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.titan-landing .phone-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 36px;
+  background: #000;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* === Laptop frame === */
+.titan-landing .laptop-wrapper {
+  position: relative;
+  width: 100%;
+}
+.titan-landing .laptop-screen {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 14px;
+  padding: 14px 14px 16px;
+  background: linear-gradient(180deg, #2a2a2e 0%, #18181c 50%, #121216 100%);
+  box-shadow:
+    0 36px 90px rgba(0, 0, 0, 0.62),
+    0 14px 34px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.titan-landing .laptop-screen::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 15px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.03) 30%,
+    rgba(255, 255, 255, 0.16) 60%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  z-index: -1;
+  pointer-events: none;
+}
+.titan-landing .laptop-screen::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.6);
+}
+.titan-landing .laptop-display {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 5px;
+  background: #000;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+.titan-landing .laptop-base {
+  position: relative;
+  margin: 0 auto;
+  width: 116%;
+  height: 18px;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.55) 0px, rgba(0, 0, 0, 0) 2px),
+    linear-gradient(180deg, #2a2a2e 0%, #18181c 30%, #0c0c10 100%);
+  border-radius: 0 0 18px 18px;
+  box-shadow:
+    0 16px 36px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+}
+.titan-landing .laptop-base::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* === Screenshot placeholder === */
+.titan-landing .screenshot-placeholder {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.04) 0%, transparent 60%),
+    linear-gradient(180deg, #0a0a0e 0%, #060608 100%);
+}
+.titan-landing .screenshot-placeholder::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 16px 16px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 40%, transparent 80%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, #000 40%, transparent 80%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ===================================================================== */
+/* Utilities (scoped)                                                    */
+/* ===================================================================== */
+
+.titan-landing .container-titan {
+  width: 100%;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+.titan-landing .container-narrow {
+  width: 100%;
+  max-width: 1024px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.25rem;
+  padding-right: 1.25rem;
+}
+@media (min-width: 768px) {
+  .titan-landing .container-titan,
+  .titan-landing .container-narrow {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+.titan-landing .text-balance {
+  text-wrap: balance;
+}
+.titan-landing .mask-fade-edges {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 8%,
+    #000 92%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, transparent 0%, #000 8%, #000 92%, transparent 100%);
+}

@@ -77,7 +77,7 @@ function TaskBucket({
               key={task.id}
               taskId={task.id}
               title={task.title}
-              xp={task.kind === "main" ? 2 : 1}
+              xp={task.kind === "main" ? 20 : 10}
               completed={completedSet.has(task.id)}
               kind={task.kind}
               engine={engine}

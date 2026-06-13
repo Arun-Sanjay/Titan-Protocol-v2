@@ -13,9 +13,26 @@
  * cached result shows instantly while SQLite serves a fresh read in the
  * background.
  */
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, MutationCache } from "@tanstack/react-query";
+import { toast, messageFromError } from "./toast";
+import { PaywallError, openPaywall } from "./paywall";
 
 export const queryClient = new QueryClient({
+  // One global handler surfaces EVERY failed mutation as a toast — web
+  // previously rolled back optimistic updates silently (audit §5.2). Cloud
+  // write failures are reassuring (the row is mirrored `_dirty=1` and the
+  // dirty-row replay retries), so `messageFromError` phrases them that way.
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      // A gated action past the free trial throws PaywallError — open the
+      // subscribe modal instead of surfacing a scary error toast.
+      if (error instanceof PaywallError) {
+        openPaywall();
+        return;
+      }
+      toast.error(messageFromError(error));
+    },
+  }),
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,

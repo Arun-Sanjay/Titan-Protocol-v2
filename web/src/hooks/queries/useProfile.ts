@@ -42,6 +42,7 @@ export function useProfile() {
         mode: "full_protocol",
         focus_engines: [],
         expo_push_token: null,
+        trial_started_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -124,6 +125,22 @@ export function useSettleStreaks() {
   return useMutation({
     mutationFn: () => settleStreaks(),
     onSettled: () => {
+      qc.invalidateQueries({ queryKey: profileKeys.all });
+    },
+  });
+}
+
+/**
+ * Generic profile patch — used by Settings to let a user set their display
+ * name (and anything else editable later). Merges through `upsertProfile`,
+ * which is cloud-first + safe against clobbering existing rows.
+ */
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (updates: Partial<Omit<Profile, "id" | "created_at">>) =>
+      upsertProfile(updates),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: profileKeys.all });
     },
   });

@@ -21,6 +21,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import Database from "better-sqlite3";
 import { migrations } from "../db/sqlite/migrations";
 import { SYNCED_TABLES } from "../db/sqlite/column-types";
+import { knownSqliteColumns } from "../db/sqlite/coerce";
 
 describe("Hybrid sync — SQLite invariants", () => {
   let db: Database.Database;
@@ -202,5 +203,58 @@ describe("Hybrid sync — SQLite invariants", () => {
       .prepare("SELECT id FROM tasks WHERE _dirty = 1")
       .all() as { id: string }[];
     expect(stillDirty).toHaveLength(0);
+  });
+
+  // ─── Offline-delete tombstone ─────────────────────────────────────────────
+
+  it("an offline-delete tombstone is found by the flush scan + replays as a delete", () => {
+    // cloudDelete's offline path tombstones the row (_deleted=1, _dirty=1)
+    // instead of throwing; flushDirtyRows scans WHERE _dirty=1 and branches
+    // on _deleted to replay it as a cloud DELETE rather than an upsert.
+    db.prepare(
+      `INSERT INTO tasks (id, user_id, engine, title, kind, days_per_week, is_active, created_at, updated_at, _dirty, _deleted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run("t1", "u1", "body", "Push-ups", "main", 7, 1,
+          "2026-05-24T00:00:00Z", "2026-05-24T00:00:00Z", 1, 1);
+
+    const pending = db
+      .prepare("SELECT _deleted FROM tasks WHERE _dirty = 1")
+      .get() as { _deleted: number } | undefined;
+    // Seen as a pending DELETE, not a pending upsert.
+    expect(pending?._deleted).toBe(1);
+
+    // A successful delete replay hard-deletes the local tombstone.
+    db.prepare("DELETE FROM tasks WHERE id = ?").run("t1");
+    expect(
+      (db.prepare("SELECT COUNT(*) AS c FROM tasks").get() as { c: number }).c,
+    ).toBe(0);
+  });
+});
+
+describe("knownSqliteColumns — schema-tolerant mirroring", () => {
+  it("keeps known columns plus the _dirty/_deleted housekeeping flags", () => {
+    const cols = knownSqliteColumns("tasks", {
+      id: "t1",
+      user_id: "u1",
+      title: "Read",
+      _dirty: 0,
+      _deleted: 0,
+    });
+    expect(cols).toContain("id");
+    expect(cols).toContain("user_id");
+    expect(cols).toContain("title");
+    expect(cols).toContain("_dirty");
+    expect(cols).toContain("_deleted");
+  });
+
+  it("drops a column the local schema does not know — a forward server migration this binary predates", () => {
+    const cols = knownSqliteColumns("tasks", {
+      id: "t1",
+      title: "Read",
+      future_column_from_a_newer_server: "ignored",
+      _dirty: 0,
+    });
+    expect(cols).toContain("title");
+    expect(cols).not.toContain("future_column_from_a_newer_server");
   });
 });

@@ -22,7 +22,7 @@ const ENGINE_LABELS: Record<EngineId, string> = {
   body: "Body",
   mind: "Mind",
   money: "Money",
-  charisma: "Charisma",
+  charisma: "General",
 };
 
 function toDateKey(date: Date): string {

@@ -366,6 +366,7 @@ export const COLUMN_TYPES: Record<string, TableColumns> = {
     first_task_completed_at: 'text',
     display_name: 'text',
     expo_push_token: 'text',
+    trial_started_at: 'text',
     created_at: 'text',
     updated_at: 'text',
     _dirty: 'dirty_flag',

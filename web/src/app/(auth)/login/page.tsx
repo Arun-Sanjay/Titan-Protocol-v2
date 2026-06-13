@@ -223,12 +223,39 @@ export default function LoginPage() {
                 mode === "signin" ? "current-password" : "new-password"
               }
               required
-              minLength={6}
+              minLength={mode === "signup" ? 8 : undefined}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               style={inputStyle}
             />
           </label>
+
+          {mode === "signin" && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                marginTop: -8,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => navigate("/auth/forgot")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  color: "var(--muted, #808080)",
+                  textDecoration: "underline",
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
 
           {error && (
             <p

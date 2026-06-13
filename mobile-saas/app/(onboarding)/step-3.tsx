@@ -89,9 +89,8 @@ export default function OnboardingStep3() {
           <Text style={styles.kicker}>STEP 3 · OPTIONAL</Text>
           <Text style={styles.title}>Pick your archetype.</Text>
           <Text style={styles.subtitle}>
-            Weights the daily Titan Score so your strongest engine carries
-            more. You can change this any time in Profile, or skip and we'll
-            weigh equally.
+            Sets the identity your protocol is built around. Skip if you're
+            not sure — every engine counts equally either way.
           </Text>
         </View>
 

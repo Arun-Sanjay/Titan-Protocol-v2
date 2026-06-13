@@ -24,6 +24,7 @@ import { useOnboardingStore } from "../../src/stores/useOnboardingStore";
 import { useProfile } from "../../src/hooks/queries/useProfile";
 import { registerForPushNotifications, clearPushToken } from "../../src/lib/push-token";
 import { restoreFromCloud } from "../../src/sync/restore";
+import { deleteAccount } from "../../src/services/account";
 import { storage } from "../../src/db/storage";
 import { logError } from "../../src/lib/error-log";
 
@@ -53,7 +54,7 @@ export default function ProfileScreen() {
   const setTheme = useThemeStore((s) => s.setTheme);
   const resetOnboarding = useOnboardingStore((s) => s.clearForSignOut);
 
-  const [busy, setBusy] = useState<null | "signout" | "repull" | "wipe">(null);
+  const [busy, setBusy] = useState<null | "signout" | "repull" | "wipe" | "delete">(null);
   const [pushEnabled, setPushEnabled] = useState<boolean>(
     Boolean(profile?.expo_push_token),
   );
@@ -179,6 +180,54 @@ export default function ProfileScreen() {
       ],
     );
   }, []);
+
+  // Apple 5.1.1(v): apps with account creation must offer in-app account
+  // deletion. Server-side erase via the delete-account Edge Function
+  // (cascades through the whole FK graph), then the canonical sign-out.
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      "Delete account?",
+      "This permanently erases your account and ALL data — tasks, habits, journal, XP, everything — from the cloud and this device. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Continue",
+          style: "destructive",
+          onPress: () => {
+            Alert.alert(
+              "Are you absolutely sure?",
+              "There is no recovery after this.",
+              [
+                { text: "Keep my account", style: "cancel" },
+                {
+                  text: "Delete everything",
+                  style: "destructive",
+                  onPress: async () => {
+                    Haptics.notificationAsync(
+                      Haptics.NotificationFeedbackType.Warning,
+                    );
+                    setBusy("delete");
+                    try {
+                      await deleteAccount();
+                      // Resets device flags + session → routes to login.
+                      await signOut();
+                    } catch (e) {
+                      logError("settings.deleteAccount", e);
+                      Alert.alert(
+                        "Delete failed",
+                        "Your account was NOT deleted. Check your connection and try again.",
+                      );
+                      setBusy(null);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
+    );
+  }, [signOut]);
 
   const handleWipeMMKV = useCallback(() => {
     Alert.alert(
@@ -321,6 +370,32 @@ export default function ProfileScreen() {
             />
             <Text style={styles.secondaryButtonText}>REPLAY ONBOARDING</Text>
           </Pressable>
+        </Section>
+
+        {/* ─── Danger zone ─────────────────────────────────────── */}
+        <Section title="DANGER ZONE">
+          <Panel>
+            <Text style={styles.rowSub}>
+              Permanently delete your account and every piece of data
+              attached to it, from the cloud and this device. This cannot
+              be undone.
+            </Text>
+            <Pressable
+              onPress={handleDeleteAccount}
+              disabled={busy === "delete"}
+              style={({ pressed }) => [
+                styles.dangerButton,
+                pressed && styles.pressed,
+                busy === "delete" && styles.buttonDisabled,
+              ]}
+            >
+              {busy === "delete" ? (
+                <ActivityIndicator color={colors.danger} />
+              ) : (
+                <Text style={styles.dangerButtonText}>DELETE ACCOUNT</Text>
+              )}
+            </Pressable>
+          </Panel>
         </Section>
 
         {/* ─── App ─────────────────────────────────────── */}

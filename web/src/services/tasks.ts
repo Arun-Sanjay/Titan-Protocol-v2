@@ -3,6 +3,7 @@ import {
   newId,
   cloudDelete,
   sqliteList,
+  sqliteGet,
   cloudUpsert,
 } from "../db/sqlite/service-helpers";
 import { addDaysISO, todayISO } from "../lib/date";
@@ -53,6 +54,24 @@ export async function createTask(input: {
   return cloudUpsert("tasks", row);
 }
 
+/** Edit an existing task in place (rename / change kind / change days-per-week)
+ *  without losing its id or completion history — the premium alternative to
+ *  delete-and-recreate (audit §5.5). */
+export async function updateTask(
+  taskId: string,
+  patch: { title?: string; kind?: TaskKind; days_per_week?: number },
+): Promise<Task> {
+  const existing = await sqliteGet<Task>("tasks", { id: taskId });
+  if (!existing) throw new Error(`[tasks] cannot update missing task ${taskId}`);
+  return cloudUpsert("tasks", {
+    ...existing,
+    title: patch.title ?? existing.title,
+    kind: patch.kind ?? existing.kind,
+    days_per_week: patch.days_per_week ?? existing.days_per_week,
+    updated_at: new Date().toISOString(),
+  });
+}
+
 export async function deleteTask(taskId: string): Promise<void> {
   await cloudDelete("tasks", { id: taskId });
 }
@@ -88,14 +107,41 @@ export async function listRecentCompletions(days: number): Promise<Completion[]>
 }
 
 /**
+ * Per-(task, date) toggle serialization. Two rapid clicks on the same
+ * checkbox used to race the check-then-insert: both read "no completion",
+ * both inserted, and the second insert hit the server's UNIQUE
+ * (task_id, date_key) — leaving a poison `_dirty=1` row behind. Chaining
+ * the second toggle behind the first turns a double-click into
+ * insert-then-delete, which is what the user meant. Mirrors the
+ * transaction guard mobile-saas added for the same race.
+ */
+const togglesInFlight = new Map<string, Promise<{ added: boolean }>>();
+
+/**
  * Toggle completion for a (task, dateKey) pair. Checks existing row,
- * soft-deletes if present, inserts if absent. Returns which direction
- * the toggle went.
- *
- * Local-first: both branches complete at SQLite-write latency (~1ms),
- * no await on network. The dashboard tap is now instant.
+ * deletes if present, inserts if absent. Returns which direction the
+ * toggle went. Cloud-first via cloudUpsert/cloudDelete.
  */
 export async function toggleCompletion(params: {
+  taskId: string;
+  dateKey: string;
+  engine: EngineKey;
+}): Promise<{ added: boolean }> {
+  const key = `${params.taskId}:${params.dateKey}`;
+  const prev = togglesInFlight.get(key) ?? Promise.resolve();
+  const next = (prev as Promise<unknown>)
+    // A failed predecessor must not poison the chain.
+    .catch(() => undefined)
+    .then(() => toggleCompletionInner(params));
+  togglesInFlight.set(key, next);
+  try {
+    return await next;
+  } finally {
+    if (togglesInFlight.get(key) === next) togglesInFlight.delete(key);
+  }
+}
+
+async function toggleCompletionInner(params: {
   taskId: string;
   dateKey: string;
   engine: EngineKey;

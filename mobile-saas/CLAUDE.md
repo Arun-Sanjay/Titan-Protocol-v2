@@ -236,6 +236,8 @@ eas submit --platform android --profile production
 
 > **Post-M6 (2026-05-30):** scoring-invalidation tightening in `src/hooks/queries/useTasks.ts` — `useToggleCompletion`/`useToggleCompletionWithReward` also invalidate the per-engine task list; `useCreateTask`/`useDeleteTask` invalidate `recentCompletions` (analytics reliability denominator). Mirrors a web fix; mobile-saas was never vulnerable to the web Context-staleness bug because HQ derives scores live (see §9).
 
+> **Pre-ship hardening (2026-06-10 → ), UNCOMMITTED:** Phase 1 ship-blockers fixed (onboarding-wipe via `FirstRunPullGate` at root + `profileSynced` latch + no-defaults profile writes, `cloudGet`, `NATURAL_KEYS` + dead-letter dirty rows, resync-before-settle, `delete-account` edge fn + Danger Zone, sign-out clears push token + onboarding MMKV, `forgot-password.tsx`). **Phase 2 (sync-trust) in progress:** `updated_at` conflict guard, offline-delete tombstones, schema-tolerant mirroring, ORDER BY on restore, realtime invalidation-key fixes + merge-not-clobber + dirty guard, channel auto-resubscribe, `AppState→startAutoRefresh`/`stopAutoRefresh` on the supabase client, offline cold-start (don't bounce a cached session to login). See root `CLAUDE.md` + memory `audit_2026_06_10.md`.
+
 When a milestone lands:
 1. Update this table's status column to ✅.
 2. Update `../MOBILE_SAAS_ROADMAP.md`'s status table too.

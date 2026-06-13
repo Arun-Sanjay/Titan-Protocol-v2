@@ -48,6 +48,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
       { href: "/app/habits", label: "Habits", icon: "habits" },
       { href: "/app/journal", label: "Journal", icon: "journal" },
       { href: "/app/goals", label: "Goals", icon: "goals" },
+      { href: "/app/achievements", label: "Achievements", icon: "achievements" },
     ],
   },
   {

@@ -23,9 +23,10 @@
  */
 
 import { all, get, run, transaction } from "./client";
-import { rowFromSqlite, rowToSqlite, stripSyncColumns } from "./coerce";
+import { rowFromSqlite, rowToSqlite, stripSyncColumns, knownSqliteColumns } from "./coerce";
 import { COLUMN_TYPES } from "./column-types";
 import { primaryKeyFor } from "../../sync/tables";
+import { markSynced } from "../../sync/sync-status";
 import { supabase } from "../../lib/session";
 import type { Database } from "@titan/shared/types/supabase";
 
@@ -223,6 +224,37 @@ async function sqliteHardDelete(
 
 // ─── Hybrid (Supabase-first) writes ─────────────────────────────────────────
 
+/**
+ * Server-side natural UNIQUE constraints per table (beyond the PK),
+ * verified against the live schema. `cloudUpsert` targets these in
+ * `onConflict` so replaying a row that lost a cross-device race (the same
+ * journal day or the same task+date completion created on another device
+ * under a different uuid) UPDATES the existing row instead of failing
+ * 23505 forever — a permanently-failing dirty row used to block every
+ * catch-up restore, silently freezing cross-device sync on this device.
+ */
+const NATURAL_KEYS: Record<string, readonly string[]> = {
+  achievements_unlocked: ["user_id", "achievement_id"],
+  boss_challenges: ["user_id", "boss_id"],
+  completions: ["task_id", "date_key"],
+  habit_logs: ["habit_id", "date_key"],
+  journal_entries: ["user_id", "date_key"],
+  meal_logs: ["user_id", "date_key", "name"],
+  narrative_entries: ["user_id", "flag"],
+  protocol_sessions: ["user_id", "date_key"],
+  quests: ["user_id", "week_start_key", "type"],
+  skill_tree_progress: ["user_id", "engine", "node_id"],
+  sleep_logs: ["user_id", "date_key"],
+  water_logs: ["user_id", "date_key"],
+  weight_logs: ["user_id", "date_key"],
+};
+
+/** Conflict target for a cloud upsert: the natural key where one exists,
+ *  the primary key otherwise. */
+function conflictTargetFor(table: string): readonly string[] {
+  return NATURAL_KEYS[table] ?? primaryKeyFor(table);
+}
+
 /** Strip housekeeping columns before sending to Supabase. */
 function toCloudRow<T extends Record<string, unknown>>(row: T): Record<string, unknown> {
   const { _dirty: _d, _deleted: _del, ...rest } = row as Record<string, unknown>;
@@ -241,7 +273,7 @@ async function mirrorToSqlite(
   dirty: 0 | 1,
 ): Promise<void> {
   const sqliteReady = rowToSqlite(table, { ...row, _dirty: dirty, _deleted: 0 });
-  const cols = Object.keys(sqliteReady);
+  const cols = knownSqliteColumns(table, sqliteReady);
   const placeholders = cols.map(() => "?").join(", ");
   await run(
     `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders})`,
@@ -268,11 +300,10 @@ export async function cloudUpsert<T extends Record<string, unknown>>(
   applyTimestampStamps(table, merged, now);
 
   const cloudRow = toCloudRow(merged);
-  const pkCols = primaryKeyFor(table);
 
   const { data, error } = await supabase
     .from(table as SyncedTableName)
-    .upsert(cloudRow as never, { onConflict: pkCols.join(",") })
+    .upsert(cloudRow as never, { onConflict: conflictTargetFor(table).join(",") })
     .select()
     .single();
 
@@ -283,6 +314,7 @@ export async function cloudUpsert<T extends Record<string, unknown>>(
 
   const cloudData = data as Record<string, unknown>;
   await mirrorToSqlite(table, cloudData, 0);
+  markSynced();
   return cloudData as T;
 }
 
@@ -304,11 +336,9 @@ export async function cloudUpsertMany<T extends Record<string, unknown>>(
     return toCloudRow(merged);
   });
 
-  const pkCols = primaryKeyFor(table);
-
   const { data, error } = await supabase
     .from(table as SyncedTableName)
-    .upsert(cloudRows as never, { onConflict: pkCols.join(",") })
+    .upsert(cloudRows as never, { onConflict: conflictTargetFor(table).join(",") })
     .select();
 
   if (error || !data) {
@@ -326,14 +356,38 @@ export async function cloudUpsertMany<T extends Record<string, unknown>>(
 }
 
 /**
- * Hybrid delete: cloud first, then hard-delete from SQLite. No tombstone
- * needed — Supabase Realtime will notify any other devices, which will
- * hard-delete on their end via the subscriber.
+ * Cloud-first single-row read for cache-miss paths. Fetches the row from
+ * Supabase by exact column match, mirrors it into SQLite (clean), and
+ * returns it — or null when no row exists (or RLS hides it). Throws on
+ * network/API failure so callers can distinguish "absent" from
+ * "unreachable".
  *
- * On cloud failure, throws without touching SQLite. Future retry logic
- * can pick up the cloud-truth state on next list query.
+ * Reserved for boot-time flows that may legitimately run before the
+ * first-run pull has seeded the cache (e.g. resolving the profile base
+ * row). Screens keep reading via the `sqlite*` helpers.
  */
-export async function cloudDelete(
+export async function cloudGet<T>(
+  table: string,
+  keys: Record<string, unknown>,
+): Promise<T | null> {
+  let query = supabase.from(table as SyncedTableName).select("*");
+  for (const [col, val] of Object.entries(keys)) {
+    query = query.eq(col, val as never);
+  }
+  const { data, error } = await query.maybeSingle();
+  if (error) throw new Error(`[cloud:${table}] ${error.message}`);
+  if (!data) return null;
+  await mirrorToSqlite(table, data as Record<string, unknown>, 0);
+  return data as T;
+}
+
+/**
+ * Cloud delete that THROWS on failure and does NOT tombstone. Used by the
+ * dirty-row flush to replay a queued delete: a real failure there must be
+ * counted and (after the retry cap) dead-lettered, not silently swallowed.
+ * On success, hard-deletes the local row.
+ */
+export async function cloudDeleteOrThrow(
   table: string,
   pk: Record<string, unknown>,
 ): Promise<void> {
@@ -347,6 +401,64 @@ export async function cloudDelete(
   if (error) throw new Error(`[cloud:${table}] ${error.message}`);
 
   await sqliteHardDelete(table, pk);
+}
+
+/**
+ * Hybrid delete: cloud first, then hard-delete from SQLite. Supabase
+ * Realtime notifies any other devices, which hard-delete on their end.
+ *
+ * On cloud failure (offline / transient) the row is TOMBSTONED locally
+ * (`_deleted=1, _dirty=1`) instead of throwing: readers filtered on
+ * `_deleted=0` stop seeing it immediately, and `flushDirtyRows` replays
+ * the delete (via `cloudDeleteOrThrow`) once connectivity returns. The
+ * user's delete intent is never lost, and an offline delete no longer
+ * throws an error the UI would (wrongly) surface as "delete failed".
+ */
+export async function cloudDelete(
+  table: string,
+  pk: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await cloudDeleteOrThrow(table, pk);
+  } catch {
+    const pkCols = primaryKeyFor(table);
+    const whereClause = pkCols.map((c) => `${c} = ?`).join(" AND ");
+    await run(
+      `UPDATE ${table} SET _deleted = 1, _dirty = 1 WHERE ${whereClause}`,
+      pkCols.map((c) => pk[c]),
+    );
+  }
+}
+
+/**
+ * Whether the cloud copy of row `id` in `table` is strictly newer (by
+ * `updated_at`) than `localUpdatedAt`. Used by the dirty-row flush as a
+ * last-write-wins guard: `cloudUpsert` re-stamps `updated_at` to now, so
+ * replaying a stale offline row would otherwise masquerade as the newest
+ * write and revert a newer edit made on another device.
+ *
+ * Returns `false` when it can't tell — the table has no `id`/`updated_at`,
+ * or the row is absent in the cloud (then the caller should push to
+ * (re)create it). Throws on network/API error so the caller retries.
+ */
+export async function remoteIsNewer(
+  table: string,
+  id: unknown,
+  localUpdatedAt: unknown,
+): Promise<boolean> {
+  if (typeof id !== "string" || typeof localUpdatedAt !== "string") return false;
+  // Mirror cloudGet's builder shape (`.select("*")` + a string column arg);
+  // narrowing the select to one column makes supabase-js type `.eq`'s column
+  // param as `never` under our union-table cast.
+  // A `string`-typed column var (not a literal) matches the builder's `.eq`
+  // overload under the union-table cast — the same trick cloudGet relies on.
+  const idCol: string = "id";
+  let query = supabase.from(table as SyncedTableName).select("*");
+  query = query.eq(idCol, id as never);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw new Error(`[cloud:${table}] ${error.message}`);
+  const remote = (data as { updated_at?: unknown } | null)?.updated_at;
+  return typeof remote === "string" && remote > localUpdatedAt;
 }
 
 // ─── Utilities ──────────────────────────────────────────────────────────────

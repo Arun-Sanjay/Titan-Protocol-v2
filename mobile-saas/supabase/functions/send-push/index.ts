@@ -1,9 +1,10 @@
 /**
  * send-push — Supabase Edge Function
  *
- * Triggered server-side (pg_cron daily streak warning; future Postgres
- * triggers on achievements_unlocked). Reads the target user's Expo push
- * token from `profiles.expo_push_token` and POSTs to the Expo Push API.
+ * Triggered server-side ONLY (pg_cron daily streak warning; future
+ * Postgres triggers on achievements_unlocked). Reads the target user's
+ * Expo push token from `profiles.expo_push_token` and POSTs to the Expo
+ * Push API.
  *
  * Body shape:
  *   {
@@ -13,13 +14,12 @@
  *     data?: Record<string, unknown>  // optional payload routed via the notif
  *   }
  *
- * Security note: this function is deployed with `verify_jwt: false` to let
- * the in-database cron call it without managing JWTs. The function only
- * sends to a token that already lives on the user's own profile row, so
- * an anonymous caller can at worst trigger an unsolicited push to a user
- * for whom they already know the user_id. Rate limiting + a proper signed
- * secret are post-launch hardening — see `supabase/functions/send-push/
- * README.md` for the plan.
+ * AUTH: deployed with verify_jwt=true AND the body requires
+ * `Authorization: Bearer <service_role key>` — compared against this
+ * function's own SUPABASE_SERVICE_ROLE_KEY env. The platform JWT check
+ * alone is NOT enough (the public anon key is also a valid JWT); the
+ * equality check is what restricts callers to the server. The pg_cron
+ * job reads the key from Vault (secret name: `service_role_key`).
  */
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -39,6 +39,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: "Method not allowed" }, 405);
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return json({ error: "Server misconfiguration" }, 500);
+  }
+
+  // ── Caller auth: service-role bearer ONLY ─────────────────────────────
+  const auth = req.headers.get("authorization") ?? "";
+  if (auth !== `Bearer ${serviceRoleKey}`) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+
   let payload: RequestBody;
   try {
     payload = (await req.json()) as RequestBody;
@@ -47,16 +59,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   if (!payload.user_id || !payload.title || !payload.body) {
-    return json(
-      { error: "user_id, title, and body are required" },
-      400,
-    );
-  }
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) {
-    return json({ error: "Server misconfiguration" }, 500);
+    return json({ error: "user_id, title, and body are required" }, 400);
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -95,8 +98,6 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const expoBody = await expoRes.json();
 
-  // Expo returns DeviceNotRegistered for a stale token; clear it so
-  // future invocations skip cleanly.
   const ticketStatus =
     Array.isArray(expoBody?.data) ? expoBody.data[0]?.status : null;
   const ticketError =

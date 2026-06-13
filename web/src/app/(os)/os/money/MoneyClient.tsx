@@ -1,4 +1,6 @@
 import * as React from "react";
+import { confirm } from "@/lib/confirm";
+import { toast } from "@/lib/toast";
 import { Link, useLocation } from "react-router-dom";
 
 import { MobileModal } from "../../../../components/ui/MobileModal";
@@ -7,6 +9,7 @@ import {
   useEngineCompletions,
   useToggleCompletion,
   useCreateTask,
+  useUpdateTask,
   useDeleteTask,
 } from "@/hooks/queries/useTasks";
 import type { EngineKey } from "@/services/tasks";
@@ -42,6 +45,7 @@ export default function MoneyClient() {
   const [newTaskPriority, setNewTaskPriority] = React.useState<"main" | "secondary">("main");
   const [newTaskDaysPerWeek, setNewTaskDaysPerWeek] = React.useState<number>(7);
   const [isAddingTask, setIsAddingTask] = React.useState<boolean>(false);
+  const [editingTaskId, setEditingTaskId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const stored = typeof window !== "undefined" ? window.localStorage.getItem("money.selectedDateISO") : null;
@@ -71,6 +75,7 @@ export default function MoneyClient() {
 
   const toggleCompletion = useToggleCompletion();
   const createTask = useCreateTask();
+  const updateTaskMut = useUpdateTask();
   const deleteTaskMut = useDeleteTask();
 
   const monthStartKey = React.useMemo(() => monthBounds(dateToISO(visibleMonth)).start, [visibleMonth]);
@@ -122,16 +127,45 @@ export default function MoneyClient() {
     toggleCompletion.mutate({ task: { id: task.id, engine: ENGINE }, dateKey: selectedDateKey });
   }
 
+  function resetTaskForm() {
+    setNewTaskTitle(""); setNewTaskPriority("main"); setNewTaskDaysPerWeek(7); setIsAddingTask(false); setEditingTaskId(null);
+  }
+
   async function handleAddTask() {
     const title = newTaskTitle.trim();
     if (!title) return;
-    createTask.mutate({ engine: ENGINE, title, kind: newTaskPriority, days_per_week: newTaskDaysPerWeek } as any);
-    setNewTaskTitle(""); setNewTaskPriority("main"); setNewTaskDaysPerWeek(7); setIsAddingTask(false);
+    if (editingTaskId) {
+      updateTaskMut.mutate(
+        { taskId: editingTaskId, engine: ENGINE, title, kind: newTaskPriority },
+        { onSuccess: () => toast.success("Task updated") },
+      );
+    } else {
+      createTask.mutate({ engine: ENGINE, title, kind: newTaskPriority, days_per_week: newTaskDaysPerWeek } as any);
+    }
+    resetTaskForm();
+  }
+
+  function handleEditStart(task: any) {
+    if (!task.id) return;
+    setNewTaskTitle(task.title);
+    setNewTaskPriority((task.kind as "main" | "secondary") ?? "main");
+    setEditingTaskId(task.id);
+    setIsAddingTask(true);
   }
 
   async function handleDelete(task: any) {
     if (!task.id) return;
-    deleteTaskMut.mutate({ taskId: task.id, engine: ENGINE });
+    const ok = await confirm({
+      title: "Delete task?",
+      message: "This removes the task and its completion history. This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteTaskMut.mutate(
+      { taskId: task.id, engine: ENGINE },
+      { onSuccess: () => toast.success("Task deleted") },
+    );
   }
 
   return (
@@ -175,7 +209,7 @@ export default function MoneyClient() {
             {secondaryTasks.map((task: any) => (
               <div key={task.id} className="tx-task-row">
                 <label className="tx-task-left"><input type="checkbox" checked={task.completed} onChange={() => handleToggleTask(task)} className="h-4 w-4 accent-white" /><span>{task.title}</span></label>
-                <div className="tx-task-right"><span className="tx-pill">Secondary</span><button type="button" onClick={() => handleDelete(task)} className="tp-button tp-button-inline text-xs">Delete</button></div>
+                <div className="tx-task-right"><span className="tx-pill">Secondary</span><button type="button" onClick={() => handleEditStart(task)} className="tp-button tp-button-inline text-xs">Edit</button><button type="button" onClick={() => handleDelete(task)} className="tp-button tp-button-inline text-xs">Delete</button></div>
               </div>
             ))}
           </div>
@@ -188,7 +222,7 @@ export default function MoneyClient() {
             {mainTasks.map((task: any) => (
               <div key={task.id} className="tx-task-row">
                 <label className="tx-task-left"><input type="checkbox" checked={task.completed} onChange={() => handleToggleTask(task)} className="h-4 w-4 accent-white" /><span>{task.title}</span></label>
-                <div className="tx-task-right"><span className="tx-pill">Main · 2 pts</span><button type="button" onClick={() => handleDelete(task)} className="tp-button tp-button-inline text-xs">Delete</button></div>
+                <div className="tx-task-right"><span className="tx-pill">Main · 2 pts</span><button type="button" onClick={() => handleEditStart(task)} className="tp-button tp-button-inline text-xs">Edit</button><button type="button" onClick={() => handleDelete(task)} className="tp-button tp-button-inline text-xs">Delete</button></div>
               </div>
             ))}
           </div>
@@ -196,13 +230,13 @@ export default function MoneyClient() {
         </TitanPanel>
       </div>
 
-      <MobileModal open={isAddingTask} onClose={() => { setIsAddingTask(false); setNewTaskTitle(""); }} title="New Deep Work Task">
-        <TitanPanelHeader kicker="New Deep Work Task" rightSlot={<TitanButton tone="ghost" compact onClick={() => { setIsAddingTask(false); setNewTaskTitle(""); }}>Close</TitanButton>} />
+      <MobileModal open={isAddingTask} onClose={resetTaskForm} title={editingTaskId ? "Edit Task" : "New Deep Work Task"}>
+        <TitanPanelHeader kicker={editingTaskId ? "Edit Task" : "New Deep Work Task"} rightSlot={<TitanButton tone="ghost" compact onClick={resetTaskForm}>Close</TitanButton>} />
         <div className="mt-4 space-y-4">
           <div><label className="tx-label">Task Title</label><input value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} className="tx-input" placeholder='e.g. "Work on business"' autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleAddTask(); }} /></div>
           <div><label className="tx-label">Priority</label><select value={newTaskPriority} onChange={(event) => setNewTaskPriority(event.target.value as "main" | "secondary")} className="tx-select"><option value="main">Main · Deep Work (2 pts)</option><option value="secondary">Secondary (1 pt)</option></select></div>
         </div>
-        <div className="mt-5 flex gap-2"><TitanButton onClick={handleAddTask}>Create</TitanButton><TitanButton tone="ghost" onClick={() => { setIsAddingTask(false); setNewTaskTitle(""); }}>Cancel</TitanButton></div>
+        <div className="mt-5 flex gap-2"><TitanButton onClick={handleAddTask}>{editingTaskId ? "Save" : "Create"}</TitanButton><TitanButton tone="ghost" onClick={resetTaskForm}>Cancel</TitanButton></div>
       </MobileModal>
     </main>
   );

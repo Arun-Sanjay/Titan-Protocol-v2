@@ -41,6 +41,7 @@ export function useProfile() {
         first_task_completed_at: null,
         onboarding_completed: false,
         tutorial_completed: false,
+        trial_started_at: null,
         display_name: null,
         archetype: null,
         mode: "full_protocol",
@@ -112,6 +113,22 @@ export function useSettleStreaks() {
       // `protocol_streak` evaluator). That layer sits above the
       // QueryClientProvider so it can't read this value via the hook.
       if (result) setJSON("protocol_streak", result.streak);
+      qc.invalidateQueries({ queryKey: profileQueryKey });
+    },
+  });
+}
+
+/**
+ * Generic profile-update mutation. Merge-updates the cloud profile row and
+ * refreshes the profile query. Used by the trial/paywall flow to stamp
+ * `trial_started_at`. Mirrors web's `useUpdateProfile`.
+ */
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (updates: Partial<Omit<Profile, "id" | "created_at">>) =>
+      upsertProfile(updates),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: profileQueryKey });
     },
   });

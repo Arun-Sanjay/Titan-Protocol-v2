@@ -136,7 +136,7 @@ export default function TrackScreen() {
               <MissionRow
                 taskId={item.id}
                 title={item.title}
-                xp={item.kind === "main" ? 2 : 1}
+                xp={item.kind === "main" ? 20 : 10}
                 completed={completedSet.has(item.id)}
                 kind={item.kind}
                 engine={item.engine as EngineKey}

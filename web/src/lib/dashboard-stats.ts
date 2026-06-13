@@ -118,7 +118,7 @@ const ENGINE_META: Record<EngineKey, { label: string; route: string }> = {
   body: { label: "Body", route: "/app/body" },
   mind: { label: "Mind", route: "/app/mind" },
   money: { label: "Money", route: "/app/money" },
-  charisma: { label: "Charisma", route: "/app/general" },
+  charisma: { label: "General", route: "/app/general" },
 };
 
 const QUICK_ACTIONS: DailyQuickAction[] = [
@@ -219,7 +219,22 @@ function deriveNextBestAction(
   dateKey: string,
   riskEngines: DailyRiskEngine[],
   topIncompleteMainTasks: DailyPlanningTask[],
+  totalTasks: number,
 ): DailyNextAction {
+  // Brand-new account with no tasks at all. Don't congratulate an empty
+  // account with "no urgent risks detected" (audit §5.1) — guide them to
+  // create their first task, which is what starts the Titan Score, streak,
+  // and XP moving.
+  if (totalTasks === 0) {
+    return {
+      title: "Set up your first mission",
+      detail:
+        "Add a daily task to an engine — that's what starts your Titan Score, streak, and XP.",
+      href: "/app/body",
+      cta: "Create your first task",
+    };
+  }
+
   const firstTask = topIncompleteMainTasks[0];
   if (firstTask) {
     return {
@@ -283,7 +298,7 @@ export async function getDailyPlanningModel(dateKey: string): Promise<DailyPlann
     },
     enginesAtRisk,
     topIncompleteMainTasks,
-    nextBestAction: deriveNextBestAction(safeDate, enginesAtRisk, topIncompleteMainTasks),
+    nextBestAction: deriveNextBestAction(safeDate, enginesAtRisk, topIncompleteMainTasks, allTasks.length),
     quickActions: QUICK_ACTIONS,
   };
 }

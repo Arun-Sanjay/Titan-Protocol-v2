@@ -44,7 +44,7 @@ export default function JournalPage() {
 
   const [selectedDate, setSelectedDate] = React.useState(today);
   const [editorContent, setEditorContent] = React.useState("");
-  const [saveStatus, setSaveStatus] = React.useState<"Saved" | "Saving..." | "No content">("No content");
+  const [saveStatus, setSaveStatus] = React.useState<"Saved" | "Saving..." | "No content" | "Not saved">("No content");
 
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLoadingRef = React.useRef(false);
@@ -93,9 +93,15 @@ export default function JournalPage() {
 
       setSaveStatus("Saving...");
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(async () => {
-        upsertEntry.mutate({ dateKey: selectedDate, content: value });
-        setSaveStatus("Saved");
+      saveTimerRef.current = setTimeout(() => {
+        // Flip to "Saved" only once the write actually resolves. Previously
+        // this set "Saved" synchronously after a fire-and-forget mutate, so a
+        // failed save still showed "Saved" and silently lost the entry
+        // (audit §5.2). The QueryClient MutationCache also surfaces a toast.
+        upsertEntry
+          .mutateAsync({ dateKey: selectedDate, content: value })
+          .then(() => setSaveStatus("Saved"))
+          .catch(() => setSaveStatus("Not saved"));
       }, 500);
     },
     [selectedDate, currentEntry, upsertEntry, deleteEntryMut],
@@ -157,7 +163,7 @@ export default function JournalPage() {
 
           <div className="tp-panel mt-3 flex-1 flex flex-col p-3 sm:p-4">
             <div className="flex items-center justify-between mb-3">
-              <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${saveStatus === "Saved" ? "text-[#34d399]" : saveStatus === "Saving..." ? "text-amber-400" : "text-white/30"}`}>{saveStatus}</span>
+              <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${saveStatus === "Saved" ? "text-[#34d399]" : saveStatus === "Saving..." ? "text-amber-400" : saveStatus === "Not saved" ? "text-[#ff6b6b]" : "text-white/30"}`}>{saveStatus}</span>
               <span className="text-xs text-white/30">{wordCount(editorContent)} {wordCount(editorContent) === 1 ? "word" : "words"}</span>
             </div>
             <textarea

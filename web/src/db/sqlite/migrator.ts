@@ -77,3 +77,22 @@ export async function runMigrations(): Promise<{
 
   return { applied, skipped };
 }
+
+/**
+ * Memoized single-run wrapper around `runMigrations`. Both the OS-subtree
+ * boot gate and the global auth provider (which opens Realtime + flushes
+ * dirty rows the moment a user is present, regardless of route) call this;
+ * the shared promise guarantees migrations run exactly once and that those
+ * global SQLite touches wait for the schema to exist. Marketing/auth routes
+ * never call it, so a logged-out visitor pays no local-store cost — and a
+ * store-init failure can no longer blank the public marketing site.
+ */
+let migrationsPromise: Promise<{ applied: string[]; skipped: string[] }> | null =
+  null;
+export function ensureMigrations(): Promise<{
+  applied: string[];
+  skipped: string[];
+}> {
+  if (!migrationsPromise) migrationsPromise = runMigrations();
+  return migrationsPromise;
+}

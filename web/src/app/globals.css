@@ -6,6 +6,7 @@
 @import "./styles/chrome-components.css";
 @import "./styles/hud-utilities.css";
 @import "./styles/marketing.css";
+@import "./(marketing)/landing.css";
 
 /* ===== Scrollbar ===== */
 

@@ -3,10 +3,10 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts } from "../../src/theme";
 import { useAuthStore } from "../../src/stores/useAuthStore";
-import { FirstRunPullGate } from "../../src/components/FirstRunPullGate";
 import { CelebrationProvider } from "../../src/components/CelebrationProvider";
 import { StreakSettlementGate } from "../../src/components/StreakSettlementGate";
 import { RankUpWatcher } from "../../src/components/RankUpWatcher";
+import { AccessGate } from "../../src/components/AccessGate";
 
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -22,13 +22,17 @@ export default function TabsLayout() {
   if (!userId) return null;
 
   return (
-    <FirstRunPullGate userId={userId}>
-      <CelebrationProvider>
-        {/* Settle streaks once per open + watch the rank-up queue for the
-            celebration — inside the pull gate so SQLite is populated first.
-            Mirrors web's OSLayout. */}
-        <StreakSettlementGate />
-        <RankUpWatcher />
+    <CelebrationProvider>
+      {/* Settle streaks once per open + watch the rank-up queue for the
+          celebration. The FirstRunPullGate now lives in the ROOT layout
+          (above onboarding), so SQLite is guaranteed populated before
+          these mount. Mirrors web's OSLayout. */}
+      <StreakSettlementGate />
+      <RankUpWatcher />
+      {/* Trial invite + paywall overlay across all tabs. Renders nothing
+          while the user is Pro (trial active or subscribed). Mirrors web's
+          AccessGate mounted in OSLayout. */}
+      <AccessGate />
         <Tabs
           screenOptions={{
             headerShown: false,
@@ -93,7 +97,6 @@ export default function TabsLayout() {
             }}
           />
         </Tabs>
-      </CelebrationProvider>
-    </FirstRunPullGate>
+    </CelebrationProvider>
   );
 }

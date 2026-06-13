@@ -1,4 +1,6 @@
 import * as React from "react";
+import { confirm } from "@/lib/confirm";
+import { toast } from "@/lib/toast";
 
 import { MobileModal } from "../../../../components/ui/MobileModal";
 import {
@@ -6,6 +8,7 @@ import {
   useEngineCompletions,
   useToggleCompletion,
   useCreateTask,
+  useUpdateTask,
   useDeleteTask,
 } from "@/hooks/queries/useTasks";
 import type { EngineKey } from "@/services/tasks";
@@ -41,6 +44,7 @@ export default function GeneralClient() {
   const [newTaskTitle, setNewTaskTitle] = React.useState<string>("");
   const [newTaskPriority, setNewTaskPriority] = React.useState<"main" | "secondary">("main");
   const [newTaskDaysPerWeek, setNewTaskDaysPerWeek] = React.useState<number>(7);
+  const [editingTaskId, setEditingTaskId] = React.useState<string | null>(null);
   const [isAddingTask, setIsAddingTask] = React.useState<boolean>(false);
 
   React.useEffect(() => {
@@ -71,7 +75,21 @@ export default function GeneralClient() {
 
   const toggleCompletion = useToggleCompletion();
   const createTask = useCreateTask();
+  const updateTaskMut = useUpdateTask();
   const deleteTaskMut = useDeleteTask();
+  async function handleDelete(task: { id: string }) {
+    const ok = await confirm({
+      title: "Delete task?",
+      message: "This removes the task and its completion history. This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteTaskMut.mutate(
+      { taskId: task.id, engine: ENGINE },
+      { onSuccess: () => toast.success("Task deleted") },
+    );
+  }
 
   const monthStartKey = React.useMemo(() => monthBounds(dateToISO(visibleMonth)).start, [visibleMonth]);
   const monthEndKey = React.useMemo(() => addDaysISO(monthBounds(dateToISO(visibleMonth)).end, -1), [visibleMonth]);
@@ -117,11 +135,30 @@ export default function GeneralClient() {
     toggleCompletion.mutate({ task: { id: task.id, engine: ENGINE }, dateKey: selectedDateKey });
   }
 
+  function resetTaskForm() {
+    setNewTaskTitle(""); setNewTaskPriority("main"); setNewTaskDaysPerWeek(7); setIsAddingTask(false); setEditingTaskId(null);
+  }
+
   async function handleAddTask() {
     const title = newTaskTitle.trim();
     if (!title) return;
-    createTask.mutate({ engine: ENGINE, title, kind: newTaskPriority, days_per_week: newTaskDaysPerWeek } as any);
-    setNewTaskTitle(""); setNewTaskPriority("main"); setNewTaskDaysPerWeek(7); setIsAddingTask(false);
+    if (editingTaskId) {
+      updateTaskMut.mutate(
+        { taskId: editingTaskId, engine: ENGINE, title, kind: newTaskPriority },
+        { onSuccess: () => toast.success("Task updated") },
+      );
+    } else {
+      createTask.mutate({ engine: ENGINE, title, kind: newTaskPriority, days_per_week: newTaskDaysPerWeek } as any);
+    }
+    resetTaskForm();
+  }
+
+  function handleEditStart(task: any) {
+    if (!task.id) return;
+    setNewTaskTitle(task.title);
+    setNewTaskPriority((task.kind as "main" | "secondary") ?? "main");
+    setEditingTaskId(task.id);
+    setIsAddingTask(true);
   }
 
   return (
@@ -158,7 +195,7 @@ export default function GeneralClient() {
             {secondaryTasks.map((task: any) => (
               <div key={task.id} className="tx-task-row">
                 <div className="tx-task-left"><input type="checkbox" checked={task.completed} onChange={() => handleToggleTask(task)} /><span>{task.title}</span></div>
-                <div className="tx-task-right"><span className="tx-pill">Secondary</span><button type="button" onClick={() => deleteTaskMut.mutate({ taskId: task.id, engine: ENGINE })} className="tp-button tp-button-inline text-xs">Delete</button></div>
+                <div className="tx-task-right"><span className="tx-pill">Secondary</span><button type="button" onClick={() => handleEditStart(task)} className="tp-button tp-button-inline text-xs">Edit</button><button type="button" onClick={() => handleDelete(task)} className="tp-button tp-button-inline text-xs">Delete</button></div>
               </div>
             ))}
           </div>
@@ -171,7 +208,7 @@ export default function GeneralClient() {
             {mainTasks.map((task: any) => (
               <div key={task.id} className="tx-task-row">
                 <div className="tx-task-left"><input type="checkbox" checked={task.completed} onChange={() => handleToggleTask(task)} /><span>{task.title}</span></div>
-                <div className="tx-task-right"><span className="tx-pill">Main</span><button type="button" onClick={() => deleteTaskMut.mutate({ taskId: task.id, engine: ENGINE })} className="tp-button tp-button-inline text-xs">Delete</button></div>
+                <div className="tx-task-right"><span className="tx-pill">Main</span><button type="button" onClick={() => handleEditStart(task)} className="tp-button tp-button-inline text-xs">Edit</button><button type="button" onClick={() => handleDelete(task)} className="tp-button tp-button-inline text-xs">Delete</button></div>
               </div>
             ))}
           </div>
@@ -179,13 +216,13 @@ export default function GeneralClient() {
         </TitanPanel>
       </div>
 
-      <MobileModal open={isAddingTask} onClose={() => { setIsAddingTask(false); setNewTaskTitle(""); }} title="New General Task">
-        <TitanPanelHeader kicker="New General Task" rightSlot={<TitanButton tone="ghost" compact onClick={() => { setIsAddingTask(false); setNewTaskTitle(""); }}>Close</TitanButton>} />
+      <MobileModal open={isAddingTask} onClose={resetTaskForm} title={editingTaskId ? "Edit Task" : "New General Task"}>
+        <TitanPanelHeader kicker={editingTaskId ? "Edit Task" : "New General Task"} rightSlot={<TitanButton tone="ghost" compact onClick={resetTaskForm}>Close</TitanButton>} />
         <div className="mt-4 space-y-4">
           <div><label className="tx-label">Title</label><input value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} className="tx-input" placeholder="Task title" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleAddTask(); }} /></div>
           <div><label className="tx-label">Priority</label><select value={newTaskPriority} onChange={(event) => setNewTaskPriority(event.target.value as "main" | "secondary")} className="tx-select"><option value="main">Main (2 pts)</option><option value="secondary">Secondary (1 pt)</option></select></div>
         </div>
-        <div className="mt-5 flex gap-2"><TitanButton onClick={handleAddTask}>Create</TitanButton><TitanButton tone="ghost" onClick={() => { setIsAddingTask(false); setNewTaskTitle(""); }}>Cancel</TitanButton></div>
+        <div className="mt-5 flex gap-2"><TitanButton onClick={handleAddTask}>{editingTaskId ? "Save" : "Create"}</TitanButton><TitanButton tone="ghost" onClick={resetTaskForm}>Cancel</TitanButton></div>
       </MobileModal>
     </main>
   );

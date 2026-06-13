@@ -1174,6 +1174,7 @@ export type Database = {
           streak_best: number
           streak_current: number
           streak_last_date: string | null
+          trial_started_at: string | null
           tutorial_completed: boolean
           updated_at: string
           xp: number
@@ -1194,6 +1195,7 @@ export type Database = {
           streak_best?: number
           streak_current?: number
           streak_last_date?: string | null
+          trial_started_at?: string | null
           tutorial_completed?: boolean
           updated_at?: string
           xp?: number
@@ -1214,6 +1216,7 @@ export type Database = {
           streak_best?: number
           streak_current?: number
           streak_last_date?: string | null
+          trial_started_at?: string | null
           tutorial_completed?: boolean
           updated_at?: string
           xp?: number

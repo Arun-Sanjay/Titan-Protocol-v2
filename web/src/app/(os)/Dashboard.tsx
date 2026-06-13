@@ -16,6 +16,7 @@ import {
 import { ScoreGauge } from "@/components/ui/ScoreGauge";
 import { useTheme } from "@/components/ui/ThemeProvider";
 import { useDailyPlanning } from "./components/DailyPlanningProvider";
+import { StatsStrip } from "./components/StatsStrip";
 
 type EngineCardModel = {
   key: "body" | "mind" | "money" | "charisma";
@@ -104,6 +105,8 @@ export default function Dashboard() {
         title="Titan OS"
         subtitle={isCyberpunk ? `System online · ${todayKey}` : "Your performance operating system — four engines, one view."}
       />
+
+      <StatsStrip />
 
       <section className="tx-dashboard-grid">
         <div className="tx-dashboard-top">
@@ -401,6 +404,8 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
+              ) : planning.summary.totalPoints === 0 ? (
+                <p className="tx-muted">No tasks yet — add one to an engine to start scoring.</p>
               ) : (
                 <p className="tx-muted">All engines are above threshold.</p>
               )}

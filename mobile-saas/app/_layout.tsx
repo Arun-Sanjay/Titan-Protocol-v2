@@ -1,5 +1,5 @@
 import "react-native-url-polyfill/auto";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -18,6 +18,8 @@ import { useAuthStore } from "../src/stores/useAuthStore";
 import { useOnboardingStore } from "../src/stores/useOnboardingStore";
 import { runMigrations } from "../src/db/sqlite/migrator";
 import { RealtimeProvider } from "../src/components/RealtimeProvider";
+import { FirstRunPullGate } from "../src/components/FirstRunPullGate";
+import { getProfile } from "../src/services/profile";
 import { setupNotificationHandler } from "../src/lib/notifications";
 import { logError } from "../src/lib/error-log";
 import { colors } from "../src/theme";
@@ -40,9 +42,37 @@ export default function RootLayout() {
   const onboardingComplete = useOnboardingStore((s) => s.completed);
 
   const [dbReady, setDbReady] = useState(false);
+  // True once the first-run pull has settled for the current user AND the
+  // device-local onboarding flag has been hydrated from the synced
+  // profile row. The onboarding redirect below must wait for this: the
+  // MMKV flag alone is blind to accounts that onboarded on another
+  // device, and routing them into onboarding used to overwrite their
+  // cloud profile with defaults.
+  const [profileSynced, setProfileSynced] = useState(false);
+  const userId = user?.id ?? null;
 
   const segments = useSegments();
   const router = useRouter();
+
+  // Re-arm the hydration latch whenever the signed-in account changes.
+  useEffect(() => {
+    setProfileSynced(false);
+  }, [userId]);
+
+  const hydrateOnboardingFromProfile = useCallback(async () => {
+    try {
+      const profile = await getProfile();
+      if (profile?.onboarding_completed) {
+        // Account already onboarded (here or on another device) — adopt
+        // it locally so the redirect below goes straight to the tabs.
+        useOnboardingStore.getState().finish();
+      }
+    } catch (e) {
+      logError("rootLayout.hydrateOnboarding", e);
+    } finally {
+      setProfileSynced(true);
+    }
+  }, []);
 
   useEffect(() => {
     initialize();
@@ -78,7 +108,12 @@ export default function RootLayout() {
       return;
     }
 
-    // Authenticated. Onboarding gate sits between auth and tabs.
+    // Authenticated. Hold all onboarding/tab routing until the first-run
+    // pull + profile hydration settle (the FirstRunPullGate splash is
+    // showing meanwhile) — the synced profile row, not the device flag,
+    // decides whether this account still needs onboarding.
+    if (!profileSynced) return;
+
     if (!onboardingComplete && !inOnboardingGroup) {
       router.replace("/(onboarding)/step-1");
       return;
@@ -92,6 +127,7 @@ export default function RootLayout() {
     isLoading,
     dbReady,
     user,
+    profileSynced,
     onboardingComplete,
     segments,
     router,
@@ -101,22 +137,41 @@ export default function RootLayout() {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
   }
 
+  const stack = (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.bg },
+      }}
+    >
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(onboarding)" />
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="+not-found" />
+    </Stack>
+  );
+
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <RealtimeProvider>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: colors.bg },
-              }}
-            >
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(onboarding)" />
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="+not-found" />
-            </Stack>
+            {/* The pull gate sits ABOVE the route tree so a fresh device
+                restores its cloud snapshot before ANY authenticated
+                screen — including onboarding — can render or write. It
+                previously lived inside (tabs), which let onboarding run
+                against an empty cache and push a defaulted profile over
+                the user's real one. */}
+            {user ? (
+              <FirstRunPullGate
+                userId={user.id}
+                onReady={hydrateOnboardingFromProfile}
+              >
+                {stack}
+              </FirstRunPullGate>
+            ) : (
+              stack
+            )}
           </RealtimeProvider>
           <StatusBar style="light" />
         </QueryClientProvider>

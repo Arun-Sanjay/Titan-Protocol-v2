@@ -1,4 +1,6 @@
 import * as React from "react";
+import { confirm } from "@/lib/confirm";
+import { toast } from "@/lib/toast";
 import { Link, useLocation } from "react-router-dom";
 
 import { MobileModal } from "../../../../components/ui/MobileModal";
@@ -7,6 +9,7 @@ import {
   useEngineCompletions,
   useToggleCompletion,
   useCreateTask,
+  useUpdateTask,
   useDeleteTask,
 } from "@/hooks/queries/useTasks";
 import type { EngineKey } from "@/services/tasks";
@@ -70,6 +73,8 @@ export default function MindClient() {
 
   const toggleCompletion = useToggleCompletion();
   const createTask = useCreateTask();
+  const updateTaskMut = useUpdateTask();
+  const [editingTaskId, setEditingTaskId] = React.useState<string | null>(null);
   const deleteTaskMut = useDeleteTask();
 
   const monthStartKey = React.useMemo(() => monthBounds(dateToISO(visibleMonth)).start, [visibleMonth]);
@@ -115,7 +120,25 @@ export default function MindClient() {
 
   async function handleDeleteTask(taskId: string) {
     if (!taskId) return;
-    deleteTaskMut.mutate({ taskId, engine: ENGINE });
+    const ok = await confirm({
+      title: "Delete task?",
+      message: "This removes the task and its completion history. This can't be undone.",
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    deleteTaskMut.mutate(
+      { taskId, engine: ENGINE },
+      { onSuccess: () => toast.success("Task deleted") },
+    );
+  }
+
+  function resetTaskForm() {
+    setNewTaskTitle("");
+    setNewTaskKind("main");
+    setIsAddingTask(false);
+    setEditingTaskId(null);
+    setCreateError(null);
   }
 
   async function handleAddTask() {
@@ -124,16 +147,30 @@ export default function MindClient() {
     setCreatingTask(true);
     setCreateError(null);
     try {
-      createTask.mutate({ engine: ENGINE, title, kind: newTaskKind } as any);
-      setNewTaskTitle("");
-      setNewTaskKind("main");
-      setIsAddingTask(false);
+      if (editingTaskId) {
+        updateTaskMut.mutate(
+          { taskId: editingTaskId, engine: ENGINE, title, kind: newTaskKind },
+          { onSuccess: () => toast.success("Task updated") },
+        );
+      } else {
+        createTask.mutate({ engine: ENGINE, title, kind: newTaskKind } as any);
+      }
+      resetTaskForm();
     } catch (err) {
       console.error(err);
       setCreateError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreatingTask(false);
     }
+  }
+
+  function handleEditStart(task: any) {
+    if (!task.id) return;
+    setNewTaskTitle(task.title);
+    setNewTaskKind((task.kind as "main" | "secondary") ?? "main");
+    setEditingTaskId(task.id);
+    setCreateError(null);
+    setIsAddingTask(true);
   }
 
   return (
@@ -192,7 +229,7 @@ export default function MindClient() {
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="body-badge">SECONDARY</span>
-                    <button type="button" onClick={() => handleDeleteTask(task.id)} className="tp-button tp-button-inline text-xs">Delete</button>
+                    <button type="button" onClick={() => handleEditStart(task)} className="tp-button tp-button-inline text-xs">Edit</button><button type="button" onClick={() => handleDeleteTask(task.id)} className="tp-button tp-button-inline text-xs">Delete</button>
                   </div>
                 </div>
               ))}
@@ -214,7 +251,7 @@ export default function MindClient() {
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="body-badge">MAIN</span>
-                    <button type="button" onClick={() => handleDeleteTask(task.id)} className="tp-button tp-button-inline text-xs">Delete</button>
+                    <button type="button" onClick={() => handleEditStart(task)} className="tp-button tp-button-inline text-xs">Edit</button><button type="button" onClick={() => handleDeleteTask(task.id)} className="tp-button tp-button-inline text-xs">Delete</button>
                   </div>
                 </div>
               ))}
@@ -224,8 +261,8 @@ export default function MindClient() {
         </section>
       </div>
 
-      <MobileModal open={isAddingTask} onClose={() => { setIsAddingTask(false); setNewTaskTitle(""); setCreateError(null); }} title="New Mind Task">
-        <div className="tp-panel-head"><p className="tp-kicker">New Mind Task</p></div>
+      <MobileModal open={isAddingTask} onClose={resetTaskForm} title={editingTaskId ? "Edit Task" : "New Mind Task"}>
+        <div className="tp-panel-head"><p className="tp-kicker">{editingTaskId ? "Edit Task" : "New Mind Task"}</p></div>
         <div className="mt-4 space-y-4">
           <div><label className="body-label">Title</label><input value={newTaskTitle} onChange={(event) => setNewTaskTitle(event.target.value)} className="body-input" placeholder="Task title" /></div>
           <div><label className="body-label">Priority</label>
@@ -236,8 +273,8 @@ export default function MindClient() {
         </div>
         {createError ? (<div className="mt-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">{createError}</div>) : null}
         <div className="mt-5 flex gap-2">
-          <button type="button" onClick={handleAddTask} className="tp-button w-auto px-4">{creatingTask ? "Creating..." : "Create"}</button>
-          <button type="button" onClick={() => { setIsAddingTask(false); setNewTaskTitle(""); setCreateError(null); }} className="tp-button w-auto px-4">Cancel</button>
+          <button type="button" onClick={handleAddTask} className="tp-button w-auto px-4">{creatingTask ? "Saving..." : editingTaskId ? "Save" : "Create"}</button>
+          <button type="button" onClick={resetTaskForm} className="tp-button w-auto px-4">Cancel</button>
         </div>
       </MobileModal>
     </main>

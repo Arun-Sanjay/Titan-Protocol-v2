@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentUserId } from "../../lib/session";
+import { runAchievementCheck } from "../../lib/achievement-integration";
 import {
   listJournalEntries,
   getJournalEntry,
@@ -68,6 +69,8 @@ export function useUpsertJournalEntry() {
     onSettled: (_data, _err, vars) => {
       qc.invalidateQueries({ queryKey: journalKeys.all });
       qc.invalidateQueries({ queryKey: journalKeys.byDate(vars.dateKey) });
+      // Journal-count achievements (e.g. Journal Keeper) live here.
+      void runAchievementCheck(qc);
     },
   });
 }

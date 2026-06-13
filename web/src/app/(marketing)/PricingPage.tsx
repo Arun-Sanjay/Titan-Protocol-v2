@@ -109,8 +109,8 @@ const FAQ = [
     a: "Local-first SQLite cache on each device, Supabase as the source of truth, RLS so only you can read your rows. We don't sell data; we don't train on it.",
   },
   {
-    q: "Can I export everything?",
-    a: "Yes. Settings has a full JSON / CSV export. Your data is yours — you can leave anytime.",
+    q: "Can I leave anytime?",
+    a: "Yes. Your data is yours: deleting your account from Settings permanently erases everything we hold, immediately. A self-serve JSON/CSV export is on the roadmap — until it ships, email us and we'll send you your data.",
   },
   {
     q: "What's the difference vs the Classic apps?",
@@ -118,7 +118,7 @@ const FAQ = [
   },
   {
     q: "Do I need an account?",
-    a: "Yes — that's what makes sync work. Email + password or Google sign-in. We send verification but otherwise we leave you alone.",
+    a: "Yes — that's what makes sync work. Email + password or Google sign-in, and otherwise we leave you alone.",
   },
   {
     q: "Will my data leave my region?",

@@ -1,12 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import { pullIfEmpty } from "../sync/first-run-pull";
 import type { RestoreProgress } from "../sync/restore";
 import { colors, fonts, spacing } from "../theme";
 
 interface Props {
   userId: string;
+  /**
+   * Invoked once per user after the pull settles (success or failure),
+   * before children render. The root layout uses it to hydrate the
+   * device-local onboarding flag from the freshly pulled profile row so
+   * an already-onboarded account is never routed back into onboarding.
+   */
+  onReady?: () => Promise<void> | void;
   children: React.ReactNode;
 }
 
@@ -17,43 +24,58 @@ interface Props {
  *
  * Mirrors web's component — same logic, RN primitives instead of `<div>`.
  */
-export function FirstRunPullGate({ userId, children }: Props) {
-  const [status, setStatus] = useState<"checking" | "syncing" | "ready">(
-    "checking",
-  );
+export function FirstRunPullGate({ userId, onReady, children }: Props) {
+  const [status, setStatus] = useState<
+    "checking" | "syncing" | "error" | "ready"
+  >("checking");
   const [progress, setProgress] = useState<RestoreProgress | null>(null);
   const ranForRef = useRef<string | null>(null);
+  // Keep the latest callback without re-triggering the pull effect.
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
-  useEffect(() => {
-    // ranForRef guards the userId so we only kick off pullIfEmpty once per
-    // user — even under React.StrictMode's mount → unmount → remount cycle.
-    // The remount returns early because ranForRef.current === userId from
-    // the first mount, so we don't fire a second concurrent pull.
-    //
-    // Note: we DO NOT use a `cancelled` flag to gate the final setStatus.
-    // StrictMode would set cancelled=true on the cleanup between mounts;
-    // the first mount's async then completes with cancelled=true and skips
-    // setStatus, leaving the gate stuck in "checking" forever (renders
-    // null → blank screen). React 19 treats setState on an unmounted
-    // component as a no-op, so the unconditional setStatus is safe and
-    // prevents that hang.
-    if (ranForRef.current === userId) return;
-    ranForRef.current = userId;
-
-    void (async () => {
-      try {
-        await pullIfEmpty(userId, (p) => {
-          setStatus("syncing");
-          setProgress(p);
-        });
-      } catch {
-        // fall through — setStatus below still fires
-      }
-      setStatus("ready");
-    })();
+  const runPull = useCallback(async () => {
+    setStatus("checking");
+    setProgress(null);
+    let ok = false;
+    try {
+      const res = await pullIfEmpty(userId, (p) => {
+        setStatus("syncing");
+        setProgress(p);
+      });
+      ok = res.ok;
+    } catch {
+      ok = false;
+    }
+    // On failure, surface an error + Retry rather than rendering the app over
+    // an empty cache: an unsurfaced first-run pull failure looks identical to
+    // total data loss, and on a fresh device the cloud is the only copy. It
+    // also used to feed the onboarding-wipe path (defaulted profile pushed
+    // over the real one).
+    if (!ok) {
+      setStatus("error");
+      return;
+    }
+    try {
+      await onReadyRef.current?.();
+    } catch {
+      // hydration is best-effort; never wedge the gate
+    }
+    setStatus("ready");
   }, [userId]);
 
+  useEffect(() => {
+    // ranForRef guards the userId so we only auto-run the pull once per user
+    // — even under StrictMode's mount → unmount → remount cycle. setState on
+    // an unmounted component is a no-op in React 19, so a pull settling after
+    // a StrictMode unmount is harmless. The Retry button calls runPull directly.
+    if (ranForRef.current === userId) return;
+    ranForRef.current = userId;
+    void runPull();
+  }, [userId, runPull]);
+
   if (status === "syncing") return <PullSplash progress={progress} />;
+  if (status === "error") return <PullError onRetry={() => void runPull()} />;
   if (status === "checking") return null;
   return <>{children}</>;
 }
@@ -75,6 +97,21 @@ function PullSplash({ progress }: { progress: RestoreProgress | null }) {
       <Text style={styles.meta}>
         {currentTable} · {rows} rows
       </Text>
+    </View>
+  );
+}
+
+function PullError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View style={styles.root}>
+      <Text style={[styles.label, { color: "#ff6b6b" }]}>SYNC FAILED</Text>
+      <Text style={styles.headline}>Could not load your data</Text>
+      <Text style={[styles.meta, { textAlign: "center", maxWidth: 320 }]}>
+        Check your connection and try again — your data is safe in the cloud.
+      </Text>
+      <Pressable onPress={onRetry} style={styles.retryBtn}>
+        <Text style={styles.retryLabel}>RETRY</Text>
+      </Pressable>
     </View>
   );
 }
@@ -105,4 +142,12 @@ const styles = StyleSheet.create({
   },
   barFill: { height: "100%", backgroundColor: colors.accent },
   meta: { ...fonts.caption, color: colors.textMuted, letterSpacing: 1.5 },
+  retryBtn: {
+    marginTop: spacing.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  retryLabel: { ...fonts.caption, color: colors.text, letterSpacing: 2 },
 });

@@ -84,14 +84,16 @@ export default function SleepPage() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   async function handleSave() {
+    // Pass bedtime/wakeTime — the service packs them into the notes JSON
+    // envelope + derives hours_slept, so the schedule survives the round trip
+    // (previously dropped, rendering "0h 0m" + diverging from mobile).
     upsertSleep.mutate({
       date_key: dateKey,
       bedtime,
-      wake_time: wakeTime,
-      duration_minutes: duration,
+      wakeTime,
       quality,
       notes: notes.trim(),
-    } as any);
+    });
     setNotes("");
   }
 
@@ -264,8 +266,9 @@ export default function SleepPage() {
                       {entry.date_key}
                     </p>
                     <p className="text-xs text-white/50">
-                      {entry.bedtime} → {entry.wake_time} •{" "}
-                      {formatDuration(entry.duration_minutes ?? 0)}
+                      {entry.bedtime && entry.wakeTime
+                        ? `${entry.bedtime} → ${entry.wakeTime} • ${formatDuration(entry.duration_minutes ?? 0)}`
+                        : formatDuration(entry.duration_minutes ?? 0)}
                     </p>
                   </div>
                 </div>

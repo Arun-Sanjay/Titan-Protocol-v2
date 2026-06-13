@@ -1,4 +1,5 @@
 import "react-native-url-polyfill/auto";
+import { AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import { useAuthStore } from "../stores/useAuthStore";
@@ -18,6 +19,22 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+});
+
+/**
+ * Supabase-RN requirement: only run the token auto-refresh ticker while the
+ * app is foregrounded, and resume it the moment the app returns. Without
+ * this, supabase-js keeps the refresh timer alive across backgrounding and
+ * fires a burst of refreshes on resume — which can trip a /token 429 and a
+ * spurious SIGNED_OUT (the very failure `useAuthStore`'s recovery exists to
+ * absorb). See https://supabase.com/docs/reference/javascript/auth-startautorefresh
+ */
+AppState.addEventListener("change", (state) => {
+  if (state === "active") {
+    void supabase.auth.startAutoRefresh();
+  } else {
+    void supabase.auth.stopAutoRefresh();
+  }
 });
 
 /**

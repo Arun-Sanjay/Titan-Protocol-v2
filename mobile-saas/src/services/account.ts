@@ -1,4 +1,4 @@
-import { supabase, requireUserId } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 import { SYNCED_TABLES } from "../sync/tables";
 import { transaction } from "../db/sqlite/client";
 
@@ -12,27 +12,31 @@ export async function wipeAllLocalUserData(): Promise<void> {
 }
 
 /**
- * Delete all user data — both cloud (Supabase) and local (SQLite).
+ * Permanently delete the signed-in user's account — server first, then
+ * this device.
  *
- *   1. Delete the profile row on Supabase. Every child table has
- *      `ON DELETE CASCADE` on the `user_id` foreign key, so the server
- *      wipes everything belonging to this user.
- *   2. Wipe the local SQLite tables so no stale data lingers after the
- *      next sign-in on this device.
- *   3. Sign out so the app returns to the login screen.
+ *   1. Invoke the `delete-account` Edge Function. It resolves the caller
+ *      from the JWT and (with the service role) deletes the auth.users
+ *      row; the FK graph cascades through profiles into every user-data
+ *      table. A client-side `profiles` delete CANNOT work here:
+ *      `profiles` has no DELETE RLS policy (so it silently affects zero
+ *      rows) and the auth user would survive anyway.
+ *   2. Wipe the local SQLite cache.
+ *
+ * The caller is responsible for the final `useAuthStore.signOut()` so
+ * the device-local flags (onboarding MMKV, query cache) reset through
+ * the one canonical sign-out path.
  */
-export async function deleteAllUserData(): Promise<void> {
-  const userId = await requireUserId();
+export async function deleteAccount(): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("delete-account", {
+    method: "POST",
+  });
+  if (error) {
+    throw new Error(`[account] delete failed: ${error.message}`);
+  }
+  if (!(data as { deleted?: boolean } | null)?.deleted) {
+    throw new Error("[account] delete failed: unexpected server response");
+  }
 
-  // Server-side cascade via profiles delete.
-  const { error } = await supabase
-    .from("profiles")
-    .delete()
-    .eq("id", userId);
-  if (error) throw error;
-
-  // Local wipe so we don't upload stale rows on the next backup.
   await wipeAllLocalUserData();
-
-  await supabase.auth.signOut();
 }

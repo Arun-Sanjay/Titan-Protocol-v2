@@ -1,6 +1,7 @@
 import { requireUserId } from "../lib/supabase";
 import {
   sqliteGet,
+  cloudGet,
   cloudUpsert,
   transaction,
 } from "../db/sqlite/service-helpers";
@@ -14,9 +15,31 @@ export async function getProfile(): Promise<Profile | null> {
 }
 
 /**
- * Merge-update the profile row. Read existing → apply partial → write. If
- * no row exists yet, start from a defaulted base (matches the Supabase
- * `handle_new_user` trigger's output plus JS-typed values).
+ * Make sure the canonical profile row is present in the local cache.
+ * Cache first; on a miss (fresh device, before the first-run pull has
+ * seeded SQLite) fall back to the cloud row — the Supabase
+ * `handle_new_user` trigger guarantees one exists for every account, and
+ * `cloudGet` mirrors it into SQLite so the transactional read below
+ * finds it.
+ *
+ * Throws when neither side has the row: merging onto an invented default
+ * is what used to push a zeroed profile (xp 0 / level 1 / streak 0 /
+ * display_name null) over an existing user's cloud row when onboarding
+ * ran on a new device, and Realtime then spread the wipe to every other
+ * signed-in device.
+ */
+async function ensureProfileBase(userId: string): Promise<void> {
+  const cached = await sqliteGet<Profile>("profiles", { id: userId });
+  if (cached) return;
+  const cloud = await cloudGet<Profile>("profiles", { id: userId });
+  if (cloud) return;
+  throw new Error(
+    "[profile] no profile row in cache or cloud — refusing to write defaults",
+  );
+}
+
+/**
+ * Merge-update the profile row. Read existing → apply partial → write.
  *
  * Wrapped in a SQLite transaction so the read-modify-write is atomic
  * relative to other profile writes. Without this, two concurrent
@@ -29,10 +52,14 @@ export async function upsertProfile(
   updates: Partial<Omit<Profile, "id" | "created_at">>,
 ): Promise<Profile> {
   const userId = await requireUserId();
+  // The network fallback runs BEFORE the transaction — never inside it.
+  await ensureProfileBase(userId);
   return transaction(async () => {
     const existing = await sqliteGet<Profile>("profiles", { id: userId });
-    const base: Profile = existing ?? defaultProfile(userId);
-    const merged: Profile = { ...base, ...updates };
+    if (!existing) {
+      throw new Error("[profile] profile row missing mid-write");
+    }
+    const merged: Profile = { ...existing, ...updates };
     return cloudUpsert("profiles", merged);
   });
 }
@@ -51,14 +78,17 @@ export async function awardXP(xpDelta: number): Promise<{
   xp: number;
 }> {
   const userId = await requireUserId();
+  await ensureProfileBase(userId);
   return transaction(async () => {
     const existing = await sqliteGet<Profile>("profiles", { id: userId });
-    const base: Profile = existing ?? defaultProfile(userId);
-    const oldXP = base.xp ?? 0;
-    const oldLevel = base.level ?? 1;
+    if (!existing) {
+      throw new Error("[profile] profile row missing mid-write");
+    }
+    const oldXP = existing.xp ?? 0;
+    const oldLevel = existing.level ?? 1;
     const newXP = Math.max(0, oldXP + xpDelta);
     const newLevel = Math.floor(newXP / 500) + 1;
-    await cloudUpsert("profiles", { ...base, xp: newXP, level: newLevel });
+    await cloudUpsert("profiles", { ...existing, xp: newXP, level: newLevel });
     return {
       leveledUp: newLevel > oldLevel,
       fromLevel: oldLevel,
@@ -66,28 +96,4 @@ export async function awardXP(xpDelta: number): Promise<{
       xp: newXP,
     };
   });
-}
-
-function defaultProfile(userId: string): Profile {
-  const now = new Date().toISOString();
-  return {
-    id: userId,
-    email: null,
-    display_name: null,
-    archetype: null,
-    level: 1,
-    xp: 0,
-    streak_current: 0,
-    streak_best: 0,
-    streak_last_date: null,
-    mode: "full_protocol",
-    focus_engines: [],
-    onboarding_completed: false,
-    tutorial_completed: false,
-    first_use_date: null,
-    first_task_completed_at: null,
-    expo_push_token: null,
-    created_at: now,
-    updated_at: now,
-  };
 }

@@ -11,8 +11,8 @@
 import { supabase, requireUserId } from "../lib/session";
 import { logError } from "../lib/error-log";
 import { run, transaction } from "../db/sqlite/client";
-import { rowToSqlite } from "../db/sqlite/coerce";
-import { PULL_ORDER } from "./tables";
+import { rowToSqlite, knownSqliteColumns } from "../db/sqlite/coerce";
+import { PULL_ORDER, primaryKeyFor } from "./tables";
 import type { Database } from "@titan/shared/types/supabase";
 
 type SyncedTableName = keyof Database["public"]["Tables"];
@@ -78,10 +78,16 @@ export async function restoreFromCloud(
     let offset = 0;
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      const { data, error } = await supabase
-        .from(table as SyncedTableName)
-        .select("*")
-        .range(offset, offset + PAGE_SIZE - 1);
+      // Stable pagination: `.range()` without an explicit order lets
+      // Postgres return rows in an arbitrary (and between-page-inconsistent)
+      // order, so rows can be silently skipped OR duplicated once a table
+      // exceeds one page (~1 active year of completions). Order by the
+      // primary key — always present and unique — for a deterministic sweep.
+      let query = supabase.from(table as SyncedTableName).select("*");
+      for (const pkCol of primaryKeyFor(table)) {
+        query = query.order(pkCol, { ascending: true });
+      }
+      const { data, error } = await query.range(offset, offset + PAGE_SIZE - 1);
 
       if (error) {
         logError("restore.select.failed", error, { table });
@@ -120,7 +126,7 @@ export async function restoreFromCloud(
           const sqliteRow = rowToSqlite(table, row);
           sqliteRow._dirty = 0;
           sqliteRow._deleted = 0;
-          const cols = Object.keys(sqliteRow);
+          const cols = knownSqliteColumns(table, sqliteRow);
           const placeholders = cols.map(() => "?").join(", ");
           await run(
             `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders})`,

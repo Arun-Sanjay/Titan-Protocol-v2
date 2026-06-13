@@ -29,7 +29,7 @@ import { restoreFromCloud, type RestoreProgress } from "./restore";
 export async function pullIfEmpty(
   userId: string,
   onProgress?: (p: RestoreProgress) => void,
-): Promise<{ pulled: boolean }> {
+): Promise<{ pulled: boolean; ok: boolean }> {
   try {
     // Three representative tables: tasks (most users have at least one),
     // habits (almost always populated), profiles (single row per user on
@@ -46,7 +46,7 @@ export async function pullIfEmpty(
     ]);
 
     if (tasks + habits + profile > 0) {
-      return { pulled: false };
+      return { pulled: false, ok: true };
     }
 
     const result = await restoreFromCloud(onProgress);
@@ -55,11 +55,15 @@ export async function pullIfEmpty(
         userId,
         errorTable: "errorTable" in result ? result.errorTable : undefined,
       });
+      // The cache is still empty and we couldn't fill it. Report failure so
+      // the gate shows an error + Retry instead of rendering "ready" over an
+      // empty store — which looks exactly like total data loss.
+      return { pulled: true, ok: false };
     }
-    return { pulled: true };
+    return { pulled: true, ok: true };
   } catch (err) {
     logError("first-run-pull.exception", err, { userId });
-    return { pulled: false };
+    return { pulled: false, ok: false };
   }
 }
 

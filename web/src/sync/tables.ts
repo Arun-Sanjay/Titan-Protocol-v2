@@ -43,7 +43,7 @@ export const TABLE_QUERY_KEY_ROOTS: Record<string, readonly string[]> = {
   money_transactions: ["money"],
   money_loans: ["money"],
   journal_entries: ["journal"],
-  achievements_unlocked: ["achievements"],
+  achievements_unlocked: ["achievements_unlocked"],
   goals: ["goals"],
   quests: ["quests"],
   boss_challenges: ["boss_challenges"],

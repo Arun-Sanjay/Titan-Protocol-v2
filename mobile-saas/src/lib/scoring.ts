@@ -15,6 +15,7 @@
 
 import {
   addDaysISO,
+  dateToISO,
   assertDateISO,
   listDateRangeISO,
   monthBounds,
@@ -194,6 +195,18 @@ function computeScoreForDate(snapshot: EngineSnapshot, dateKey: string): DayScor
   let secondaryDone = 0;
 
   for (const task of snapshot.tasks) {
+    // A task only counts toward days it already existed on. Without this, a
+    // task created today shows up as an incomplete "main" on every past day,
+    // silently rewriting history and resetting the consistency streak
+    // (audit §3.6). createdAt is the task's creation instant (ms); compare
+    // its local date-key to the day being scored.
+    if (
+      Number.isFinite(task.createdAt) &&
+      dateToISO(new Date(task.createdAt)) > dateKey
+    ) {
+      continue;
+    }
+
     const daysPerWeek = task.daysPerWeek ?? 7;
     if (daysPerWeek < 7) {
       const weekCount = countWeeklyCompletions(task.id!, weekStart, dateKey, snapshot.completionsByTask);

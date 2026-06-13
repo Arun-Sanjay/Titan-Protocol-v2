@@ -6,6 +6,7 @@ import {
 } from "@/hooks/queries/useBudgets";
 import { useTransactions } from "@/hooks/queries/useMoney";
 import { monthBounds, todayISO } from "@/lib/date";
+import { formatMoney, type MoneyCurrency } from "@/lib/money_format";
 
 const CATEGORY_SUGGESTIONS = ["Food", "Transport", "Rent", "Groceries", "Utilities", "Health", "Education", "Bills", "Entertainment", "Dining Out", "Shopping", "Travel", "Gaming", "Other"];
 
@@ -14,6 +15,12 @@ export default function BudgetsPage() {
   const { data: allTx } = useTransactions();
   const createBudget = useCreateBudget();
   const deleteBudgetMut = useDeleteBudget();
+  // Match the currency the Finance Tracker uses (audit §5.9 — budgets used to
+  // hardcode "$"). Stored device-locally by MoneyExpenseClient.
+  const [currency] = React.useState<MoneyCurrency>(() => {
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem("money.currency") : null;
+    return (stored as MoneyCurrency) ?? "USD";
+  });
 
   // Compute spending from transactions
   const spending = React.useMemo(() => {
@@ -74,7 +81,7 @@ export default function BudgetsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-sm font-medium text-white/90">{item.budget.category}</p>
-                      <p className="text-xs text-white/50">${item.spent.toLocaleString()} / ${item.budget.monthly_limit?.toLocaleString()}</p>
+                      <p className="text-xs text-white/50">{formatMoney(item.spent, currency)} / {formatMoney(item.budget.monthly_limit ?? 0, currency)}</p>
                     </div>
                     <div className="h-2 w-full overflow-hidden rounded bg-white/5">
                       <div className="h-full transition-all duration-300" style={{ width: `${Math.min(100, item.percent)}%`, backgroundColor: barColor(item.percent) }} />
@@ -94,7 +101,7 @@ export default function BudgetsPage() {
             <p className="tp-kicker mb-1">New Budget</p>
             <div className="space-y-4">
               <div><label className="body-label">Category</label><input type="text" className="body-input" placeholder="e.g. Food" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} list="budget-categories" autoFocus /><datalist id="budget-categories">{CATEGORY_SUGGESTIONS.map((c) => (<option key={c} value={c} />))}</datalist></div>
-              <div><label className="body-label">Monthly Limit ($)</label><input type="number" className="body-input" placeholder="500" min={1} value={newLimit} onChange={(e) => setNewLimit(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }} /></div>
+              <div><label className="body-label">Monthly Limit</label><input type="number" className="body-input" placeholder="500" min={1} value={newLimit} onChange={(e) => setNewLimit(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }} /></div>
             </div>
             <div className="mt-5 flex gap-2">
               <button type="button" onClick={handleAdd} className="tp-button inline-flex w-auto px-5" disabled={!newCategory.trim() || !newLimit}>Add Budget</button>

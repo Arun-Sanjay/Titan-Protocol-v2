@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabase";
 import { logError } from "../lib/error-log";
 import { queryClient } from "../lib/query-client";
@@ -35,12 +36,13 @@ type AuthState = {
  *
  * ─── Sign-out ───────────────────────────────────────────────────────────────
  *
- * `signOut` wipes local SQLite (every synced table) BEFORE calling
- * `supabase.auth.signOut`. The wipe-first ordering matters: if the cloud
- * call fails we still don't want the next user on this device to see the
- * previous user's cached rows. Onboarding-store clearing (Classic's
- * dynamic import of `useOnboardingStore`) lands in M5; services/profile
- * ensure-row lands in M3.
+ * `signOut` clears this device's push token from the cloud profile (so
+ * the next account doesn't receive the previous user's pushes), wipes
+ * local SQLite (every synced table) BEFORE calling
+ * `supabase.auth.signOut`, and resets the device-local onboarding flags.
+ * The wipe-first ordering matters: if the cloud call fails we still
+ * don't want the next user on this device to see the previous user's
+ * cached rows.
  */
 
 let explicitSignOut = false;
@@ -58,18 +60,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { isLoading } = get();
     if (!isLoading) return;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const nextUser = session?.user ?? null;
-      const prevUserId = get().user?.id ?? null;
-      if (nextUser && prevUserId !== nextUser.id) {
-        queryClient.clear();
-      }
-      set((prev) => ({
-        session: session ?? prev.session,
-        user: nextUser ?? prev.user,
-        isLoading: false,
-      }));
-    });
+    // Offline-tolerant cold start: rehydrate any persisted session straight
+    // from storage BEFORE the network round-trip, so a returning user who
+    // opens the app offline lands in their cached app instead of being
+    // bounced to login. Additive only — getSession / INITIAL_SESSION below
+    // still reconcile, and a real SIGNED_OUT clears it + wipes the cache.
+    void hydratePersistedSession(get, set);
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        const nextUser = session?.user ?? null;
+        const prevUserId = get().user?.id ?? null;
+        if (nextUser && prevUserId !== nextUser.id) {
+          queryClient.clear();
+        }
+        set((prev) => ({
+          session: session ?? prev.session,
+          user: nextUser ?? prev.user,
+          isLoading: false,
+        }));
+      })
+      .catch((e) => {
+        // Offline / transient: don't wedge on the splash. Any session the
+        // optimistic rehydrate found is kept; otherwise INITIAL_SESSION
+        // settles isLoading.
+        logError("useAuthStore.getSession", e);
+        set({ isLoading: false });
+      });
 
     const {
       data: { subscription },
@@ -107,6 +125,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     explicitSignOut = true;
+    // Remove this device's push token from the cloud profile FIRST — it
+    // needs both the cached profile row and a live session, and skipping
+    // it leaves the token on the old account so the next user on this
+    // device receives the previous user's pushes (streak warnings etc.).
+    // Dynamic import: push-token.ts imports this store.
+    try {
+      const { clearPushToken } = await import("../lib/push-token");
+      await clearPushToken();
+    } catch (e) {
+      logError("useAuthStore.signOut.clearPushToken", e);
+    }
     // Wipe the local cache BEFORE the cloud sign-out. If the network
     // call fails we still don't want the next account on this device
     // to see the previous user's rows.
@@ -114,6 +143,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await wipeAllSyncedTables();
     } catch (e) {
       logError("useAuthStore.signOut.wipe", e);
+    }
+    // Reset device-local onboarding flags (the onboarding store's
+    // documented sign-out contract) so the next account neither skips
+    // onboarding nor inherits this user's identity/goals.
+    try {
+      const { useOnboardingStore } = await import("./useOnboardingStore");
+      useOnboardingStore.getState().clearForSignOut();
+    } catch (e) {
+      logError("useAuthStore.signOut.onboarding", e);
     }
     try {
       await supabase.auth.signOut();
@@ -126,6 +164,41 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 }));
+
+/**
+ * Read the persisted Supabase session straight from AsyncStorage and adopt
+ * it if the store has no user yet. supabase-js can resolve `getSession()` to
+ * null on an offline cold start (expired access token, no network to
+ * refresh); without this, a returning user with a full local cache gets
+ * bounced to login. Best-effort and additive — never clears a user, never
+ * throws into boot.
+ */
+async function hydratePersistedSession(
+  get: () => AuthState,
+  set: (partial: Partial<AuthState>) => void,
+) {
+  try {
+    if (get().user) return;
+    const keys = await AsyncStorage.getAllKeys();
+    const tokenKey = keys.find(
+      (k) => k.startsWith("sb-") && k.endsWith("-auth-token"),
+    );
+    if (!tokenKey) return;
+    const raw = await AsyncStorage.getItem(tokenKey);
+    if (!raw) return;
+    // supabase-js v2 stores the Session JSON directly; older gotrue nested
+    // it under `currentSession`. Handle both, defensively.
+    const parsed = JSON.parse(raw) as
+      | (Session & { currentSession?: Session })
+      | null;
+    const session = (parsed?.currentSession ?? parsed) as Session | null;
+    if (session?.user && !get().user) {
+      set({ session, user: session.user, isLoading: false });
+    }
+  } catch (e) {
+    logError("useAuthStore.hydratePersisted", e);
+  }
+}
 
 function handleSignedOut(
   get: () => AuthState,

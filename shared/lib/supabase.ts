@@ -18,6 +18,14 @@ export type SupabaseInitOptions = {
   storage?: any;
   /** Mobile: false. Web: true (for OAuth redirects). */
   detectSessionInUrl?: boolean;
+  /**
+   * Web passes "pkce": auth codes come back in the QUERY string
+   * (`?code=…`), which survives the app's HashRouter URLs. The default
+   * implicit flow appends `#access_token=…` — a second fragment that
+   * collides with the app's own `#/route` and never parses. PKCE is also
+   * what makes password-recovery email links work.
+   */
+  flowType?: "pkce" | "implicit";
 };
 
 export function initSupabase(options: SupabaseInitOptions): SupabaseClient<Database> {
@@ -27,6 +35,7 @@ export function initSupabase(options: SupabaseInitOptions): SupabaseClient<Datab
       persistSession: true,
       detectSessionInUrl: options.detectSessionInUrl ?? true,
       ...(options.storage ? { storage: options.storage } : {}),
+      ...(options.flowType ? { flowType: options.flowType } : {}),
     },
   });
   return supabase;

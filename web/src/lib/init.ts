@@ -20,4 +20,8 @@ initSupabase({
   url: SUPABASE_URL,
   anonKey: SUPABASE_ANON_KEY,
   detectSessionInUrl: true,
+  // PKCE: OAuth + password-recovery codes land in the query string
+  // (?code=…), which coexists with HashRouter — the implicit flow's
+  // #access_token fragment collided with our #/ routes and never parsed.
+  flowType: "pkce",
 });

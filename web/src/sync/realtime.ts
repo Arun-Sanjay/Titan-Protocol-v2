@@ -19,8 +19,8 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { QueryClient } from "@tanstack/react-query";
 import { supabase } from "../lib/session";
-import { run } from "../db/sqlite/client";
-import { rowToSqlite } from "../db/sqlite/coerce";
+import { get, run } from "../db/sqlite/client";
+import { rowToSqlite, rowFromSqlite, knownSqliteColumns } from "../db/sqlite/coerce";
 import { logError } from "../lib/error-log";
 import { SYNCED_TABLES, primaryKeyFor } from "./tables";
 import { invalidateScoring, tableAffectsScoring } from "../lib/score-invalidation";
@@ -91,33 +91,17 @@ async function handleChange(
 ): Promise<void> {
   const { table, eventType } = payload;
 
+  let applied = false;
   try {
-    if (eventType === "DELETE") {
-      const pkCols = primaryKeyFor(table);
-      const old = payload.old;
-      const whereClause = pkCols.map((c) => `${c} = ?`).join(" AND ");
-      await run(
-        `DELETE FROM ${table} WHERE ${whereClause}`,
-        pkCols.map((c) => old[c]),
-      );
-    } else {
-      const row = payload.new;
-      const sqliteReady = rowToSqlite(table, {
-        ...row,
-        _dirty: 0,
-        _deleted: 0,
-      });
-      const cols = Object.keys(sqliteReady);
-      const placeholders = cols.map(() => "?").join(", ");
-      await run(
-        `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders})`,
-        cols.map((c) => sqliteReady[c]),
-      );
-    }
+    applied = await applyChangeToCache(payload);
   } catch (err) {
     logError("realtime.apply.failed", err, { table, eventType });
     return;
   }
+  // Skipped — a pending local write we must not clobber, or a stale
+  // out-of-order event. The cache is unchanged, so there's nothing to
+  // refetch.
+  if (!applied) return;
 
   // Broad invalidation — query keys vary across hooks (some use the
   // table name, some use a shorter root like "habits" for "habit_logs").
@@ -138,6 +122,71 @@ async function handleChange(
   if (tableAffectsScoring(table)) {
     invalidateScoring(queryClient);
   }
+}
+
+/**
+ * Apply one Realtime change to the local SQLite cache. Returns `true` if
+ * the cache was modified, `false` if the event was intentionally skipped.
+ *
+ * Conflict rules — full-row last-write-wins, but never destructive to
+ * unsynced local intent:
+ *   • A row carrying a pending local write (`_dirty=1`) is left untouched.
+ *     Applying the event would drop the user's offline edit — or, for a
+ *     pending offline delete (`_deleted=1,_dirty=1`), resurrect a row they
+ *     deleted. The dirty-row flush + catch-up resync reconcile it later
+ *     against the server.
+ *   • Non-delete events are MERGED over the existing local row, not blindly
+ *     replaced: Postgres can omit unchanged TOAST-able columns (long text /
+ *     json) from an UPDATE payload, and a blind `INSERT OR REPLACE` would
+ *     null them in this device's cache until a full resync.
+ *   • An event older than what we already hold (by `updated_at`) is ignored
+ *     — Realtime can deliver out of order after a reconnect.
+ */
+async function applyChangeToCache(payload: ChangePayload): Promise<boolean> {
+  const { table, eventType } = payload;
+  const pkCols = primaryKeyFor(table);
+  const whereClause = pkCols.map((c) => `${c} = ?`).join(" AND ");
+
+  if (eventType === "DELETE") {
+    const old = payload.old;
+    const existing = await get<{ _dirty: number }>(
+      `SELECT _dirty FROM ${table} WHERE ${whereClause}`,
+      pkCols.map((c) => old[c]),
+    );
+    // Preserve a pending local write rather than letting a remote delete
+    // wipe it; the flush pushes our version back up (LWW resolves server-side).
+    if (existing && Number(existing._dirty) === 1) return false;
+    await run(`DELETE FROM ${table} WHERE ${whereClause}`, pkCols.map((c) => old[c]));
+    return true;
+  }
+
+  const newRow = payload.new;
+  const existingRaw = await get<Record<string, unknown>>(
+    `SELECT * FROM ${table} WHERE ${whereClause}`,
+    pkCols.map((c) => newRow[c]),
+  );
+  if (existingRaw && Number(existingRaw._dirty) === 1) return false;
+
+  const existingDecoded = existingRaw
+    ? (rowFromSqlite(table, existingRaw) as Record<string, unknown>)
+    : {};
+  if (
+    typeof existingDecoded.updated_at === "string" &&
+    typeof newRow.updated_at === "string" &&
+    newRow.updated_at < existingDecoded.updated_at
+  ) {
+    return false;
+  }
+
+  const merged = { ...existingDecoded, ...newRow, _dirty: 0, _deleted: 0 };
+  const sqliteReady = rowToSqlite(table, merged);
+  const cols = knownSqliteColumns(table, sqliteReady);
+  const placeholders = cols.map(() => "?").join(", ");
+  await run(
+    `INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${placeholders})`,
+    cols.map((c) => sqliteReady[c]),
+  );
+  return true;
 }
 
 /**
@@ -177,11 +226,11 @@ const SHORT_ROOT_FOR_TABLE: Record<string, string> = {
   mind_training_results: "mindTraining",
   narrative_entries: "narrative",
   narrative_log: "narrative",
-  protocol_sessions: "protocol",
+  protocol_sessions: "protocol_session",
   boss_challenges: "bossChallenges",
   field_op_cooldown: "fieldOps",
   field_ops: "fieldOps",
-  rank_up_events: "rankUps",
+  rank_up_events: "rank_ups",
   achievements_unlocked: "achievements",
   skill_tree_progress: "skillTree",
   user_titles: "titles",

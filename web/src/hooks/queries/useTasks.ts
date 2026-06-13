@@ -8,6 +8,7 @@ import {
   listRecentCompletions,
   toggleCompletion,
   createTask,
+  updateTask,
   deleteTask,
   type Task,
   type Completion,
@@ -16,10 +17,10 @@ import {
 } from "../../services/tasks";
 import { runAchievementCheck } from "../../lib/achievement-integration";
 import { invalidateScoring } from "../../lib/score-invalidation";
-import { awardXpForCompletion, refundXpForUncomplete } from "../../services/xp";
-import { enqueueRankUp } from "../../services/rank-ups";
 import { xpKeys } from "./useXp";
 import { profileKeys } from "./useProfile";
+import { PaywallError } from "../../lib/paywall";
+import { entitlementFromCache } from "./useSubscription";
 
 // ─── Query Keys ─────────────────────────────────────────────────────────────
 
@@ -101,25 +102,21 @@ export function useToggleCompletion() {
       task: { id: string; engine: EngineKey };
       dateKey: string;
     }): Promise<{ completed: boolean }> => {
+      // Past the free trial (and with no active subscription), completing a
+      // task is gated. Throw BEFORE any write — there's no optimistic toggle
+      // here, so nothing flickers; the MutationCache opens the paywall.
+      if (!entitlementFromCache(qc).isPro) throw new PaywallError();
       const result = await toggleCompletion({
         taskId: vars.task.id,
         dateKey: vars.dateKey,
         engine: vars.task.engine,
       });
-      if (result.added) {
-        // Award XP (10/day cap + streak multiplier handled in the service).
-        // On a level-up, enqueue a rank-up event for the celebration watcher.
-        const award = await awardXpForCompletion(vars.dateKey, vars.task.id);
-        if (award.awarded && award.leveledUp) {
-          await enqueueRankUp({
-            fromLevel: award.fromLevel,
-            toLevel: award.toLevel,
-          });
-        }
-      } else {
-        // Un-completing a counted task refunds its XP (anti-gaming guarded).
-        await refundXpForUncomplete(vars.dateKey, vars.task.id);
-      }
+      // XP, level, and the rank-up celebration are awarded SERVER-SIDE by the
+      // completions INSERT/DELETE triggers: atomic (no cross-tap/-device
+      // race), 10/day cap + streak multiplier + ±1-day gate enforced in SQL,
+      // exactly once — and offline completions earn their XP when they sync.
+      // The resulting xp_log / profiles / rank_up_events rows arrive via
+      // Realtime; the onSettled invalidations below refetch them.
       return { completed: result.added };
     },
     onMutate: async (vars) => {
@@ -172,6 +169,35 @@ export function useCreateTask() {
       qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.engine) });
       // Adding a task changes the denominator (more main/secondary points)
       // so every score shifts. Invalidate scoring caches.
+      invalidateScoring(qc);
+    },
+  });
+}
+
+/**
+ * Edit a task in place: mutate({ taskId, engine, title?, kind?, days_per_week? }).
+ * The premium alternative to delete-and-recreate (which destroys history).
+ */
+export function useUpdateTask() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (vars: {
+      taskId: string;
+      engine: EngineKey;
+      title?: string;
+      kind?: TaskKind;
+      days_per_week?: number;
+    }) =>
+      updateTask(vars.taskId, {
+        title: vars.title,
+        kind: vars.kind,
+        days_per_week: vars.days_per_week,
+      }),
+    onSettled: (_data, _err, vars) => {
+      qc.invalidateQueries({ queryKey: tasksKeys.all });
+      qc.invalidateQueries({ queryKey: tasksKeys.engine(vars.engine) });
+      // Renaming / re-kinding / changing days can shift the score denominator.
       invalidateScoring(qc);
     },
   });

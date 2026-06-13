@@ -9,8 +9,9 @@
 
 ---
 
-## 0. Current SaaS-pivot state (2026-05-30)
+## 0. Current SaaS-pivot state (2026-06-13)
 
+- **Pre-ship audit fixes landed (uncommitted).** Phase 1 ship-blockers fixed 2026-06-10 in the working tree: `cloudGet` helper + no-defaults `upsertProfile`/`awardXP`, `NATURAL_KEYS` onConflict + dead-letter dirty rows (`_dirty=2` after 3 fails), `catchUpResync` returning `ResyncResult` + resync-before-settle in `StreakSettlementGate`, `flowType:"pkce"` (also fixes OAuth double-hash), `/auth/forgot` + `/auth/reset` + change-password in settings, `delete-account` edge function + Danger Zone, Privacy/Terms pages, marketing-honesty pass. **Phase 2 (sync-trust) now in progress** — see root `CLAUDE.md` §"State at a glance" and memory `audit_2026_06_10.md`.
 - **P0 + P1 + P2 marketing layer landed.** App is at `/app/*`, marketing at `/`, `/pricing`, `/features`, `/changelog`, `/about`. Auth still at `/auth/login` and `/auth/callback`.
 - **Auth live**: `src/lib/session.ts` initializes user id/email to `null`; `src/layouts/OSLayout.tsx` runs `useWebAuth` + `<Navigate to="/auth/login">`. Unauthenticated users hit the login screen.
 - **Hybrid data layer live**: services use `cloudUpsert` / `cloudUpsertMany` / `cloudDelete` from `src/db/sqlite/service-helpers.ts` instead of the plain `sqlite*` variants. Writes go to Supabase first; the response is mirrored to SQLite.

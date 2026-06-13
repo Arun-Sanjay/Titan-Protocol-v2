@@ -30,6 +30,7 @@ import {
   toggleHabitLog,
   listHabitLogsForDate,
 } from "../../services/habits";
+import { getTodayKey, addDays } from "../../lib/date";
 
 describe("habits service", () => {
   beforeEach(() => {
@@ -59,11 +60,12 @@ describe("habits service", () => {
     expect(await listHabitLogsForDate("2026-04-18")).toHaveLength(0);
   });
 
-  test("logging 3 consecutive days sets current_chain=3 and best_chain=3", async () => {
+  test("logging today + the two days before sets current_chain=3 and best_chain=3", async () => {
     const h = await createHabit({ title: "x", engine: "mind" });
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-16" });
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-17" });
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-18" });
+    const today = getTodayKey();
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -2) });
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -1) });
+    await toggleHabitLog({ habitId: h.id, dateKey: today });
 
     const habits = await listHabits();
     expect(habits[0].current_chain).toBe(3);
@@ -72,27 +74,46 @@ describe("habits service", () => {
 
   test("breaking the chain keeps best_chain but resets current_chain", async () => {
     const h = await createHabit({ title: "x", engine: "mind" });
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-16" });
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-17" });
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-18" });
-    // un-log the most recent — chain resets from today
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-18" });
+    const today = getTodayKey();
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -2) });
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -1) });
+    await toggleHabitLog({ habitId: h.id, dateKey: today });
+    // un-log every recent day → the today-anchored chain collapses to 0,
+    // but best_chain (3) is preserved.
+    await toggleHabitLog({ habitId: h.id, dateKey: today });
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -1) });
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -2) });
 
     const habits = await listHabits();
     expect(habits[0].current_chain).toBe(0);
     expect(habits[0].best_chain).toBe(3);
-    expect(habits[0].last_broken_date).toBe("2026-04-18");
+  });
+
+  test("current_chain is anchored to today — back-filling an old day doesn't clobber it (§3.7)", async () => {
+    const h = await createHabit({ title: "x", engine: "mind" });
+    const today = getTodayKey();
+    // A live 2-day chain ending today.
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -1) });
+    await toggleHabitLog({ habitId: h.id, dateKey: today });
+    expect((await listHabits())[0].current_chain).toBe(2);
+
+    // Back-fill a single ancient day — must NOT clobber the live chain.
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -40) });
+    const habits = await listHabits();
+    expect(habits[0].current_chain).toBe(2);
+    expect(habits[0].best_chain).toBe(2);
   });
 
   test("a non-consecutive day doesn't extend the chain", async () => {
     const h = await createHabit({ title: "x", engine: "mind" });
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-15" });
-    // skipping 2026-04-16
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-17" });
-    await toggleHabitLog({ habitId: h.id, dateKey: "2026-04-18" });
+    const today = getTodayKey();
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -3) });
+    // skipping today-2
+    await toggleHabitLog({ habitId: h.id, dateKey: addDays(today, -1) });
+    await toggleHabitLog({ habitId: h.id, dateKey: today });
 
     const habits = await listHabits();
-    // chain counted backwards from 2026-04-18: 17 logged, 16 missing → breaks.
+    // chain back from today: today + today-1 logged, today-2 missing → 2.
     expect(habits[0].current_chain).toBe(2);
   });
 });

@@ -7,7 +7,7 @@ import {
   cloudUpsert,
 } from "../db/sqlite/service-helpers";
 import type { Tables } from "../types/supabase";
-import { toLocalDateKey } from "../lib/date";
+import { toLocalDateKey, getTodayKey, addDays } from "../lib/date";
 
 export type Habit = Tables<"habits">;
 export type HabitLog = Tables<"habit_logs">;
@@ -110,26 +110,31 @@ export async function toggleHabitLog(params: {
 // ─── Chain ──────────────────────────────────────────────────────────────────
 
 /**
- * Recalculate `current_chain` + `best_chain` for a habit, walking backwards
- * from `dateKey` through consecutive logged days. A day without a log breaks
- * the chain; `last_broken_date` is stamped when the chain collapses.
- *
- * 90-day window is more than enough for the longest streak we care about.
+ * Recalculate `current_chain` + `best_chain` for a habit. `current_chain` is
+ * always anchored to TODAY, never the toggled `dateKey`: it counts consecutive
+ * logged days ending today — or yesterday if today isn't logged yet, so the
+ * chain stays alive until a full day is actually missed. This is why
+ * back-filling an old day no longer clobbers a live chain (audit §3.7) —
+ * `dateKey` only widens the scan window so an older back-fill can still raise
+ * `best_chain` (the longest consecutive run anywhere in the window).
  */
 async function recalculateChain(
   habitId: string,
   dateKey: string,
 ): Promise<void> {
-  const startDate = subtractDays(dateKey, 90);
+  const today = getTodayKey();
+  const windowStart = subtractDays(today, 90);
+  const scanStart = dateKey < windowStart ? dateKey : windowStart;
+
   const logs = await sqliteList<{ date_key: string }>("habit_logs", {
     where: "habit_id = ? AND date_key >= ? AND date_key <= ?",
-    params: [habitId, startDate, dateKey],
-    order: "date_key DESC",
+    params: [habitId, scanStart, today],
+    order: "date_key ASC",
   });
   const logDates = new Set(logs.map((l) => l.date_key));
 
   let chain = 0;
-  let cursor = dateKey;
+  let cursor = logDates.has(today) ? today : subtractDays(today, 1);
   while (logDates.has(cursor)) {
     chain++;
     cursor = subtractDays(cursor, 1);
@@ -138,15 +143,24 @@ async function recalculateChain(
   const habit = await sqliteGet<Habit>("habits", { id: habitId });
   if (!habit) return; // habit was deleted mid-toggle; nothing to do
 
-  const oldBest = habit.best_chain ?? 0;
-  const newBest = Math.max(oldBest, chain);
-  const justBroke = chain === 0 && (habit.current_chain ?? 0) > 0;
+  // best_chain: longest consecutive run anywhere in the scanned window.
+  let best = habit.best_chain ?? 0;
+  let run = 0;
+  for (let d = scanStart; d <= today; d = addDays(d, 1)) {
+    if (logDates.has(d)) {
+      run++;
+      if (run > best) best = run;
+    } else {
+      run = 0;
+    }
+  }
 
+  const justBroke = chain === 0 && (habit.current_chain ?? 0) > 0;
   await cloudUpsert("habits", {
     ...habit,
     current_chain: chain,
-    best_chain: newBest,
-    last_broken_date: justBroke ? dateKey : habit.last_broken_date,
+    best_chain: best,
+    last_broken_date: justBroke ? today : habit.last_broken_date,
   });
 }
 

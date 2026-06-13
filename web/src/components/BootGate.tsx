@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { runMigrations } from "../db/sqlite/migrator";
+import { ensureMigrations } from "../db/sqlite/migrator";
 
 type Phase =
   | { kind: "loading" }
@@ -22,7 +22,7 @@ export function BootGate({ children }: { children: React.ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const result = await runMigrations();
+        const result = await ensureMigrations();
         if (cancelled) return;
         setPhase({ kind: "ready", ...result });
       } catch (err) {

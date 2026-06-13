@@ -100,3 +100,27 @@ export function stripSyncColumns<T extends Record<string, unknown>>(
   const { _dirty: _d, _deleted: _del, ...rest } = row as unknown as Record<string, unknown>;
   return rest as Omit<T, "_dirty" | "_deleted">;
 }
+
+/**
+ * The subset of `row`'s keys that the local SQLite schema actually knows
+ * about, plus the `_dirty`/`_deleted` housekeeping columns. Use this to
+ * build INSERT/REPLACE column lists from any row that originated in the
+ * cloud (a Realtime payload, a restore page, a `cloudUpsert` response).
+ *
+ * Why it matters: a forward server migration can add a column this app
+ * binary predates. Feeding that unknown column into
+ * `INSERT INTO <table> (...)` throws "table <t> has no column named <c>",
+ * which silently drops the Realtime event, fails the whole restore, or
+ * errors a write that already committed in the cloud. Filtering to known
+ * columns degrades gracefully instead — the new column is ignored until
+ * this binary ships the matching SQLite migration.
+ */
+export function knownSqliteColumns(
+  table: string,
+  row: Record<string, unknown>,
+): string[] {
+  const cols = columns(table);
+  return Object.keys(row).filter(
+    (k) => k in cols || k === "_dirty" || k === "_deleted",
+  );
+}

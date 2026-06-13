@@ -120,6 +120,16 @@ export default function EmailLoginScreen() {
             </Pressable>
 
             <Pressable
+              onPress={() => router.push("/(auth)/forgot-password")}
+              style={({ pressed }) => [
+                styles.ghostButton,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.ghostButtonText}>Forgot password?</Text>
+            </Pressable>
+
+            <Pressable
               onPress={() => router.replace("/(auth)/signup")}
               style={({ pressed }) => [
                 styles.ghostButton,

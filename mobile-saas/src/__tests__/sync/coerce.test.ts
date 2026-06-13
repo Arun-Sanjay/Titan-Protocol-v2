@@ -4,6 +4,7 @@ import {
   stripSyncColumns,
   valueFromSqlite,
   valueToSqlite,
+  knownSqliteColumns,
 } from "../../db/sqlite/coerce";
 
 describe("valueToSqlite / valueFromSqlite", () => {
@@ -143,5 +144,33 @@ describe("stripSyncColumns", () => {
   test("rows without sync columns pass through unchanged", () => {
     const input = { id: "t1", title: "Read" };
     expect(stripSyncColumns(input)).toEqual(input);
+  });
+});
+
+describe("knownSqliteColumns — schema-tolerant mirroring", () => {
+  test("keeps known columns plus the _dirty/_deleted housekeeping flags", () => {
+    const cols = knownSqliteColumns("tasks", {
+      id: "t1",
+      user_id: "u1",
+      title: "Read",
+      _dirty: 0,
+      _deleted: 0,
+    });
+    expect(cols).toContain("id");
+    expect(cols).toContain("user_id");
+    expect(cols).toContain("title");
+    expect(cols).toContain("_dirty");
+    expect(cols).toContain("_deleted");
+  });
+
+  test("drops a column the local schema does not know — a forward server migration this binary predates", () => {
+    const cols = knownSqliteColumns("tasks", {
+      id: "t1",
+      title: "Read",
+      future_column_from_a_newer_server: "ignored",
+      _dirty: 0,
+    });
+    expect(cols).toContain("title");
+    expect(cols).not.toContain("future_column_from_a_newer_server");
   });
 });

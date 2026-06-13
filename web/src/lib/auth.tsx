@@ -17,6 +17,7 @@ import { setCurrentUser } from "./session";
 import { subscribeUserChanges } from "../sync/realtime";
 import { wipeAllSyncedTables } from "../sync/first-run-pull";
 import { flushDirtyRows } from "../sync/flush-dirty";
+import { ensureMigrations } from "../db/sqlite/migrator";
 import { catchUpResync } from "../sync/resync";
 import { identifyUser, resetUser } from "./observability";
 
@@ -27,6 +28,10 @@ type WebAuthContextValue = {
   signUp: (email: string, password: string) => Promise<AuthResponse>;
   signInWithGoogle: () => Promise<OAuthResponse>;
   signOut: () => Promise<{ error: Error | null }>;
+  /** Send a password-recovery email (PKCE link → /auth/reset). */
+  resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  /** Set a new password for the signed-in (or recovery) session. */
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
 };
 
 const WebAuthContext = createContext<WebAuthContextValue | null>(null);
@@ -64,11 +69,28 @@ export function WebAuthProvider({ children }: { children: React.ReactNode }) {
   // signed-in user's rows shows up in this tab's SQLite cache + React Query.
   useEffect(() => {
     if (!user?.id) return;
-    const teardown = subscribeUserChanges(user.id, queryClient);
-    // First land after sign-in: try to push any rows that were left _dirty=1
-    // from a prior offline session. Idempotent — no dirty rows = no-op.
-    void flushDirtyRows();
-    return teardown;
+    const uid = user.id;
+    let teardown: (() => void) | undefined;
+    let cancelled = false;
+    // Wait for the local store's migrations before touching SQLite. The boot
+    // gate now lives inside the OS subtree (so the marketing site renders
+    // even if the local store can't init), which means this global provider
+    // can fire before /app ever mounts. `ensureMigrations` shares the boot
+    // gate's single run and guarantees the schema exists first; a failed
+    // store init is swallowed here (the OS subtree surfaces the error).
+    void ensureMigrations()
+      .catch(() => {})
+      .then(() => {
+        if (cancelled) return;
+        teardown = subscribeUserChanges(uid, queryClient);
+        // First land after sign-in: push any rows left _dirty=1 by a prior
+        // offline session. Idempotent — no dirty rows = no-op.
+        void flushDirtyRows();
+      });
+    return () => {
+      cancelled = true;
+      teardown?.();
+    };
   }, [user?.id, queryClient]);
 
   // Retry the dirty-row queue on network reconnect + on tab refocus.
@@ -117,11 +139,35 @@ export function WebAuthProvider({ children }: { children: React.ReactNode }) {
           },
         }),
       signOut: async () => {
+        // Best-effort: push any rows a failed/offline write left `_dirty`
+        // UP to the cloud BEFORE wiping the cache — otherwise signing out
+        // silently discards unsynced local edits. Bounded by a timeout so a
+        // hung or offline flush can't block sign-out; the wipe + cloud
+        // sign-out proceed regardless.
+        await Promise.race([
+          flushDirtyRows().catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, 4000)),
+        ]);
         // Wipe the local cache BEFORE telling Supabase to sign out. If
         // anything fails server-side, we'd rather have an empty cache
         // than a half-empty one. Next sign-in's first-run pull repopulates.
         await wipeAllSyncedTables();
         const { error } = await supabase.auth.signOut();
+        return { error: error ?? null };
+      },
+      resetPassword: async (email) => {
+        // PKCE: the email link returns to `{origin}/?code=…#/auth/reset`;
+        // the boot-time detectSessionInUrl exchange turns the code into a
+        // recovery session before the reset page mounts.
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + "/#/auth/reset",
+        });
+        return { error: error ?? null };
+      },
+      updatePassword: async (newPassword) => {
+        const { error } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
         return { error: error ?? null };
       },
     }),

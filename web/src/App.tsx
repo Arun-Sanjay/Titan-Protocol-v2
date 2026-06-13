@@ -8,11 +8,15 @@ import PricingPage from "./app/(marketing)/PricingPage";
 import FeaturesPage from "./app/(marketing)/FeaturesPage";
 import ChangelogPage from "./app/(marketing)/ChangelogPage";
 import AboutPage from "./app/(marketing)/AboutPage";
+import PrivacyPage from "./app/(marketing)/PrivacyPage";
+import TermsPage from "./app/(marketing)/TermsPage";
 import NotFoundPage from "./app/(marketing)/NotFoundPage";
 
 // Auth pages (unprotected — no layout)
 import LoginPage from "./app/(auth)/login/page";
 import CallbackPage from "./app/(auth)/callback/page";
+import ForgotPasswordPage from "./app/(auth)/forgot/page";
+import ResetPasswordPage from "./app/(auth)/reset/page";
 
 // App pages (gated under OSLayout). The folder name `(os)` is kept because
 // the route group convention is purely cosmetic; the URL prefix changed
@@ -27,6 +31,7 @@ import AnalyticsClient from "./app/(os)/os/analytics/AnalyticsClient";
 import HabitsPage from "./app/(os)/os/habits/page";
 import JournalPage from "./app/(os)/os/journal/page";
 import GoalsPage from "./app/(os)/os/goals/page";
+import AchievementsPage from "./app/(os)/os/achievements/page";
 import FocusPage from "./app/(os)/os/focus/page";
 import SettingsPage from "./app/(os)/os/settings/page";
 import NutritionPage from "./app/(os)/os/body/nutrition/page";
@@ -47,11 +52,15 @@ export function App() {
         <Route path="/features" element={<FeaturesPage />} />
         <Route path="/changelog" element={<ChangelogPage />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
       </Route>
 
       {/* Auth — public, no layout */}
       <Route path="/auth/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<CallbackPage />} />
+      <Route path="/auth/forgot" element={<ForgotPasswordPage />} />
+      <Route path="/auth/reset" element={<ResetPasswordPage />} />
 
       {/* App — gated under OSLayout */}
       <Route path="/app" element={<OSLayout />}>
@@ -72,6 +81,7 @@ export function App() {
         <Route path="habits" element={<HabitsPage />} />
         <Route path="journal" element={<JournalPage />} />
         <Route path="goals" element={<GoalsPage />} />
+        <Route path="achievements" element={<AchievementsPage />} />
         <Route path="focus" element={<FocusPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
