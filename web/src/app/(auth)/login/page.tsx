@@ -56,33 +56,19 @@ export default function LoginPage() {
           navigate("/app", { replace: true });
           return;
         }
-        // No session + no error. New accounts are auto-confirmed server-side
-        // and get a session above, so reaching here almost always means the
-        // email is ALREADY registered — Supabase hides that (no error, no
-        // session, empty `identities`) to prevent email enumeration. Detect it
-        // and say so, instead of dead-ending on the confusing "Invalid login
-        // credentials" the sign-in fallback would produce.
-        const alreadyRegistered =
-          !data.user || (data.user.identities?.length ?? 0) === 0;
-        if (alreadyRegistered) {
-          setError(
-            "This email is already registered. Please sign in instead — or use “Forgot password?” to reset it.",
-          );
-          setMode("signin");
-          return;
-        }
-        // Brand-new account whose session didn't come back inline — sign in.
-        const { data: signInData, error: signInErr } = await signIn(
-          trimmedEmail,
-          password,
-        );
+        // No session + no error. New emails are auto-confirmed server-side and
+        // return a session above — so reaching here means the email is ALREADY
+        // registered (Supabase returns no session/error for an existing email
+        // to prevent enumeration). Try a sign-in in case they typed their real
+        // password; otherwise say so clearly instead of dead-ending on the raw
+        // "Invalid login credentials".
+        const { data: signInData } = await signIn(trimmedEmail, password);
         if (signInData?.session) {
           navigate("/app", { replace: true });
           return;
         }
         setError(
-          signInErr?.message ??
-            "Account created, but automatic sign-in failed — try signing in.",
+          "This email is already registered — please sign in instead, or use “Forgot password?” to reset your password.",
         );
         setMode("signin");
       }
