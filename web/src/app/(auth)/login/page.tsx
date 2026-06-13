@@ -56,9 +56,22 @@ export default function LoginPage() {
           navigate("/app", { replace: true });
           return;
         }
-        // signUp returned no session (the project keeps "confirm email" on).
-        // New accounts are auto-confirmed server-side, so sign in right away
-        // for a frictionless create → in-app flow — no inbox round-trip.
+        // No session + no error. New accounts are auto-confirmed server-side
+        // and get a session above, so reaching here almost always means the
+        // email is ALREADY registered — Supabase hides that (no error, no
+        // session, empty `identities`) to prevent email enumeration. Detect it
+        // and say so, instead of dead-ending on the confusing "Invalid login
+        // credentials" the sign-in fallback would produce.
+        const alreadyRegistered =
+          !data.user || (data.user.identities?.length ?? 0) === 0;
+        if (alreadyRegistered) {
+          setError(
+            "This email is already registered. Please sign in instead — or use “Forgot password?” to reset it.",
+          );
+          setMode("signin");
+          return;
+        }
+        // Brand-new account whose session didn't come back inline — sign in.
         const { data: signInData, error: signInErr } = await signIn(
           trimmedEmail,
           password,
@@ -67,8 +80,6 @@ export default function LoginPage() {
           navigate("/app", { replace: true });
           return;
         }
-        // Fallback: account exists but immediate sign-in didn't take. Surface
-        // a clear message instead of a dead end.
         setError(
           signInErr?.message ??
             "Account created, but automatic sign-in failed — try signing in.",
