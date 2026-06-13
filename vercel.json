@@ -1,0 +1,7 @@
+{
+  "buildCommand": "cd shared && npm install && cd ../web && npm install && npm run build",
+  "outputDirectory": "web/out",
+  "installCommand": "echo skip-root-install",
+  "framework": null,
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
